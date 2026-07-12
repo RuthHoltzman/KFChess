@@ -1,1 +1,0 @@
-package kfchess.view;
