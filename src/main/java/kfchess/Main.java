@@ -11,6 +11,8 @@ import kfchess.rules.RuleEngine;
 
 import java.util.Scanner;
 
+// קישור לפרויקט בחשבון GitHub: https://github.com/RuthHoltzman/KFChess.git
+
 public class Main {
 
     public static void main(String[] args) {
