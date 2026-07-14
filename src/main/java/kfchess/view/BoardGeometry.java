@@ -33,7 +33,6 @@ public class BoardGeometry {
     }
     
     public Point cellToPixel(Position pos) {
-        // TODO: להשתמש ב-pos.row() ו-pos.col()
         int x = pos.col() * cellWidth;
         int y = pos.row() * cellHeight;
         return new Point(x, y);
