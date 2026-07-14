@@ -23,7 +23,9 @@ public class BoardParser {
     private static final String COMMANDS_HEADER = "Commands:";
     private static final String EMPTY_CELL_TOKEN = ".";
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
-
+    private static final String ERROR_EMPTY_BOARD = "ERROR EMPTY_BOARD";
+    private static final String ERROR_ROW_WIDTH_MISMATCH = "ERROR ROW_WIDTH_MISMATCH";
+    private static final String ERROR_UNKNOWN_TOKEN = "ERROR UNKNOWN_TOKEN";
     private final Scanner scanner;
 
     public BoardParser(Scanner scanner) {
@@ -32,8 +34,9 @@ public class BoardParser {
 
     public Board readBoard() {
         List<String[]> rawRows = readRawBoardLines();
-        if (!isValidBoard(rawRows)) {
-            return null;
+        ValidationResult result = isValidBoard(rawRows);
+        if (!result.isValid()) {
+            throw new IllegalArgumentException(result.errorMessage());
         }
         return buildBoard(rawRows);
     }
@@ -59,21 +62,18 @@ public class BoardParser {
         return lines;
     }
 
-    private boolean isValidBoard(List<String[]> lines) {
-        if (lines == null || lines.isEmpty()) {
-            return false;
-        }
-        if (!hasConsistentRowWidth(lines)) {
-            System.out.println("ERROR ROW_WIDTH_MISMATCH");
-            return false;
-        }
-        if (!hasOnlyValidTokens(lines)) {
-            System.out.println("ERROR UNKNOWN_TOKEN");
-            return false;
-        }
-        return true;
+   private ValidationResult isValidBoard(List<String[]> lines) {
+    if (lines == null || lines.isEmpty()) {
+        return ValidationResult.failure(ERROR_EMPTY_BOARD);
     }
-
+    if (!hasConsistentRowWidth(lines)) {
+        return ValidationResult.failure(ERROR_ROW_WIDTH_MISMATCH);
+    }
+    if (!hasOnlyValidTokens(lines)) {
+        return ValidationResult.failure(ERROR_UNKNOWN_TOKEN);
+    }
+    return ValidationResult.success();
+}
     private boolean hasConsistentRowWidth(List<String[]> lines) {
         int width = lines.get(0).length;
         return lines.stream().allMatch(row -> row.length == width);
@@ -119,4 +119,31 @@ public class BoardParser {
         PieceKind kind = PieceKind.fromCode(token.charAt(1));
         return new Piece(color, kind);
     }
+
+
+    private static final class ValidationResult {
+    private final boolean valid;
+    private final String errorMessage;
+
+    private ValidationResult(boolean valid, String errorMessage) {
+        this.valid = valid;
+        this.errorMessage = errorMessage;
+    }
+
+    static ValidationResult success() {
+        return new ValidationResult(true, null);
+    }
+
+    static ValidationResult failure(String errorMessage) {
+        return new ValidationResult(false, errorMessage);
+    }
+
+    boolean isValid() {
+        return valid;
+    }
+
+    String errorMessage() {
+        return errorMessage;
+    }
+}
 }

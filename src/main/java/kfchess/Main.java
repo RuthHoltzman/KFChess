@@ -3,11 +3,11 @@ import kfchess.engine.GameEngine;
 import kfchess.input.BoardMapper;
 import kfchess.input.Controller;
 import kfchess.io.BoardParser;
+import kfchess.io.BoardPrinter;
 import kfchess.model.Board;
 import kfchess.model.Game;
 import kfchess.realtime.RaelTime;
 import kfchess.rules.RuleEngine;
-import kfchess.view.Renderer;
 
 import java.util.Scanner;
 
@@ -49,24 +49,40 @@ public class Main {
 
         // 4. יצירת רכיבי הקלט והתצוגה (Infrastructure)
         BoardMapper boardMapper = BoardMapper.withDefaultCellSize();
-        Renderer renderer = new Renderer();
-        
-        // יצירת מפרש הפקודות והבקרה
-        kfchess.io.Controller ioController = new kfchess.io.Controller(boardMapper, renderer);
+        BoardPrinter boardPrinter = new BoardPrinter();
         Controller textCommandParser = new Controller();
 
         // 5. לולאת המשחק הראשית (Game Loop)
+        // ה-wiring שקודם היה ב-io/Controller.execute עבר לכאן, ל-Main,
+        // שהוא ה-composition root של האפליקציה.
         while (scanner.hasNextLine() && !game.isGameOver()) {
             String line = scanner.nextLine();
             if (line.trim().isEmpty()) {
                 continue;
             }
-            
+
             // פענוח השורה לפקודה מובנית
             Controller.Command command = textCommandParser.parse(line);
-            
+
             // ביצוע הפקודה על גבי מנוע המשחק
-            ioController.execute(command, engine);
+            switch (command.type()) {
+                case CLICK:
+                    engine.handleClick(boardMapper.pixelToPosition(command.x(), command.y()));
+                    break;
+                case WAIT:
+                    engine.handleWait(command.milliseconds());
+                    break;
+                case JUMP:
+                    engine.handleJump(boardMapper.pixelToPosition(command.x(), command.y()));
+                    break;
+                case PRINT_BOARD:
+                    boardPrinter.print(engine.board());
+                    break;
+                case UNKNOWN:
+                default:
+                    // התעלמות משורה ריקה או לא מזוהה
+                    break;
+            }
         }
     }
 }
