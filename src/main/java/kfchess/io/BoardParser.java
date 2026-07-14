@@ -16,6 +16,10 @@ import java.util.regex.Pattern;
  * ה-Scanner מוזרק דרך הבנאי (constructor injection) - לא נוצר כאן
  * ולא נלקח מ-System.in ישירות - כדי שאפשר יהיה לבדוק את המחלקה
  * עם קלט מדומה (ראו kfchess.texttests.BoardParserTest).
+ * <p>
+ * כישלון ולידציה מדווח דרך IllegalArgumentException (לא הדפסה עצמית
+ * ולא ערך null) - כך שה-Parser נשאר "טהור" (בלי side effect של פלט),
+ * וה-caller (Main) הוא זה שמחליט איך ומתי להציג את השגיאה למשתמש.
  */
 public class BoardParser {
 
@@ -23,6 +27,10 @@ public class BoardParser {
     private static final String COMMANDS_HEADER = "Commands:";
     private static final String EMPTY_CELL_TOKEN = ".";
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
+
+    private static final String ERROR_EMPTY_BOARD = "ERROR EMPTY_BOARD";
+    private static final String ERROR_ROW_WIDTH_MISMATCH = "ERROR ROW_WIDTH_MISMATCH";
+    private static final String ERROR_UNKNOWN_TOKEN = "ERROR UNKNOWN_TOKEN";
 
     private final Scanner scanner;
 
@@ -32,8 +40,9 @@ public class BoardParser {
 
     public Board readBoard() {
         List<String[]> rawRows = readRawBoardLines();
-        if (!isValidBoard(rawRows)) {
-            return null;
+        ValidationResult result = validate(rawRows);
+        if (!result.isValid()) {
+            throw new IllegalArgumentException(result.errorMessage());
         }
         return buildBoard(rawRows);
     }
@@ -59,19 +68,17 @@ public class BoardParser {
         return lines;
     }
 
-    private boolean isValidBoard(List<String[]> lines) {
+    private ValidationResult validate(List<String[]> lines) {
         if (lines == null || lines.isEmpty()) {
-            return false;
+            return ValidationResult.failure(ERROR_EMPTY_BOARD);
         }
         if (!hasConsistentRowWidth(lines)) {
-            System.out.println("ERROR ROW_WIDTH_MISMATCH");
-            return false;
+            return ValidationResult.failure(ERROR_ROW_WIDTH_MISMATCH);
         }
         if (!hasOnlyValidTokens(lines)) {
-            System.out.println("ERROR UNKNOWN_TOKEN");
-            return false;
+            return ValidationResult.failure(ERROR_UNKNOWN_TOKEN);
         }
-        return true;
+        return ValidationResult.success();
     }
 
     private boolean hasConsistentRowWidth(List<String[]> lines) {
@@ -118,5 +125,31 @@ public class BoardParser {
         PieceColor color = PieceColor.fromCode(token.charAt(0));
         PieceKind kind = PieceKind.fromCode(token.charAt(1));
         return new Piece(color, kind);
+    }
+
+    private static final class ValidationResult {
+        private final boolean valid;
+        private final String errorMessage;
+
+        private ValidationResult(boolean valid, String errorMessage) {
+            this.valid = valid;
+            this.errorMessage = errorMessage;
+        }
+
+        static ValidationResult success() {
+            return new ValidationResult(true, null);
+        }
+
+        static ValidationResult failure(String errorMessage) {
+            return new ValidationResult(false, errorMessage);
+        }
+
+        boolean isValid() {
+            return valid;
+        }
+
+        String errorMessage() {
+            return errorMessage;
+        }
     }
 }

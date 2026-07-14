@@ -66,11 +66,17 @@ public class GameEngine {
     }
 
     public void handleWait(long milliseconds) {
+        if (game.isGameOver()) {
+            return;
+        }
         clock.advance(milliseconds);
         advanceGameState();
     }
 
     public void handleJump(Position target) {
+        if (game.isGameOver()) {
+            return;
+        }
         board().pieceAt(target).ifPresent(piece -> {
             if (piece.isIdle()) {
                 piece.markJumping();
@@ -126,8 +132,12 @@ public class GameEngine {
     }
 
     private void advanceGameState() {
-        resolveExpiredJumps();
+        // הסדר כאן קריטי: אם כלי מגן מסיים קפיצה בדיוק באותה מילישנייה
+        // שבה כלי אחר מגיע אליו, הוא עדיין נחשב "באוויר" באותו טיק -
+        // ולכן צריך לפתור הגעות מול מצב הקפיצה הישן, ורק אחר-כך לפוג
+        // את הקפיצה עבור הטיק הבא.
         resolveArrivedMotions();
+        resolveExpiredJumps();
     }
 
     private void resolveExpiredJumps() {
@@ -158,6 +168,15 @@ public class GameEngine {
 
     private void completeMotion(Motion motion) {
         Piece movingPiece = motion.piece();
+
+        // אם המשבצת שממנה יצא הכלי הזה כבר לא מחזיקה אותו (זהות, לא רק
+        // סוג/צבע) - סימן שכלי אחר "עבר דרכו" באותו טיק וכבר תפס אותו.
+        // המהלך הזה מת ואין מה להשלים בו.
+        Optional<Piece> pieceStillAtOrigin = board().pieceAt(motion.from());
+        if (pieceStillAtOrigin.isEmpty() || pieceStillAtOrigin.get() != movingPiece) {
+            return;
+        }
+
         Optional<Piece> defender = board().pieceAt(motion.to());
 
         if (defender.isPresent() && defender.get().isJumping()) {
