@@ -2,6 +2,7 @@ package kfchess.view;
 
 import kfchess.model.Position;
 import java.util.Map;
+import javax.swing.Timer;
 import java.util.HashMap;
 import kfchess.model.Piece;
 import kfchess.model.PieceColor;
@@ -26,13 +27,14 @@ public static void main(String[] args) throws InterruptedException{
 
          
     BoardView view = new BoardView(board, geometry);
-        // view.render(dummyPieces);
-        for (long t = 0; t < 3000; t += 200) {
-    view.render(dummyPieces, t);
-    Thread.sleep(200); // כדי שנספיק לראות בעין
-}
-  
+    view.render(dummyPieces, 0);
 
- 
-        }
+    long startTime = System.currentTimeMillis();
+    Timer timer = new Timer(100, e -> {
+        long elapsedTime = System.currentTimeMillis() - startTime;
+        view.render(dummyPieces, elapsedTime);
+    });
+
+    timer.start();
+}
 }

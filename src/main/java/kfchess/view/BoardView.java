@@ -41,7 +41,7 @@ private String currentFramePathFor(Piece piece, long elapsedMillis) {
     String folder = "" + piece.kind().code() + Character.toUpperCase(piece.color().code());
     String spritesFolder = "src/main/resources/pieces/" + folder + "/states/idle/sprites";
 
-    AnimationClip clip = new AnimationClip(spritesFolder, 6, true); // TODO: 6 בהמשך יגיע מה-JSON, כרגע קבוע
+    AnimationClip clip = AnimationClipCache.get(spritesFolder, 6, true);
     int frameIndex = clip.getFrameIndex(elapsedMillis);
     return clip.getFramePath(frameIndex);
 }

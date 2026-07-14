@@ -12,6 +12,8 @@ import java.io.IOException;
 public class Img {
 
     private BufferedImage img;
+    private static JFrame frame;
+    static JLabel label;
 
     /* ----------- load & optional resize ----------- */
     public Img read(String path,
@@ -89,14 +91,25 @@ public class Img {
     public void show() {
         if (img == null) throw new IllegalStateException("Image not loaded.");
 
+         if (frame == null) {
+        // פעם ראשונה - יוצרים את החלון
         SwingUtilities.invokeLater(() -> {
-            JFrame f = new JFrame("Image");
-            f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            f.add(new JLabel(new ImageIcon(img)));                            // :contentReference[oaicite:6]{index=6}
-            f.pack();
-            f.setLocationRelativeTo(null);
-            f.setVisible(true);
+            frame = new JFrame("Image");
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            label = new JLabel(new ImageIcon(img));
+            frame.add(label);
+            frame.pack();
+            frame.setLocationRelativeTo(null);
+            frame.setVisible(true);
         });
+    } else {
+        // החלון כבר קיים - רק מעדכנים את התמונה בתוכו
+        SwingUtilities.invokeLater(() -> {
+            label.setIcon(new ImageIcon(img));
+            frame.pack();
+            frame.repaint();
+        });
+        }
     }
 
     /* ----------- access (optional) ----------- */
