@@ -20,7 +20,13 @@ public class BoardView {
         this.geometry = geometry;
     }
 
-    public void render(GameSnapshot snapshot) {
+    /**
+     * מציירת את הלוח + הכלים על קנבס טרי ומחזירה אותו (בלי להציג אותו).
+     * ההצגה בפועל (canvas.show()) היא באחריות שכבת קומפוזיציה מעל
+     * (GameSceneView) - כי אנחנו רוצים לצייר קודם את פאנלי הניקוד/המהלכים
+     * לצידי הלוח, ורק אז להציג את התמונה השלמה פעם אחת.
+     */
+    public Img render(GameSnapshot snapshot) {
         // קנבס טרי בכל render - אבל דרך readAsFreshCanvas, שמביא את
         // התמונה מקאש בזיכרון (ולא מהדיסק מחדש בכל פריים) ומחזיר לנו
         // עותק פרטי שמותר לצייר עליו בלי להשפיע על הפריים הבא.
@@ -35,7 +41,7 @@ public class BoardView {
 
         drawSelectionHighlight(canvas, snapshot);
 
-        canvas.show();
+        return canvas;
     }
 
     private void drawPiece(Img canvas, PieceSnapshot piece) {
@@ -45,8 +51,17 @@ public class BoardView {
                 new Dimension(geometry.getCellWidth(), geometry.getCellHeight()),
                 true, null
         );
-        int x = (int) Math.round(piece.pixelX());
-        int y = (int) Math.round(piece.pixelY());
+        // read(..., keepAspect=true) שומרת על יחס הגובה-רוחב של הספרייט, ולכן
+        // הגודל בפועל של pieceImg כמעט תמיד קטן מ-cellWidth/cellHeight באחד
+        // הצירים (למשל ספרייט "רזה" יותר מהמשבצת). אם מציירים אותו פשוט
+        // בפינה השמאלית-עליונה של המשבצת (כמו קודם), הוא ייראה "דחוק"
+        // לפינה במקום להיות ממורכז בה - זו בדיוק התופעה של "כלים לא
+        // במיקום המדויק של הריבוע". כאן מחשבים את מרכז המשבצת ומזיזים
+        // את פינת הציור כך שהספרייט (בגודלו האמיתי אחרי הסקייל) יתמרכז בה.
+        int cellX = (int) Math.round(piece.pixelX());
+        int cellY = (int) Math.round(piece.pixelY());
+        int x = cellX + (geometry.getCellWidth() - pieceImg.width()) / 2;
+        int y = cellY + (geometry.getCellHeight() - pieceImg.height()) / 2;
         pieceImg.drawOn(canvas, x, y);
     }
 

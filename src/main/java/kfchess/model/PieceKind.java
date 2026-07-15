@@ -35,4 +35,18 @@ public enum PieceKind {
         }
         return false;
     }
+
+    /**
+     * ערך "קלאסי" של הכלי (כמו בשחמט רגיל) - משמש רק לחישוב הניקוד
+     * המוצג ב-UI (view/SidePanelView), אין לו שום השפעה על חוקי המשחק.
+     */
+    public int value() {
+        return switch (this) {
+            case PAWN -> 1;
+            case KNIGHT, BISHOP -> 3;
+            case ROOK -> 5;
+            case QUEEN -> 9;
+            case KING -> 0;
+        };
+    }
 }

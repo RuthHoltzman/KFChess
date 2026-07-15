@@ -2,6 +2,7 @@ package kfchess.engine;
 
 import kfchess.model.Board;
 import kfchess.model.Piece;
+import kfchess.model.PieceColor;
 import kfchess.model.Position;
 import kfchess.realtime.Motion;
 
@@ -28,7 +29,9 @@ public class SnapshotFactory {
             boolean gameOver,
             String winner,
             List<Motion> activeMotions,
-            List<Position> legalMoves
+            List<Position> legalMoves,
+            Map<PieceColor, Integer> scores,
+            Map<PieceColor, List<String>> moveLog
     ) {
         // מיפוי כלי -> Motion פעיל, כדי לדעת עבור כל כלי אם הוא "בדרך"
         // כרגע ולחשב עבורו מיקום פיקסלים מתקדם (הליכה) ולא רק את המשבצת
@@ -74,6 +77,7 @@ public class SnapshotFactory {
             }
         }
 
-        return new GameSnapshot(board.width(), board.height(), pieceSnapshots, selectedPosition, legalMoves, gameOver, winner);
+        return new GameSnapshot(board.width(), board.height(), pieceSnapshots, selectedPosition, legalMoves,
+                gameOver, winner, scores, moveLog);
     }
 }

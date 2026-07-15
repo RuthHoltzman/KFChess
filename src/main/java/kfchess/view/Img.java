@@ -105,6 +105,47 @@ public class Img {
         return this;
     }
 
+    /**
+     * יוצרת קנבס ריק (לא נטען מקובץ) בגודל נתון, מלא בצבע רקע אחיד.
+     * זו הדרך היחידה ליצור "משטח ציור" גדול יותר מתמונת הלוח עצמה -
+     * למשל כדי להרכיב עליו את הלוח ולצדדיו את פאנלי הניקוד/המהלכים -
+     * בלי לצאת מגבולות ה-API של Img ובלי להיעזר בשום ספריית גרפיקה אחרת.
+     */
+    public Img newCanvas(int width, int height, Color backgroundColor) {
+        BufferedImage canvas = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = canvas.createGraphics();
+        g.setColor(backgroundColor);
+        g.fillRect(0, 0, width, height);
+        g.dispose();
+        img = canvas;
+        return this;
+    }
+
+    public int width() {
+        if (img == null) throw new IllegalStateException("Image not loaded.");
+        return img.getWidth();
+    }
+
+    public int height() {
+        if (img == null) throw new IllegalStateException("Image not loaded.");
+        return img.getHeight();
+    }
+
+    /**
+     * מציירת טקסט עם שליטה אמיתית בגודל הפונט (בפיקסלים) ואפשרות הדגשה (bold).
+     * putText הקיימת נשארת ללא שינוי (כדי לא לשבור קוד קיים שמשתמש בה) -
+     * זו תוספת ל-API הפנימי של Img לצורך פאנלי הניקוד/המהלכים החדשים.
+     */
+    public void drawText(String text, int x, int y, int fontSize, Color color, boolean bold) {
+        if (img == null) throw new IllegalStateException("Image not loaded.");
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g.setColor(color);
+        g.setFont(new Font(Font.SANS_SERIF, bold ? Font.BOLD : Font.PLAIN, fontSize));
+        g.drawString(text, x, y);
+        g.dispose();
+    }
+
     /* ----------- draw this image onto another ----------- */
     public void drawOn(Img other, int x, int y) {
         if (img == null || other.img == null)

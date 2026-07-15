@@ -11,6 +11,7 @@ import kfchess.realtime.RaelTime;
 import kfchess.rules.RuleEngine;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,10 +40,21 @@ public class GameEngine {
     private final Map<Piece, Long> jumpEndTimes = new HashMap<>();
     private Position selectedPosition;
 
+    // ניקוד ורשימת מהלכים לכל צבע - נאספים כאן (ולא ב-UI) כי הם חלק
+    // מהתקדמות המשחק עצמה, וצריך שיהיו זמינים גם ל-ConsoleRunner/בדיקות,
+    // לא רק לחלון ה-Swing.
+    private final Map<PieceColor, Integer> scores = new EnumMap<>(PieceColor.class);
+    private final Map<PieceColor, List<String>> moveLog = new EnumMap<>(PieceColor.class);
+    private PieceColor winnerColor;
+
     public GameEngine(Game game, RuleEngine ruleEngine, RaelTime clock) {
         this.game = game;
         this.ruleEngine = ruleEngine;
         this.clock = clock;
+        for (PieceColor color : PieceColor.values()) {
+            scores.put(color, 0);
+            moveLog.put(color, new ArrayList<>());
+        }
     }
 
     public boolean isGameOver() {
@@ -82,6 +94,13 @@ public class GameEngine {
             if (piece.isIdle()) {
                 piece.markJumping();
                 jumpEndTimes.put(piece, clock.now() + DEFAULT_JUMP_DURATION_MS);
+                // אם הכלי שקפץ היה הכלי הנבחר, יש לבטל את הבחירה: הוא כבר
+                // לא IDLE, ולכן ממילא לא ניתן להזיז אותו - אבל בלי הביטול
+                // הזה ה-UI היה ממשיך לצייר עליו מסגרת "נבחר" כאילו אפשר
+                // עדיין לבחור לו יעד, מה שמטעה את השחקן.
+                if (target.equals(selectedPosition)) {
+                    selectedPosition = null;
+                }
             }
         });
     }
@@ -186,7 +205,8 @@ public class GameEngine {
             return;
         }
 
-        checkForKingCapture(defender);
+        checkForKingCapture(movingPiece, defender);
+        recordMove(movingPiece, motion.from(), motion.to(), defender.orElse(null));
         board().movePieceTo(motion.from(), motion.to());
         movingPiece.markArrived();
         maybePromote(movingPiece, motion.to());
@@ -197,13 +217,43 @@ public class GameEngine {
      * התוקף "מתאדה" (נעלם מהמקור) והמגן נשאר מוגן במקומו.
      */
     private void captureFailsAgainstJumpingDefender(Motion motion, Piece movingPiece) {
+        recordFailedCapture(movingPiece, motion.from(), motion.to());
         board().removePieceAt(motion.from());
         movingPiece.markArrived();
     }
 
-    private void checkForKingCapture(Optional<Piece> defender) {
+    /**
+     * מעדכן ניקוד (אם הייתה לכידה) ומוסיף שורה לרשימת המהלכים של הצבע
+     * שביצע את המהלך - נקרא *לפני* שהלוח מתעדכן בפועל, כדי שעדיין
+     * אפשר לדעת מי היה במשבצת היעד.
+     */
+    private void recordMove(Piece movingPiece, Position from, Position to, Piece captured) {
+        boolean isCapture = captured != null;
+        if (isCapture) {
+            scores.merge(movingPiece.color(), captured.kind().value(), Integer::sum);
+        }
+        String notation = movingPiece.kind().code() + squareName(from)
+                + (isCapture ? "x" : "-") + squareName(to);
+        moveLog.get(movingPiece.color()).add(notation);
+    }
+
+    /** מהלך תקיפה שנכשל מול כלי קופץ - מתועד ברשימת המהלכים בלי שינוי ניקוד. */
+    private void recordFailedCapture(Piece movingPiece, Position from, Position to) {
+        String notation = movingPiece.kind().code() + squareName(from) + "x" + squareName(to) + "?!";
+        moveLog.get(movingPiece.color()).add(notation);
+    }
+
+    /** ממיר Position לסימון שח-מטי מוכר (עמודה a.. + שורה ממוספרת מלמטה). */
+    private String squareName(Position pos) {
+        char file = (char) ('a' + pos.col());
+        int rank = board().height() - pos.row();
+        return "" + file + rank;
+    }
+
+    private void checkForKingCapture(Piece attacker, Optional<Piece> defender) {
         defender.ifPresent(captured -> {
             if (captured.kind() == PieceKind.KING) {
+                winnerColor = attacker.color();
                 game.markGameOver();
             }
         });
@@ -220,8 +270,27 @@ public class GameEngine {
         }
     }
 
+    /** הצבע שניצח (המלך של הצבע השני נלכד) - ריק כל עוד המשחק לא הסתיים. */
+    public Optional<PieceColor> winner() {
+        return Optional.ofNullable(winnerColor);
+    }
+
     public Optional<Position> selectedPosition() {
         return Optional.ofNullable(selectedPosition);
+    }
+
+    /** עותק הגנתי: ניקוד נוכחי לכל צבע (למשל להצגה בפאנל הצד). */
+    public Map<PieceColor, Integer> scores() {
+        return Map.copyOf(scores);
+    }
+
+    /** עותק הגנתי: רשימת המהלכים (בסימון שח-מטי) שביצע כל צבע עד כה. */
+    public Map<PieceColor, List<String>> moveLog() {
+        Map<PieceColor, List<String>> copy = new EnumMap<>(PieceColor.class);
+        for (Map.Entry<PieceColor, List<String>> entry : moveLog.entrySet()) {
+            copy.put(entry.getKey(), List.copyOf(entry.getValue()));
+        }
+        return copy;
     }
     public long now() {
     return clock.now();
