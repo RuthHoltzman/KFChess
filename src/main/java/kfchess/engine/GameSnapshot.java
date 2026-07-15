@@ -8,10 +8,12 @@ public record GameSnapshot(
         int boardHeightCells,
         List<PieceSnapshot> pieces,
         Position selectedPosition,
+        List<Position> legalMoves,
         boolean gameOver,
         String winner
 ) {
     public GameSnapshot {
         pieces = List.copyOf(pieces); // הגנה - אי אפשר לשנות את הרשימה אחרי היצירה
+        legalMoves = List.copyOf(legalMoves);
     }
 }

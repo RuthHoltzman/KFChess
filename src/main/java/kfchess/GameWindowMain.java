@@ -8,6 +8,7 @@ import kfchess.input.GameController;
 import kfchess.io.BoardParser;
 import kfchess.model.Board;
 import kfchess.model.Game;
+import kfchess.model.Position;
 import kfchess.realtime.RaelTime;
 import kfchess.rules.RuleEngine;
 import kfchess.view.BoardGeometry;
@@ -15,6 +16,7 @@ import kfchess.view.BoardView;
 import kfchess.view.Img;
 
 import javax.swing.Timer;
+import java.util.List;
 import java.util.Scanner;
 
 public class GameWindowMain {
@@ -50,14 +52,18 @@ public class GameWindowMain {
 
         // רינדור ראשון - פותח את החלון ומעלה את ה-EDT
         GameSnapshot firstSnapshot = snapshotFactory.createSnapshot(
-                board, engine.now(), null, false, null);
+                board, engine.now(), null, false, null,
+                engine.activeMotions(), List.<Position>of());
         view.render(firstSnapshot);
 
-        javax.swing.SwingUtilities.invokeLater(() -> boardImgForSizing.onClick(controller::click));
+        // רישום יחיד של מאזיני קליק (שמאל = תזוזה, ימין = קפיצה).
+        // חשוב: לא לרשום פעמיים - כל רישום כפול היה גורם לכל קליק
+        // להתעבד פעמיים (בחירה כפולה / דריסה של הבחירה מיד אחריה).
         javax.swing.SwingUtilities.invokeLater(() -> {
-    boardImgForSizing.onClick(controller::click);
-    boardImgForSizing.onRightClick(controller::rightClick);
-});
+            boardImgForSizing.onClick(controller::click);
+            boardImgForSizing.onRightClick(controller::rightClick);
+        });
+
         long[] previousTimeNanos = { System.nanoTime() };
         Timer timer = new Timer(16, e -> {
             long now = System.nanoTime();
@@ -66,12 +72,19 @@ public class GameWindowMain {
 
             engine.handleWait(elapsedMillis);
 
+            Position selected = engine.selectedPosition().orElse(null);
+            List<Position> legalMoves = selected == null
+                    ? List.<Position>of()
+                    : engine.legalMovesFrom(selected);
+
             GameSnapshot snapshot = snapshotFactory.createSnapshot(
                     board,
                     engine.now(),
-                    engine.selectedPosition().orElse(null),
+                    selected,
                     engine.isGameOver(),
-                    null);
+                    null,
+                    engine.activeMotions(),
+                    legalMoves);
             view.render(snapshot);
         });
         timer.start();

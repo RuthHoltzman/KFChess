@@ -5,11 +5,18 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Lightweight image‑utility class using only standard JDK APIs.
  */
 public class Img {
+
+    // קאש לתמונות שנטענו מהדיסק - מונע ImageIO.read חוזר על אותו קובץ
+    // בכל render tick (60 פעמים בשנייה). המפתח כולל את מידות היעד כדי
+    // שגדלים שונים של אותה תמונה לא ידרסו זה את זה.
+    private static final Map<String, BufferedImage> IMAGE_CACHE = new ConcurrentHashMap<>();
 
     private BufferedImage img;
     private static JFrame frame;
@@ -21,41 +28,82 @@ public class Img {
                     boolean keepAspect,
                     Object interpolation /*ignored*/) {
 
-        try {
-            img = ImageIO.read(new File(path));                              // :contentReference[oaicite:0]{index=0}
-        } catch (IOException e) {
-            throw new IllegalArgumentException("Cannot load image: " + path);
+        String cacheKey = path + "|" + (targetSize == null ? "orig" : targetSize.width + "x" + targetSize.height) + "|" + keepAspect;
+        BufferedImage cached = IMAGE_CACHE.get(cacheKey);
+        if (cached != null) {
+            img = cached;
+            return this;
         }
-        if (img == null) throw new IllegalArgumentException("Unsupported image: " + path);
 
-        if (targetSize != null) {
-            int tw = targetSize.width, th = targetSize.height;
-            int w = img.getWidth(), h = img.getHeight();
-
-            int nw, nh;
-            if (keepAspect) {                                                // :contentReference[oaicite:1]{index=1}
-                double s = Math.min(tw / (double) w, th / (double) h);
-                nw = (int) Math.round(w * s);
-                nh = (int) Math.round(h * s);
-            } else { nw = tw; nh = th; }
-
-            BufferedImage dst = new BufferedImage(
-                    nw, nh,
-                    img.getColorModel().hasAlpha()
-                            ? BufferedImage.TYPE_INT_ARGB
-                            : BufferedImage.TYPE_INT_RGB);
-
-            Graphics2D g = dst.createGraphics();
-            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
-                               RenderingHints.VALUE_INTERPOLATION_BILINEAR);   // :contentReference[oaicite:2]{index=2}
-            g.drawImage(img, 0, 0, nw, nh, null);
-            g.dispose();
-            img = dst;
+        BufferedImage source = IMAGE_CACHE.get(path);
+        if (source == null) {
+            try {
+                source = ImageIO.read(new File(path));
+            } catch (IOException e) {
+                throw new IllegalArgumentException("Cannot load image: " + path);
+            }
+            if (source == null) throw new IllegalArgumentException("Unsupported image: " + path);
+            IMAGE_CACHE.put(path, source);
         }
+
+        if (targetSize == null) {
+            img = source;
+            return this;
+        }
+
+        int tw = targetSize.width, th = targetSize.height;
+        int w = source.getWidth(), h = source.getHeight();
+
+        int nw, nh;
+        if (keepAspect) {
+            double s = Math.min(tw / (double) w, th / (double) h);
+            nw = (int) Math.round(w * s);
+            nh = (int) Math.round(h * s);
+        } else { nw = tw; nh = th; }
+
+        BufferedImage dst = new BufferedImage(
+                nw, nh,
+                source.getColorModel().hasAlpha()
+                        ? BufferedImage.TYPE_INT_ARGB
+                        : BufferedImage.TYPE_INT_RGB);
+
+        Graphics2D g = dst.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                           RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.drawImage(source, 0, 0, nw, nh, null);
+        g.dispose();
+
+        IMAGE_CACHE.put(cacheKey, dst);
+        img = dst;
         return this;
     }
 
     public Img read(String path) { return read(path, null, false, null); }
+
+    /**
+     * טוענת תמונה כ"קנבס" נקי לציור - עותק פרטי (לא משותף עם הקאש),
+     * כי קנבס עומד להיות מצויר עליו (drawOn/fillRect וכו') בכל פריים,
+     * ועותק משותף היה נצבע-על מפריים לפריים. עדיין נמנעת מקריאה מהדיסק
+     * בזכות הקאש הפנימי.
+     */
+    public Img readAsFreshCanvas(String path) {
+        BufferedImage source = IMAGE_CACHE.get(path);
+        if (source == null) {
+            try {
+                source = ImageIO.read(new File(path));
+            } catch (IOException e) {
+                throw new IllegalArgumentException("Cannot load image: " + path);
+            }
+            if (source == null) throw new IllegalArgumentException("Unsupported image: " + path);
+            IMAGE_CACHE.put(path, source);
+        }
+        BufferedImage copy = new BufferedImage(source.getWidth(), source.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = copy.createGraphics();
+        g.drawImage(source, 0, 0, null);
+        g.dispose();
+        img = copy;
+        return this;
+    }
 
     /* ----------- draw this image onto another ----------- */
     public void drawOn(Img other, int x, int y) {
@@ -67,8 +115,39 @@ public class Img {
             throw new IllegalArgumentException("Patch exceeds destination bounds.");
 
         Graphics2D g = other.img.createGraphics();
-        g.setComposite(AlphaComposite.SrcOver);                               // handles alpha channel :contentReference[oaicite:3]{index=3}
-        g.drawImage(img, x, y, null);                                        // :contentReference[oaicite:4]{index=4}
+        g.setComposite(AlphaComposite.SrcOver);                               // handles alpha channel
+        g.drawImage(img, x, y, null);
+        g.dispose();
+    }
+
+    /* ----------- draw a filled, alpha-blended rectangle (highlights / sandglass) ----------- */
+    public void fillRect(int x, int y, int w, int h, Color color) {
+        if (img == null) throw new IllegalStateException("Image not loaded.");
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setColor(color);
+        g.fillRect(x, y, w, h);
+        g.dispose();
+    }
+
+    /* ----------- draw a rectangle outline (e.g. selection border) ----------- */
+    public void drawRect(int x, int y, int w, int h, Color color, int thickness) {
+        if (img == null) throw new IllegalStateException("Image not loaded.");
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setColor(color);
+        g.setStroke(new BasicStroke(thickness));
+        g.drawRect(x + thickness / 2, y + thickness / 2, w - thickness, h - thickness);
+        g.dispose();
+    }
+
+    /* ----------- draw a filled oval (e.g. legal-move dot marker) ----------- */
+    public void fillOval(int x, int y, int w, int h, Color color) {
+        if (img == null) throw new IllegalStateException("Image not loaded.");
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setColor(color);
+        g.fillOval(x, y, w, h);
         g.dispose();
     }
 
@@ -83,7 +162,7 @@ public class Img {
                            RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g.setColor(color);
         g.setFont(img.getGraphics().getFont().deriveFont(fontSize * 12));     // simple scale
-        g.drawString(txt, x, y);                                             // :contentReference[oaicite:5]{index=5}
+        g.drawString(txt, x, y);
         g.dispose();
     }
 

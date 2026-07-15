@@ -10,5 +10,6 @@ public record PieceSnapshot(
         PieceVisualState state,
         double pixelX,
         double pixelY,
-        long stateElapsedMillis
+        long stateElapsedMillis,
+        double restProgress
 ) {}

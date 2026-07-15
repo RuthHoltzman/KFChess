@@ -70,4 +70,26 @@ public PieceVisualState resolve(Piece piece, long now) {
         Entry entry = entries.get(piece);
         return entry == null ? 0 : now - entry.visualStateEnteredAt;
     }
+
+    /**
+     * שבר ההתקדמות (0..1) בתוך מנוחה (SHORT_REST/LONG_REST).
+     * 0 = בדיוק נכנס למנוחה, 1 = המנוחה עומדת להסתיים.
+     * מחוץ למנוחה מחזיר 0 - שכבת ה-UI פשוט לא תצייר את אפקט "שעון החול".
+     */
+    public double restProgress(Piece piece, long now) {
+        Entry entry = entries.get(piece);
+        if (entry == null) {
+            return 0;
+        }
+        long totalMs = switch (entry.visualState) {
+            case SHORT_REST -> SHORT_REST_MS;
+            case LONG_REST -> LONG_REST_MS;
+            default -> 0;
+        };
+        if (totalMs <= 0) {
+            return 0;
+        }
+        long elapsed = now - entry.visualStateEnteredAt;
+        return Math.max(0.0, Math.min(1.0, elapsed / (double) totalMs));
+    }
 }

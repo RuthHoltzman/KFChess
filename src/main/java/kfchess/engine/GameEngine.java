@@ -74,6 +74,7 @@ public class GameEngine {
     }
 
     public void handleJump(Position target) {
+        advanceGameState();
         if (game.isGameOver()) {
             return;
         }
@@ -121,9 +122,10 @@ public class GameEngine {
             return;
         }
 
-        long arrivalTime = clock.now() + travelTimeFor(from, to);
+        long startTime = clock.now();
+        long arrivalTime = startTime + travelTimeFor(from, to);
         piece.markInTransit();
-        activeMotions.add(new Motion(piece, from, to, arrivalTime));
+        activeMotions.add(new Motion(piece, from, to, startTime, arrivalTime));
     }
 
     private long travelTimeFor(Position from, Position to) {
@@ -224,4 +226,39 @@ public class GameEngine {
     public long now() {
     return clock.now();
 }
+
+    /**
+     * עותק הגנתי של המהלכים הפעילים כרגע - נחוץ לשכבת ה-UI כדי לצייר
+     * את הכלי "הולך" בהדרגה בין המשבצות (אינטרפולציה), במקום "לקפוץ"
+     * ישר ליעד ברגע שהמהלך מסתיים.
+     */
+    public List<Motion> activeMotions() {
+        return List.copyOf(activeMotions);
+    }
+
+    /**
+     * כל המשבצות שהכלי שנמצא ב-from יכול לזוז אליהן חוקית *כרגע*
+     * (משמש את שכבת ה-UI כדי להאיר את המשבצות האפשריות אחרי לחיצה על כלי).
+     * מחזיר רשימה ריקה אם אין כלי במשבצת, או שהכלי לא IDLE.
+     */
+    public List<Position> legalMovesFrom(Position from) {
+        List<Position> moves = new ArrayList<>();
+        if (from == null) {
+            return moves;
+        }
+        Optional<Piece> pieceOpt = board().pieceAt(from);
+        if (pieceOpt.isEmpty() || !pieceOpt.get().isIdle()) {
+            return moves;
+        }
+        Piece piece = pieceOpt.get();
+        for (int row = 0; row < board().height(); row++) {
+            for (int col = 0; col < board().width(); col++) {
+                Position to = new Position(row, col);
+                if (ruleEngine.isLegalMove(board(), piece, from, to)) {
+                    moves.add(to);
+                }
+            }
+        }
+        return moves;
+    }
 }

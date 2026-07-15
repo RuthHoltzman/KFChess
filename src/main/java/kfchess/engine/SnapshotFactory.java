@@ -1,10 +1,14 @@
 package kfchess.engine;
 
 import kfchess.model.Board;
+import kfchess.model.Piece;
 import kfchess.model.Position;
+import kfchess.realtime.Motion;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class SnapshotFactory {
 
@@ -22,8 +26,18 @@ public class SnapshotFactory {
             long now,
             Position selectedPosition,
             boolean gameOver,
-            String winner
+            String winner,
+            List<Motion> activeMotions,
+            List<Position> legalMoves
     ) {
+        // מיפוי כלי -> Motion פעיל, כדי לדעת עבור כל כלי אם הוא "בדרך"
+        // כרגע ולחשב עבורו מיקום פיקסלים מתקדם (הליכה) ולא רק את המשבצת
+        // המקורית (מה שהיה נראה כמו "קפיצה" ליעד ברגע שהמהלך הסתיים).
+        Map<Piece, Motion> motionByPiece = new HashMap<>();
+        for (Motion motion : activeMotions) {
+            motionByPiece.put(motion.piece(), motion);
+        }
+
         List<PieceSnapshot> pieceSnapshots = new ArrayList<>();
 
         for (int row = 0; row < board.height(); row++) {
@@ -32,19 +46,34 @@ public class SnapshotFactory {
                 board.pieceAt(pos).ifPresent(piece -> {
                     PieceVisualState visualState = visualStateTracker.resolve(piece, now);
                     long stateElapsed = visualStateTracker.elapsedInCurrentVisualState(piece, now);
+                    double restProgress = visualStateTracker.restProgress(piece, now);
 
-                    double pixelX = pos.col() * cellWidth;
-                    double pixelY = pos.row() * cellHeight;
+                    double pixelX;
+                    double pixelY;
+                    Motion motion = motionByPiece.get(piece);
+                    if (motion != null) {
+                        double progress = motion.progress(now);
+                        double fromX = motion.from().col() * cellWidth;
+                        double fromY = motion.from().row() * cellHeight;
+                        double toX = motion.to().col() * cellWidth;
+                        double toY = motion.to().row() * cellHeight;
+                        pixelX = fromX + (toX - fromX) * progress;
+                        pixelY = fromY + (toY - fromY) * progress;
+                    } else {
+                        pixelX = pos.col() * cellWidth;
+                        pixelY = pos.row() * cellHeight;
+                    }
+
                     String id = "" + piece.color().code() + piece.kind().code() + "@" + pos;
 
                     pieceSnapshots.add(new PieceSnapshot(
                             id, piece.kind(), piece.color(), visualState,
-                            pixelX, pixelY, stateElapsed
+                            pixelX, pixelY, stateElapsed, restProgress
                     ));
                 });
             }
         }
 
-        return new GameSnapshot(board.width(), board.height(), pieceSnapshots, selectedPosition, gameOver, winner);
+        return new GameSnapshot(board.width(), board.height(), pieceSnapshots, selectedPosition, legalMoves, gameOver, winner);
     }
 }
