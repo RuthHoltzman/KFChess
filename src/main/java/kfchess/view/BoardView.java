@@ -1,9 +1,9 @@
 package kfchess.view;
 
-import kfchess.model.Piece;
-import kfchess.model.Position;
+import kfchess.engine.GameSnapshot;
+import kfchess.engine.PieceSnapshot;
+import kfchess.engine.PieceVisualState;
 import java.awt.*;
-import java.util.Map;
 
 public class BoardView {
 
@@ -15,35 +15,54 @@ public class BoardView {
         this.geometry = geometry;
     }
 
-   public void render(Map<Position, Piece> pieces, long elapsedMillis) {
-    for (Map.Entry<Position, Piece> entry : pieces.entrySet()) {
-        Position pos = entry.getKey();
-        Piece piece = entry.getValue();
+    public void render(GameSnapshot snapshot) {
+        for (PieceSnapshot piece : snapshot.pieces()) {
+            String framePath = currentFramePathFor(piece);
 
-        String framePath = currentFramePathFor(piece, elapsedMillis);
-
-        Img pieceImg = new Img().read(
-            framePath,
-            new Dimension(geometry.getCellWidth(), geometry.getCellHeight()),
-            true, null
-        );
-        Point p = geometry.cellToPixel(pos);
-        pieceImg.drawOn(boardImg, p.x, p.y);
+            Img pieceImg = new Img().read(
+                    framePath,
+                    new Dimension(geometry.getCellWidth(), geometry.getCellHeight()),
+                    true, null
+            );
+            int x = (int) Math.round(piece.pixelX());
+            int y = (int) Math.round(piece.pixelY());
+            pieceImg.drawOn(boardImg, x, y);
+        }
+        boardImg.show();
     }
-    boardImg.show();
-}
-    // private static String imagePathFor(Piece piece) {
-    // String folder = "" + piece.kind().code() + Character.toUpperCase(piece.color().code());
-    // return "src/main/resources/pieces/" + folder + "/states/idle/sprites/1.png";
-    // }  
-    
-private String currentFramePathFor(Piece piece, long elapsedMillis) {
-    String folder = "" + piece.kind().code() + Character.toUpperCase(piece.color().code());
-    String spritesFolder = "src/main/resources/pieces/" + folder + "/states/idle/sprites";
 
-    AnimationClip clip = AnimationClipCache.get(spritesFolder, 6, true);
-    int frameIndex = clip.getFrameIndex(elapsedMillis);
-    return clip.getFramePath(frameIndex);
-}
+    private String currentFramePathFor(PieceSnapshot piece) {
+        String folder = "" + piece.kind().code() + Character.toUpperCase(piece.color().code());
+        String stateFolder = stateFolderFor(piece.state());
+        String spritesFolder = "src/main/resources/pieces/" + folder + "/states/" + stateFolder + "/sprites";
 
+        AnimationClip clip = AnimationClipCache.get(
+                spritesFolder, framesPerSecFor(piece.state()), isLoopFor(piece.state())
+        );
+        int frameIndex = clip.getFrameIndex(piece.stateElapsedMillis());
+        return clip.getFramePath(frameIndex);
+    }
+
+    private String stateFolderFor(PieceVisualState state) {
+        return switch (state) {
+            case IDLE -> "idle";
+            case MOVING -> "move";
+            case JUMPING -> "jump";
+            case SHORT_REST -> "short_rest";
+            case LONG_REST -> "long_rest";
+        };
+    }
+
+    private int framesPerSecFor(PieceVisualState state) {
+        return switch (state) {
+            case IDLE -> 6;
+            case MOVING -> 12;
+            case JUMPING, SHORT_REST -> 8;
+            case LONG_REST -> 6;
+        };
+    }
+
+    private boolean isLoopFor(PieceVisualState state) {
+        return state != PieceVisualState.JUMPING;
+    }
 }

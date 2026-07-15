@@ -114,4 +114,16 @@ public class Img {
 
     /* ----------- access (optional) ----------- */
     public BufferedImage get() { return img; }
+
+public void onClick(java.util.function.BiConsumer<Integer, Integer> handler) {
+    if (label == null) {
+        throw new IllegalStateException("Call show() before onClick().");
+    }
+    label.addMouseListener(new java.awt.event.MouseAdapter() {
+        @Override
+        public void mouseClicked(java.awt.event.MouseEvent e) {
+            handler.accept(e.getX(), e.getY());
+        }
+    });
+}
 }
