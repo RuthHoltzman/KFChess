@@ -211,11 +211,17 @@ public class GameEngine {
         if (piece.kind() != PieceKind.PAWN) {
             return;
         }
-        boolean reachedLastRow =
-                (piece.color() == PieceColor.WHITE && at.row() == 0)
-                        || (piece.color() == PieceColor.BLACK && at.row() == board().height() - 1);
+        boolean reachedLastRow = (piece.color() == PieceColor.WHITE && at.row() == 0)
+                || (piece.color() == PieceColor.BLACK && at.row() == board().height() - 1);
         if (reachedLastRow) {
             board().replacePieceAt(at, new Piece(piece.color(), PieceKind.QUEEN));
         }
     }
+
+    public Optional<Position> selectedPosition() {
+        return Optional.ofNullable(selectedPosition);
+    }
+    public long now() {
+    return clock.now();
+}
 }

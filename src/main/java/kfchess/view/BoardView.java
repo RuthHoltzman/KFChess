@@ -7,18 +7,19 @@ import java.awt.*;
 
 public class BoardView {
 
-    private final Img boardImg;
+    private final String boardImagePath;
     private final BoardGeometry geometry;
 
-    public BoardView(Img boardImg, BoardGeometry geometry) {
-        this.boardImg = boardImg;
+    public BoardView(String boardImagePath, BoardGeometry geometry) {
+        this.boardImagePath = boardImagePath;
         this.geometry = geometry;
     }
 
     public void render(GameSnapshot snapshot) {
+        Img canvas = new Img().read(boardImagePath); // <-- קנבס טרי בכל render
+
         for (PieceSnapshot piece : snapshot.pieces()) {
             String framePath = currentFramePathFor(piece);
-
             Img pieceImg = new Img().read(
                     framePath,
                     new Dimension(geometry.getCellWidth(), geometry.getCellHeight()),
@@ -26,10 +27,12 @@ public class BoardView {
             );
             int x = (int) Math.round(piece.pixelX());
             int y = (int) Math.round(piece.pixelY());
-            pieceImg.drawOn(boardImg, x, y);
+            pieceImg.drawOn(canvas, x, y);
         }
-        boardImg.show();
+        canvas.show();
     }
+
+   
 
     private String currentFramePathFor(PieceSnapshot piece) {
         String folder = "" + piece.kind().code() + Character.toUpperCase(piece.color().code());

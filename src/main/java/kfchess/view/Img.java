@@ -119,10 +119,26 @@ public void onClick(java.util.function.BiConsumer<Integer, Integer> handler) {
     if (label == null) {
         throw new IllegalStateException("Call show() before onClick().");
     }
+
+    
     label.addMouseListener(new java.awt.event.MouseAdapter() {
         @Override
         public void mouseClicked(java.awt.event.MouseEvent e) {
             handler.accept(e.getX(), e.getY());
+        }
+    });
+}
+// ב-Img.java, ליד onClick הקיימת
+public void onRightClick(java.util.function.BiConsumer<Integer, Integer> handler) {
+    if (label == null) {
+        throw new IllegalStateException("Call show() before onRightClick().");
+    }
+    label.addMouseListener(new java.awt.event.MouseAdapter() {
+        @Override
+        public void mouseClicked(java.awt.event.MouseEvent e) {
+            if (javax.swing.SwingUtilities.isRightMouseButton(e)) {
+                handler.accept(e.getX(), e.getY());
+            }
         }
     });
 }
