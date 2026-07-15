@@ -1,8 +1,8 @@
 package kfchess;
 
 import kfchess.engine.GameEngine;
-import kfchess.engine.GameSnapshot;
-import kfchess.engine.SnapshotFactory;
+import kfchess.engine.snaoshot.GameSnapshot;
+import kfchess.engine.snaoshot.SnapshotFactory;
 import kfchess.input.BoardMapper;
 import kfchess.input.GameController;
 import kfchess.io.BoardParser;

@@ -1,6 +1,6 @@
 package kfchess.view;
 
-import kfchess.engine.GameSnapshot;
+import kfchess.engine.snaoshot.GameSnapshot;
 import kfchess.model.PieceColor;
 
 import java.awt.Color;

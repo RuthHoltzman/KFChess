@@ -1,4 +1,4 @@
-package kfchess.engine;
+package kfchess.engine.snaoshot;
 
 import kfchess.model.PieceColor;
 import kfchess.model.Position;

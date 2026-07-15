@@ -1,5 +1,7 @@
-package kfchess.engine;
+package kfchess.engine.snaoshot;
 
+import kfchess.engine.PieceVisualState;
+import kfchess.engine.PieceVisualStateTracker;
 import kfchess.model.Board;
 import kfchess.model.Piece;
 import kfchess.model.PieceColor;
