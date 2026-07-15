@@ -1,4 +1,4 @@
-package kfchess.engine.snaoshot;
+package kfchess.engine;
 
 import kfchess.model.PieceColor;
 import kfchess.model.Position;
@@ -9,6 +9,7 @@ public record GameSnapshot(
         int boardWidthCells,
         int boardHeightCells,
         List<PieceSnapshot> pieces,
+        List<CaptureEffectSnapshot> captureEffects,
         Position selectedPosition,
         List<Position> legalMoves,
         boolean gameOver,
@@ -18,6 +19,7 @@ public record GameSnapshot(
 ) {
     public GameSnapshot {
         pieces = List.copyOf(pieces); // הגנה - אי אפשר לשנות את הרשימה אחרי היצירה
+        captureEffects = List.copyOf(captureEffects);
         legalMoves = List.copyOf(legalMoves);
         scores = Map.copyOf(scores);
         moveLog = Map.copyOf(moveLog);

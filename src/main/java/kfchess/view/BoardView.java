@@ -1,8 +1,9 @@
 package kfchess.view;
 
+import kfchess.engine.CaptureEffectSnapshot;
+import kfchess.engine.GameSnapshot;
+import kfchess.engine.PieceSnapshot;
 import kfchess.engine.PieceVisualState;
-import kfchess.engine.snaoshot.GameSnapshot;
-import kfchess.engine.snaoshot.PieceSnapshot;
 import kfchess.model.Position;
 import java.awt.*;
 
@@ -11,6 +12,7 @@ public class BoardView {
     private static final Color SELECTION_COLOR = new Color(255, 235, 59); // צהוב לבחירה
     private static final Color LEGAL_MOVE_COLOR = new Color(30, 200, 30, 170); // ירוק חצי-שקוף לתאים שאפשר לזוז אליהם
     private static final Color REST_SAND_COLOR = new Color(255, 200, 0, 120); // "שעון חול" - צהוב חצי-שקוף שמתרוקן
+    private static final Color CAPTURE_EFFECT_COLOR = new Color(220, 30, 30); // אדום - "X" דוהה במקום שכלי נלכד
 
     private final String boardImagePath;
     private final BoardGeometry geometry;
@@ -39,9 +41,45 @@ public class BoardView {
             drawRestOverlayIfResting(canvas, piece);
         }
 
+        // מצוירים אחרי הכלים (מעל), כדי שה"X" הדוהה יהיה גלוי בבירור גם
+        // אם כלי אחר כבר עומד/עובר על אותה משבצת ברגע זה.
+        for (CaptureEffectSnapshot effect : snapshot.captureEffects()) {
+            drawCaptureEffect(canvas, effect);
+        }
+
         drawSelectionHighlight(canvas, snapshot);
 
         return canvas;
+    }
+
+    /**
+     * מציירת "X" אדום דוהה + טבעת מתרחבת במקום שבו כלי נלכד הרגע (בין אם
+     * זו לכידה רגילה, ובין אם זו "התאדות" של תוקף מול כלי קופץ) - כדי
+     * שהלכידה תהיה ברורה לעין ולא תיראה כאילו "כלום לא קרה" בין פריים
+     * לפריים. progress=0 זה הרגע שנתפס (הכי בולט), progress=1 זה הרגע
+     * שבו האפקט אמור להיעלם לגמרי (הכי דהוי ומורחב).
+     */
+    private void drawCaptureEffect(Img canvas, CaptureEffectSnapshot effect) {
+        double fadeOut = 1.0 - effect.progress();
+        int alpha = (int) Math.round(220 * fadeOut);
+        if (alpha <= 0) {
+            return;
+        }
+
+        int cx = (int) Math.round(effect.pixelX() + geometry.getCellWidth() / 2.0);
+        int cy = (int) Math.round(effect.pixelY() + geometry.getCellHeight() / 2.0);
+        int baseSize = Math.min(geometry.getCellWidth(), geometry.getCellHeight());
+        // הטבעת מתרחבת קצת תוך כדי שהיא דוהה - נותן תחושת "התפזרות" ולא רק היעלמות.
+        int ringSize = (int) Math.round(baseSize * (0.55 + 0.35 * effect.progress()));
+        Color ringColor = new Color(CAPTURE_EFFECT_COLOR.getRed(), CAPTURE_EFFECT_COLOR.getGreen(),
+                CAPTURE_EFFECT_COLOR.getBlue(), alpha);
+
+        canvas.drawRect(cx - ringSize / 2, cy - ringSize / 2, ringSize, ringSize, ringColor, 5);
+
+        String mark = "\u2715"; // ✕
+        int markFontSize = (int) Math.round(baseSize * 0.5);
+        int markWidth = canvas.textWidth(mark, markFontSize, true);
+        canvas.drawText(mark, cx - markWidth / 2, cy + markFontSize / 3, markFontSize, ringColor, true);
     }
 
     private void drawPiece(Img canvas, PieceSnapshot piece) {

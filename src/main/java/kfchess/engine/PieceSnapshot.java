@@ -1,6 +1,5 @@
-package kfchess.engine.snaoshot;
+package kfchess.engine;
 
-import kfchess.engine.PieceVisualState;
 import kfchess.model.PieceColor;
 import kfchess.model.PieceKind;
 

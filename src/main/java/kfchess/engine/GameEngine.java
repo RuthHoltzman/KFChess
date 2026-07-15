@@ -32,12 +32,29 @@ public class GameEngine {
     private static final long MILLISECONDS_PER_SQUARE = 1000;
     private static final long DEFAULT_JUMP_DURATION_MS = 1000;
 
+    /**
+     * כמה זמן (במילישניות) אפקט "לכידה" (ר' CaptureEffect) נשאר חי אחרי
+     * שכלי הוסר מהלוח - חלון קצר שנועד רק לאפשר ל-UI לצייר אפקט חזותי
+     * (למשל טבעת דוהה) במקום שבו הכלי נעלם, כדי שההיעלמות לא תיראה
+     * כאילו "כלום לא קרה". ציבורי כדי ש-SnapshotFactory יוכל לחשב לפיו
+     * את שבר ההתקדמות (progress) של כל אפקט, בלי לשכפל את המספר.
+     */
+    public static final long CAPTURE_EFFECT_DURATION_MS = 450;
+
     private final Game game;
     private final RuleEngine ruleEngine;
     private final RaelTime clock;
 
     private final List<Motion> activeMotions = new ArrayList<>();
     private final Map<Piece, Long> jumpEndTimes = new HashMap<>();
+    // זמני התחלה של קפיצות פעילות - נשמר במקביל ל-jumpEndTimes (ולא בתוכו),
+    // כדי לא לגעת בלוגיקת הקפיצה הקיימת שכבר עובדת נכון; המפה הזו משרתת
+    // אך ורק את שכבת התצוגה (חישוב קשת הגובה של הקפיצה ב-SnapshotFactory).
+    private final Map<Piece, Long> jumpStartTimes = new HashMap<>();
+    // כלים שהוסרו לאחרונה מהלוח (לכידה רגילה, או "התאדות" תוקף מול כלי
+    // קופץ) - נשמר זמנית רק כדי שה-UI יוכל לצייר אפקט לכידה קצר; ר' תיעוד
+    // מלא ב-CaptureEffect.
+    private final List<CaptureEffect> recentCaptures = new ArrayList<>();
     private Position selectedPosition;
 
     // ניקוד ורשימת מהלכים לכל צבע - נאספים כאן (ולא ב-UI) כי הם חלק
@@ -45,7 +62,6 @@ public class GameEngine {
     // לא רק לחלון ה-Swing.
     private final Map<PieceColor, Integer> scores = new EnumMap<>(PieceColor.class);
     private final Map<PieceColor, List<String>> moveLog = new EnumMap<>(PieceColor.class);
-    private PieceColor winnerColor;
 
     public GameEngine(Game game, RuleEngine ruleEngine, RaelTime clock) {
         this.game = game;
@@ -59,6 +75,11 @@ public class GameEngine {
 
     public boolean isGameOver() {
         return game.isGameOver();
+    }
+
+    /** הצבע שניצח, אם המשחק נגמר (ריק אם המשחק עדיין רץ). */
+    public Optional<PieceColor> winner() {
+        return game.winner();
     }
 
     public Board board() {
@@ -93,7 +114,9 @@ public class GameEngine {
         board().pieceAt(target).ifPresent(piece -> {
             if (piece.isIdle()) {
                 piece.markJumping();
-                jumpEndTimes.put(piece, clock.now() + DEFAULT_JUMP_DURATION_MS);
+                long startTime = clock.now();
+                jumpStartTimes.put(piece, startTime);
+                jumpEndTimes.put(piece, startTime + DEFAULT_JUMP_DURATION_MS);
                 // אם הכלי שקפץ היה הכלי הנבחר, יש לבטל את הבחירה: הוא כבר
                 // לא IDLE, ולכן ממילא לא ניתן להזיז אותו - אבל בלי הביטול
                 // הזה ה-UI היה ממשיך לצייר עליו מסגרת "נבחר" כאילו אפשר
@@ -159,6 +182,17 @@ public class GameEngine {
         // את הקפיצה עבור הטיק הבא.
         resolveArrivedMotions();
         resolveExpiredJumps();
+        purgeExpiredCaptureEffects();
+    }
+
+    /** מנקה אפקטי לכידה שכבר עברו את משך החיים שלהם (ר' CAPTURE_EFFECT_DURATION_MS). */
+    private void purgeExpiredCaptureEffects() {
+        recentCaptures.removeIf(effect -> clock.now() - effect.removedAt() >= CAPTURE_EFFECT_DURATION_MS);
+    }
+
+    /** רושם שכלי הוסר הרגע מהלוח, לצורך אפקט הלכידה הקצר ב-UI. */
+    private void registerCaptureEffect(Piece removedPiece, Position at) {
+        recentCaptures.add(new CaptureEffect(removedPiece.kind(), removedPiece.color(), at, clock.now()));
     }
 
     private void resolveExpiredJumps() {
@@ -171,6 +205,7 @@ public class GameEngine {
         for (Piece piece : finishedJumpers) {
             piece.markJumpEnded();
             jumpEndTimes.remove(piece);
+            jumpStartTimes.remove(piece);
         }
     }
 
@@ -206,6 +241,7 @@ public class GameEngine {
         }
 
         checkForKingCapture(movingPiece, defender);
+        defender.ifPresent(captured -> registerCaptureEffect(captured, motion.to()));
         recordMove(movingPiece, motion.from(), motion.to(), defender.orElse(null));
         board().movePieceTo(motion.from(), motion.to());
         movingPiece.markArrived();
@@ -218,6 +254,7 @@ public class GameEngine {
      */
     private void captureFailsAgainstJumpingDefender(Motion motion, Piece movingPiece) {
         recordFailedCapture(movingPiece, motion.from(), motion.to());
+        registerCaptureEffect(movingPiece, motion.from());
         board().removePieceAt(motion.from());
         movingPiece.markArrived();
     }
@@ -250,11 +287,11 @@ public class GameEngine {
         return "" + file + rank;
     }
 
-    private void checkForKingCapture(Piece attacker, Optional<Piece> defender) {
+    private void checkForKingCapture(Piece movingPiece, Optional<Piece> defender) {
         defender.ifPresent(captured -> {
             if (captured.kind() == PieceKind.KING) {
-                winnerColor = attacker.color();
-                game.markGameOver();
+                // מי שלכד את המלך (לא המלך שנלכד) הוא המנצח.
+                game.markGameOver(movingPiece.color());
             }
         });
     }
@@ -268,11 +305,6 @@ public class GameEngine {
         if (reachedLastRow) {
             board().replacePieceAt(at, new Piece(piece.color(), PieceKind.QUEEN));
         }
-    }
-
-    /** הצבע שניצח (המלך של הצבע השני נלכד) - ריק כל עוד המשחק לא הסתיים. */
-    public Optional<PieceColor> winner() {
-        return Optional.ofNullable(winnerColor);
     }
 
     public Optional<Position> selectedPosition() {
@@ -303,6 +335,27 @@ public class GameEngine {
      */
     public List<Motion> activeMotions() {
         return List.copyOf(activeMotions);
+    }
+
+    /**
+     * כל הקפיצות הפעילות כרגע, עם זמני התחלה/סיום - נחוץ לשכבת ה-UI
+     * כדי לצייר קשת גובה (הכלי "עולה" ו"יורד") בזמן הקפיצה, בדיוק כמו
+     * ש-activeMotions() משמש לצייר הליכה הדרגתית בין משבצות.
+     */
+    public List<JumpVisual> activeJumps() {
+        List<JumpVisual> jumps = new ArrayList<>();
+        for (Map.Entry<Piece, Long> entry : jumpEndTimes.entrySet()) {
+            Piece piece = entry.getKey();
+            long endTime = entry.getValue();
+            long startTime = jumpStartTimes.getOrDefault(piece, endTime - DEFAULT_JUMP_DURATION_MS);
+            jumps.add(new JumpVisual(piece, startTime, endTime));
+        }
+        return jumps;
+    }
+
+    /** עותק הגנתי של אפקטי הלכידה הפעילים כרגע (ר' CaptureEffect). */
+    public List<CaptureEffect> recentCaptureEffects() {
+        return List.copyOf(recentCaptures);
     }
 
     /**

@@ -146,6 +146,23 @@ public class Img {
         g.dispose();
     }
 
+    /**
+     * מודדת (בפיקסלים) כמה רוחב טקסט נתון יתפוס בפונט/גודל נתונים -
+     * בלי לצייר כלום. נחוץ כדי למרכז טקסט (למשל כותרת "ניצחת!" או טקסט
+     * על כפתור) בלי לנחש רוחב לפי מספר תווים, ובלי לצאת מגבולות ה-API
+     * של Img לשום ספריית גרפיקה אחרת - זה עדיין שימוש רק ב-Graphics2D
+     * הפנימי שכבר נמצא בשימוש בכל שאר המחלקה.
+     */
+    public int textWidth(String text, int fontSize, boolean bold) {
+        if (img == null) throw new IllegalStateException("Image not loaded.");
+        Graphics2D g = img.createGraphics();
+        g.setFont(new Font(Font.SANS_SERIF, bold ? Font.BOLD : Font.PLAIN, fontSize));
+        FontMetrics metrics = g.getFontMetrics();
+        int width = metrics.stringWidth(text);
+        g.dispose();
+        return width;
+    }
+
     /* ----------- draw this image onto another ----------- */
     public void drawOn(Img other, int x, int y) {
         if (img == null || other.img == null)
