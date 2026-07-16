@@ -7,8 +7,12 @@ import java.util.Map;
 
 public class PieceVisualStateTracker {
 
-    private static final long SHORT_REST_MS = 500;
-    private static final long LONG_REST_MS = 1000;
+    // משכי המנוחה עצמם (כמה זמן שעון החול נמשך) הם עכשיו מוגדרים במקום
+    // אחד בלבד - GameEngine - כי הם גם קובעים בפועל כמה זמן הכלי חסום
+    // מפעולה (לא רק כמה זמן מציירים עליו אנימציה). כך אי אפשר להגיע
+    // למצב שבו הוויזואל והלוגיקה "מתפצלים" ומראים משכי זמן שונים.
+    private static final long SHORT_REST_MS = GameEngine.SHORT_REST_DURATION_MS;
+    private static final long LONG_REST_MS = GameEngine.LONG_REST_DURATION_MS;
 
     private static class Entry {
         PieceState lastKnownLogicalState;

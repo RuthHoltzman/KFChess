@@ -41,6 +41,13 @@ public class GameEngine {
      */
     public static final long CAPTURE_EFFECT_DURATION_MS = 450;
 
+    // משכי "מנוחה" (cooldown) אחרי הליכה/קפיצה - כמה זמן הכלי חסום מפעולה.
+    // ציבוריים כי PieceVisualStateTracker משתמש באותם ערכים בדיוק כדי
+    // שהאנימציה (שעון החול) תמיד תואמת בדיוק את משך הזמן שבו הכלי באמת
+    // לא ניתן להזזה - אין שני מקורות אמת לאותו מספר.
+    public static final long SHORT_REST_DURATION_MS = 500;  // אחרי הליכה
+    public static final long LONG_REST_DURATION_MS = 1000;  // אחרי קפיצה
+
     private final Game game;
     private final RuleEngine ruleEngine;
     private final RaelTime clock;
@@ -55,6 +62,12 @@ public class GameEngine {
     // קופץ) - נשמר זמנית רק כדי שה-UI יוכל לצייר אפקט לכידה קצר; ר' תיעוד
     // מלא ב-CaptureEffect.
     private final List<CaptureEffect> recentCaptures = new ArrayList<>();
+    // מתי המנוחה הנוכחית של כל כלי (אם יש) מסתיימת - כל עוד clock.now()
+    // קטן מהערך הזה, הכלי לא זמין לבחירה/תנועה/קפיצה (ר' isAvailableToAct).
+    // זה מה שהופך את "המנוחה" ממשהו ויזואלי-בלבד (שהיה קודם) לכלל משחק
+    // אמיתי: קליק על כלי שנח לא בוחר אותו בכלל - בדיוק כמו כלי שנמצא
+    // כרגע בתנועה (IN_TRANSIT) או בקפיצה (JUMPING).
+    private final Map<Piece, Long> restEndTimes = new HashMap<>();
     private Position selectedPosition;
 
     // ניקוד ורשימת מהלכים לכל צבע - נאספים כאן (ולא ב-UI) כי הם חלק
@@ -112,7 +125,7 @@ public class GameEngine {
             return;
         }
         board().pieceAt(target).ifPresent(piece -> {
-            if (piece.isIdle()) {
+            if (isAvailableToAct(piece)) {
                 piece.markJumping();
                 long startTime = clock.now();
                 jumpStartTimes.put(piece, startTime);
@@ -128,9 +141,22 @@ public class GameEngine {
         });
     }
 
+    /**
+     * האם כלי זמין כרגע לפעולה (בחירה/תנועה/קפיצה): לא רק "IDLE" ברמת
+     * המודל, אלא גם לא נמצא כרגע ב"מנוחה" (cooldown) אחרי הליכה/קפיצה
+     * קודמת. זה מה שהופך את שעון החול הצהוב מקישוט בלבד לכלל משחק אמיתי.
+     */
+    private boolean isAvailableToAct(Piece piece) {
+        if (!piece.isIdle()) {
+            return false;
+        }
+        Long restEndTime = restEndTimes.get(piece);
+        return restEndTime == null || clock.now() >= restEndTime;
+    }
+
     private void trySelect(Position clicked) {
         board().pieceAt(clicked).ifPresent(piece -> {
-            if (piece.isIdle()) {
+            if (isAvailableToAct(piece)) {
                 selectedPosition = clicked;
             }
         });
@@ -143,11 +169,11 @@ public class GameEngine {
             return;
         }
 
-        boolean clickedOwnPiece = board().pieceAt(clicked)
-                .map(p -> p.isSameColor(selectedPiece.get()))
+        boolean clickedOwnAvailablePiece = board().pieceAt(clicked)
+                .map(p -> p.isSameColor(selectedPiece.get()) && isAvailableToAct(p))
                 .orElse(false);
 
-        if (clickedOwnPiece) {
+        if (clickedOwnAvailablePiece) {
             selectedPosition = clicked;
             return;
         }
@@ -157,7 +183,7 @@ public class GameEngine {
     }
 
     private void tryMove(Piece piece, Position from, Position to) {
-        if (!piece.isIdle()) {
+        if (!isAvailableToAct(piece)) {
             return;
         }
         if (!ruleEngine.isLegalMove(board(), piece, from, to)) {
@@ -183,6 +209,12 @@ public class GameEngine {
         resolveArrivedMotions();
         resolveExpiredJumps();
         purgeExpiredCaptureEffects();
+        purgeExpiredRestEntries();
+    }
+
+    /** מנקה רשומות מנוחה שכבר פקעו, כדי שהמפה לא תגדל ללא גבול לאורך משחק ארוך. */
+    private void purgeExpiredRestEntries() {
+        restEndTimes.entrySet().removeIf(entry -> clock.now() >= entry.getValue());
     }
 
     /** מנקה אפקטי לכידה שכבר עברו את משך החיים שלהם (ר' CAPTURE_EFFECT_DURATION_MS). */
@@ -206,6 +238,7 @@ public class GameEngine {
             piece.markJumpEnded();
             jumpEndTimes.remove(piece);
             jumpStartTimes.remove(piece);
+            restEndTimes.put(piece, clock.now() + LONG_REST_DURATION_MS);
         }
     }
 
@@ -245,6 +278,7 @@ public class GameEngine {
         recordMove(movingPiece, motion.from(), motion.to(), defender.orElse(null));
         board().movePieceTo(motion.from(), motion.to());
         movingPiece.markArrived();
+        restEndTimes.put(movingPiece, clock.now() + SHORT_REST_DURATION_MS);
         maybePromote(movingPiece, motion.to());
     }
 
@@ -369,7 +403,7 @@ public class GameEngine {
             return moves;
         }
         Optional<Piece> pieceOpt = board().pieceAt(from);
-        if (pieceOpt.isEmpty() || !pieceOpt.get().isIdle()) {
+        if (pieceOpt.isEmpty() || !isAvailableToAct(pieceOpt.get())) {
             return moves;
         }
         Piece piece = pieceOpt.get();
