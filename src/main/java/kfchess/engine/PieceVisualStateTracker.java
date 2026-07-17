@@ -34,7 +34,6 @@ public PieceVisualState resolve(Piece piece, long now) {
 
     PieceState currentLogicalState = piece.state();
 
-    // TODO 1: זיהוי מעבר לוגי (מה-tick הקודם להווה)
     if (currentLogicalState != entry.lastKnownLogicalState) {
         if (entry.lastKnownLogicalState == PieceState.IN_TRANSIT
                 && currentLogicalState == PieceState.IDLE) {
@@ -48,14 +47,12 @@ public PieceVisualState resolve(Piece piece, long now) {
         entry.lastKnownLogicalState = currentLogicalState;
     }
 
-    // TODO 2: מצבים "רגילים" שתמיד עוקבים ישירות אחרי הלוגיקה
     if (currentLogicalState == PieceState.IN_TRANSIT) {
         entry.visualState = PieceVisualState.MOVING;
     } else if (currentLogicalState == PieceState.JUMPING) {
         entry.visualState = PieceVisualState.JUMPING;
     }
 
-    // TODO 3: פקיעת מנוחה (רק אם אנחנו כרגע בתוכה)
     if (entry.visualState == PieceVisualState.SHORT_REST
             && now - entry.visualStateEnteredAt >= SHORT_REST_MS) {
         entry.visualState = PieceVisualState.IDLE;

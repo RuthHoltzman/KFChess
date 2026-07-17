@@ -29,16 +29,11 @@ import java.util.Optional;
  */
 public class GameEngine {
 
+    
     private static final long MILLISECONDS_PER_SQUARE = 1000;
     private static final long DEFAULT_JUMP_DURATION_MS = 1000;
 
-    /**
-     * כמה זמן (במילישניות) אפקט "לכידה" (ר' CaptureEffect) נשאר חי אחרי
-     * שכלי הוסר מהלוח - חלון קצר שנועד רק לאפשר ל-UI לצייר אפקט חזותי
-     * (למשל טבעת דוהה) במקום שבו הכלי נעלם, כדי שההיעלמות לא תיראה
-     * כאילו "כלום לא קרה". ציבורי כדי ש-SnapshotFactory יוכל לחשב לפיו
-     * את שבר ההתקדמות (progress) של כל אפקט, בלי לשכפל את המספר.
-     */
+    // משך זמן אפקט הלכידה (השעון החול הצהוב) - לא משנה אם הכלי נלכד על ידי כלי רגיל או על ידי כלי קופץ, האפקט זהה.
     public static final long CAPTURE_EFFECT_DURATION_MS = 450;
 
     // משכי "מנוחה" (cooldown) אחרי הליכה/קפיצה - כמה זמן הכלי חסום מפעולה.
@@ -76,6 +71,8 @@ public class GameEngine {
     private final Map<PieceColor, Integer> scores = new EnumMap<>(PieceColor.class);
     private final Map<PieceColor, List<String>> moveLog = new EnumMap<>(PieceColor.class);
 
+    private final Map<Piece, Position> chainFinalTarget = new HashMap<>();
+    private final Map<Piece, Position> chainOriginalFrom = new HashMap<>();    
     public GameEngine(Game game, RuleEngine ruleEngine, RaelTime clock) {
         this.game = game;
         this.ruleEngine = ruleEngine;
@@ -190,10 +187,24 @@ public class GameEngine {
             return;
         }
 
+        boolean isSlidingMove = to.row() == from.row() || to.col() == from.col()
+                || Math.abs(to.row() - from.row()) == Math.abs(to.col() - from.col());
+        boolean isMultiSquare = Math.max(Math.abs(to.row() - from.row()), Math.abs(to.col() - from.col())) > 1;
+
+        Position nextHop = to;
+        if (isSlidingMove && isMultiSquare) {
+            int rowStep = Integer.signum(to.row() - from.row());
+            int colStep = Integer.signum(to.col() - from.col());
+            nextHop = new Position(from.row() + rowStep, from.col() + colStep);
+            chainFinalTarget.put(piece, to);
+            chainOriginalFrom.put(piece, from);
+        }
+
+
         long startTime = clock.now();
-        long arrivalTime = startTime + travelTimeFor(from, to);
+        long arrivalTime = startTime + travelTimeFor(from, nextHop);
         piece.markInTransit();
-        activeMotions.add(new Motion(piece, from, to, startTime, arrivalTime));
+        activeMotions.add(new Motion(piece, from, nextHop, startTime, arrivalTime));
     }
 
     private long travelTimeFor(Position from, Position to) {
@@ -270,15 +281,46 @@ public class GameEngine {
 
         if (defender.isPresent() && defender.get().isJumping()) {
             captureFailsAgainstJumpingDefender(motion, movingPiece);
+            chainFinalTarget.remove(movingPiece);
+            chainOriginalFrom.remove(movingPiece);
             return;
         }
 
+        if (defender.isPresent() && defender.get().isSameColor(movingPiece)) {
+            recordBlockedMove(movingPiece, chainOriginalFrom.getOrDefault(movingPiece, motion.from()), motion.to());
+            movingPiece.markArrived();
+            restEndTimes.put(movingPiece, clock.now() + SHORT_REST_DURATION_MS);
+            chainFinalTarget.remove(movingPiece);
+            chainOriginalFrom.remove(movingPiece);
+            return;
+        }
+
+        Position finalTarget = chainFinalTarget.get(movingPiece);
+        boolean chainContinues = defender.isEmpty() && finalTarget != null && !finalTarget.equals(motion.to());
+        
+        if (chainContinues) {
+            board().movePieceTo(motion.from(), motion.to());
+            movingPiece.markArrived();
+            movingPiece.markInTransit();
+            int rowStep = Integer.signum(finalTarget.row() - motion.to().row());
+            int colStep = Integer.signum(finalTarget.col() - motion.to().col());
+            Position nextHop = new Position(motion.to().row() + rowStep, motion.to().col() + colStep);
+            long startTime = clock.now();
+            activeMotions.add(new Motion(movingPiece, motion.to(), nextHop, startTime,
+                    startTime + MILLISECONDS_PER_SQUARE));
+            return;
+        }
+        
+        
         checkForKingCapture(movingPiece, defender);
         defender.ifPresent(captured -> registerCaptureEffect(captured, motion.to()));
-        recordMove(movingPiece, motion.from(), motion.to(), defender.orElse(null));
+        recordMove(movingPiece, chainOriginalFrom.getOrDefault(movingPiece, motion.from()), motion.to(),
+                defender.orElse(null));
         board().movePieceTo(motion.from(), motion.to());
         movingPiece.markArrived();
         restEndTimes.put(movingPiece, clock.now() + SHORT_REST_DURATION_MS);
+        chainFinalTarget.remove(movingPiece);
+        chainOriginalFrom.remove(movingPiece);        
         maybePromote(movingPiece, motion.to());
     }
 
@@ -308,6 +350,12 @@ public class GameEngine {
         moveLog.get(movingPiece.color()).add(notation);
     }
 
+/** מהלך שנעצר כי כלי ידידותי היה במשבצת הבאה - "כמעט התנגשות". */
+    private void recordBlockedMove(Piece movingPiece, Position from, Position blockedAt) {
+        String notation = movingPiece.kind().code() + squareName(from) + "-" + squareName(blockedAt) + " (blocked)";
+        moveLog.get(movingPiece.color()).add(notation);
+    }
+     
     /** מהלך תקיפה שנכשל מול כלי קופץ - מתועד ברשימת המהלכים בלי שינוי ניקוד. */
     private void recordFailedCapture(Piece movingPiece, Position from, Position to) {
         String notation = movingPiece.kind().code() + squareName(from) + "x" + squareName(to) + "?!";
