@@ -18,6 +18,14 @@ public class AnimationClip {
     private List<String> loadSortedFramePaths(String folder) {
         File dir = new File(folder);
         File[] files = dir.listFiles((d, name) -> name.endsWith(".png"));
+        if (files == null) {
+            throw new IllegalStateException(
+                    "Missing animation folder: " + folder
+                            + " (expected one .png file per frame, e.g. 0.png, 1.png, ...)");
+        }
+        if (files.length == 0) {
+            throw new IllegalStateException("Animation folder is empty: " + folder);
+        }
         Arrays.sort(files, Comparator.comparingInt(file -> {
             String name = file.getName();
             return Integer.parseInt(name.substring(0, name.length() - 4));

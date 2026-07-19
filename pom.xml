@@ -29,8 +29,14 @@
             <version>5.11.0</version>
             <scope>test</scope>
         </dependency>
+        <!-- JUnit 5 Jupiter Params for parameterized tests -->
+        <dependency>
+            <groupId>net.java.jinput</groupId>
+            <artifactId>jinput</artifactId>
+            <version>2.0.9</version>
+        </dependency>
     </dependencies>
-
+  
     <build>
         <plugins>
             <plugin>
