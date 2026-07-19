@@ -8,24 +8,21 @@ import java.awt.Rectangle;
 import java.util.List;
 
 /**
- * שכבת התצוגה העליונה: מרכיבה קנבס אחד גדול מ-3 חלקים -
- * פאנל השחקן הלבן (שמאל) | הלוח עצמו (כפי שמצייר BoardView) | פאנל השחקן השחור (ימין) -
- * ורק היא קוראת ל-show() בפועל. כך BoardView נשאר אחראי אך ורק על
- * ציור הלוח/הכלים, ו-SidePanelView אחראי אך ורק על ציור פאנל שחקן בודד -
- * כל אחד "יודע" מעט ככל האפשר, בהתאם לסגנון שאר הפרויקט.
+ * שכבת התצוגה העליונה: מרכיבה קנבס אחד גדול -
+ * פאנל השחקן הלבן (מוצמד לקצה השמאלי) | הלוח (ריבועי, ממורכז בשטח
+ * שנשאר באמצע) | פאנל השחקן השחור (מוצמד לקצה הימני) -
+ * ורק היא קוראת ל-show() בפועל.
  * <p>
- * זו גם השכבה שאחראית על מסך "Game Over" (כותרת המנצח + כפתור Restart) -
- * הוא מצויר ישירות על-גבי קנבס הלוח (boardCanvas), *לפני* שהוא מורכב
- * לתוך הסצנה המלאה, כדי שקואורדינטות הכפתור (restartButtonBounds) יהיו
- * תמיד ביחס ללוח בלבד - בדיוק כמו קואורדינטות העכבר שמגיעות מ-GameWindowMain
- * אחרי שכבר הוחסר מהן boardOffsetX().
+ * בכוונה, המחלקה הזו לא מחשבת שום גיאומטריה בעצמה יותר (לא היכן הלוח
+ * מתחיל, לא כמה מקום נשאר) - כל המספרים (גודל הלוח, ה-offset שלו)
+ * מגיעים כפרמטרים מוכנים מ-GameWindowMain, שהוא המקום היחיד שבאמת
+ * יודע מה גודל החלון האמיתי כרגע. זה לקח משתי באגים קודמים: כל פעם
+ * ששני מקומות שונים חישבו את אותו מספר בנפרד (במקום שאחד יחשב ויעביר
+ * לשני), הם התבדרו זה מזה וזה יצר בדיוק את הבאגים של "קליק לא במקום".
  * <p>
- * גודל הלוח (boardWidthPx/boardHeightPx) הוא עכשיו פרמטר של render()
- * ולא שדה קבוע בקונסטרוקטור - כדי שהלוח יוכל להשתנות בגודל בין פריים
- * לפריים (שינוי גודל חלון). המחלקה עדיין שומרת את הערכים ה*אחרונים*
- * שקיבלה כשדות mutable, כדי ש-boardOffsetX()/totalWidthPx()/וכו' - שאין
- * להן פרמטרים, ונקראות גם מחוץ ל-render (למשל מ-GameWindowMain כדי
- * לבדוק קואורדינטות קליק) - עדיין ידעו למה להתייחס.
+ * הלוח *תמיד* ריבועי (cellSize זהה לרוחב ולגובה) - זו הסיבה שאין יותר
+ * "קצוות שהופכות למלבן": אם החלון עצמו לא ריבועי, פשוט נשאר שוליים
+ * ריקים (letterboxing) בציר שיש בו עודף מקום, במקום למתוח את הלוח.
  */
 public class GameSceneView {
 
@@ -46,67 +43,56 @@ public class GameSceneView {
     private final SidePanelView sidePanelView;
 
     // "הגודל האחרון שידוע" - מתעדכן בתחילת כל render(). לא זיכרון-מצב
-    // אמיתי (אין כאן שום דבר שתלוי בהיסטוריה), רק נוחות כדי שמתודות
-    // בלי פרמטרים (boardOffsetX/totalWidthPx/וכו') ידעו למה להתייחס.
-    private int boardWidthPx;
-    private int boardHeightPx;
+    // אמיתי, רק נוחות כדי ש-restartButtonBounds() (בלי פרמטרים, נקראת
+    // גם מחוץ ל-render כדי לבדוק קליק) תדע למה להתייחס.
+    private int lastBoardPixelSize;
 
     public GameSceneView(BoardView boardView, int panelWidth) {
         this.boardView = boardView;
         this.sidePanelView = new SidePanelView(panelWidth);
     }
 
-    /** ה-X שבו הלוח מתחיל בתוך הקנבס המורכב - קלט העכבר צריך להתאים אליו. */
-    public int boardOffsetX() {
-        return sidePanelView.panelWidth();
-    }
-
-    public int totalWidthPx() {
-        return sidePanelView.panelWidth() * 2 + boardWidthPx;
-    }
-
-    public int totalHeightPx() {
-        return boardHeightPx;
-    }
-
     /**
-     * מיקום/גודל כפתור ה-Restart, ביחס ללוח בלבד (לא לכל הסצנה) - כדי
-     * ש-GameWindowMain יוכל לבדוק אם קליק (אחרי החסרת boardOffsetX) נפל
-     * בתוכו, בלי לשכפל את המספרים במקום נוסף. מתייחס לגודל הלוח *האחרון*
-     * שצויר - נכון תמיד אחרי לפחות render() אחד.
+     * מיקום/גודל כפתור ה-Restart, ביחס ללוח בלבד (0,0 = הפינה השמאלית-
+     * עליונה של הלוח עצמו, לא של כל הסצנה) - נכון תמיד אחרי לפחות
+     * render() אחד. GameWindowMain צריך להחסיר את ה-offset של הלוח
+     * (שהוא עצמו מחשב) לפני שהוא בודק קליק מול זה.
      */
     public Rectangle restartButtonBounds() {
-        int x = (boardWidthPx - BUTTON_WIDTH) / 2;
-        int y = boardHeightPx / 2 + 30;
+        int x = (lastBoardPixelSize - BUTTON_WIDTH) / 2;
+        int y = lastBoardPixelSize / 2 + 30;
         return new Rectangle(x, y, BUTTON_WIDTH, BUTTON_HEIGHT);
     }
 
     /**
-     * @param boardWidthPx  הרוחב הנוכחי (בפיקסלים) שבו רוצים לצייר את הלוח -
-     *                      נקבע כל פעם מחדש לפי גודל החלון הנוכחי, לא קבוע.
-     * @param boardHeightPx כנ"ל לגובה.
+     * @param sceneWidthPx   הרוחב הכולל של החלון (הפנימי, לציור) - כולל שני הפאנלים.
+     * @param sceneHeightPx  הגובה הכולל של החלון.
+     * @param boardPixelSize גודל הלוח בפיקסלים - *ריבוע* אחד (רוחב=גובה תמיד).
+     * @param boardOffsetX   היכן הלוח מתחיל בציר X בתוך הסצנה (כבר כולל את הפאנל השמאלי + מירכוז).
+     * @param boardOffsetY   היכן הלוח מתחיל בציר Y בתוך הסצנה (מירכוז אנכי אם יש שוליים).
      */
-    public void render(GameSnapshot snapshot, int boardWidthPx, int boardHeightPx) {
-        this.boardWidthPx = boardWidthPx;
-        this.boardHeightPx = boardHeightPx;
+    public void render(GameSnapshot snapshot, int sceneWidthPx, int sceneHeightPx,
+                        int boardPixelSize, int boardOffsetX, int boardOffsetY) {
+        this.lastBoardPixelSize = boardPixelSize;
 
         BoardGeometry geometry = new BoardGeometry(
-                boardWidthPx, boardHeightPx, snapshot.boardHeightCells(), snapshot.boardWidthCells());
+                boardPixelSize, boardPixelSize, snapshot.boardHeightCells(), snapshot.boardWidthCells());
 
-        Img scene = new Img().newCanvas(totalWidthPx(), totalHeightPx(), OUTER_BACKGROUND);
+        Img scene = new Img().newCanvas(sceneWidthPx, sceneHeightPx, OUTER_BACKGROUND);
 
         Img boardCanvas = boardView.render(snapshot, geometry);
         if (snapshot.gameOver()) {
             drawGameOverOverlay(boardCanvas, snapshot.winner());
         }
-        boardCanvas.drawOn(scene, boardOffsetX(), 0);
+        boardCanvas.drawOn(scene, boardOffsetX, boardOffsetY);
 
-        sidePanelView.draw(scene, 0, totalHeightPx(),
+        int panelWidth = sidePanelView.panelWidth();
+        sidePanelView.draw(scene, 0, sceneHeightPx,
                 PieceColor.WHITE,
                 snapshot.scores().getOrDefault(PieceColor.WHITE, 0),
                 snapshot.moveLog().getOrDefault(PieceColor.WHITE, List.of()));
 
-        sidePanelView.draw(scene, boardOffsetX() + boardWidthPx, totalHeightPx(),
+        sidePanelView.draw(scene, sceneWidthPx - panelWidth, sceneHeightPx,
                 PieceColor.BLACK,
                 snapshot.scores().getOrDefault(PieceColor.BLACK, 0),
                 snapshot.moveLog().getOrDefault(PieceColor.BLACK, List.of()));
@@ -116,10 +102,10 @@ public class GameSceneView {
 
     /** מציירת מסך "נגמר המשחק": רקע כהה חצי-שקוף, כותרת עם שם המנצח, וכפתור Restart. */
     private void drawGameOverOverlay(Img boardCanvas, String winner) {
-        boardCanvas.fillRect(0, 0, boardWidthPx, boardHeightPx, OVERLAY_BACKGROUND);
+        boardCanvas.fillRect(0, 0, lastBoardPixelSize, lastBoardPixelSize, OVERLAY_BACKGROUND);
 
-        int centerX = boardWidthPx / 2;
-        int titleBaselineY = boardHeightPx / 2 - 50;
+        int centerX = lastBoardPixelSize / 2;
+        int titleBaselineY = lastBoardPixelSize / 2 - 50;
 
         String title = winner == null ? "Game Over" : (winner + " Wins!");
         int titleWidth = boardCanvas.textWidth(title, TITLE_FONT_SIZE, true);

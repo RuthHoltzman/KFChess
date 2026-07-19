@@ -254,42 +254,41 @@ public class Img {
     public void show() {
         if (img == null) throw new IllegalStateException("Image not loaded.");
 
-    if (frame == null) {
-            // פעם ראשונה - יוצרים את החלון. pack() כאן קובע רק את הגודל
-            // ההתחלתי (לפי גודל התמונה הראשונה) - אחרי זה setResizable
-            // משאיר למשתמשת לגרור ולשנות גודל בעצמה.
-            SwingUtilities.invokeLater(() -> {
-                frame = new JFrame("Image");
-                frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-                frame.setResizable(true);
-                label = new JLabel(new ImageIcon(img));
-                // ברירת המחדל של JLabel היא למרכז אייקון בתוך גבולות ה-label -
-                // וה-label עצמו נמתח (BorderLayout.CENTER) לכל שטח החלון, שכמעט
-                // תמיד קצת יותר גדול מהתמונה המצוירת בפועל (בגלל חלוקת שלמים
-                // בחישוב גודל התא). התוצאה: התמונה "צפה" עם רווח מסביבה, ואז
-                // קליק שנמדד ביחס ל-label (שמתחיל ב-0,0 של כל השטח הנמתח) לא
-                // תואם לקואורדינטות בתוך התמונה עצמה. עיגון לפינה השמאלית-
-                // עליונה מבטל את המירכוז הזה לגמרי: התמונה תמיד מצוירת החל
-                // מ-(0,0) - בדיוק אותה נקודת התחלה שממנה נמדדות קואורדינטות
-                // העכבר - כך שאין יותר שום פער לפצות עליו בזמן טיפול בקליק.
-                label.setHorizontalAlignment(SwingConstants.LEFT);
-                label.setVerticalAlignment(SwingConstants.TOP);
-                frame.add(label);
-                frame.pack();
-                frame.setLocationRelativeTo(null);
-                frame.setVisible(true);
-            });
-        } else {
-            // החלון כבר קיים - רק מעדכנים את התמונה בתוכו. בכוונה *לא*
-            // קוראים ל-pack() כאן: pack() היה מכריח את החלון לחזור לגודל
-            // התמונה בכל פריים (60 פעם בשנייה), מה שמבטל כל שינוי גודל
-            // ידני שהמשתמשת עושה בעכבר, עוד לפני שהיא מספיקה לראות אותו.
-            SwingUtilities.invokeLater(() -> {
-                label.setIcon(new ImageIcon(img));
-                frame.repaint();
-            });
-            }
-    
+         if (frame == null) {
+        // פעם ראשונה - יוצרים את החלון. pack() כאן קובע רק את הגודל
+        // ההתחלתי (לפי גודל התמונה הראשונה) - אחרי זה setResizable
+        // משאיר למשתמשת לגרור ולשנות גודל בעצמה.
+        SwingUtilities.invokeLater(() -> {
+            frame = new JFrame("Image");
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            frame.setResizable(true);
+            label = new JLabel(new ImageIcon(img));
+            // ברירת המחדל של JLabel היא למרכז אייקון בתוך גבולות ה-label -
+            // וה-label עצמו נמתח (BorderLayout.CENTER) לכל שטח החלון, שכמעט
+            // תמיד קצת יותר גדול מהתמונה המצוירת בפועל (בגלל חלוקת שלמים
+            // בחישוב גודל התא). התוצאה: התמונה "צפה" עם רווח מסביבה, ואז
+            // קליק שנמדד ביחס ל-label (שמתחיל ב-0,0 של כל השטח הנמתח) לא
+            // תואם לקואורדינטות בתוך התמונה עצמה. עיגון לפינה השמאלית-
+            // עליונה מבטל את המירכוז הזה לגמרי: התמונה תמיד מצוירת החל
+            // מ-(0,0) - בדיוק אותה נקודת התחלה שממנה נמדדות קואורדינטות
+            // העכבר - כך שאין יותר שום פער לפצות עליו בזמן טיפול בקליק.
+            label.setHorizontalAlignment(SwingConstants.LEFT);
+            label.setVerticalAlignment(SwingConstants.TOP);
+            frame.add(label);
+            frame.pack();
+            frame.setLocationRelativeTo(null);
+            frame.setVisible(true);
+        });
+    } else {
+        // החלון כבר קיים - רק מעדכנים את התמונה בתוכו. בכוונה *לא*
+        // קוראים ל-pack() כאן: pack() היה מכריח את החלון לחזור לגודל
+        // התמונה בכל פריים (60 פעם בשנייה), מה שמבטל כל שינוי גודל
+        // ידני שהמשתמשת עושה בעכבר, עוד לפני שהיא מספיקה לראות אותו.
+        SwingUtilities.invokeLater(() -> {
+            label.setIcon(new ImageIcon(img));
+            frame.repaint();
+        });
+        }
     }
 
     /* ----------- access (optional) ----------- */

@@ -24,11 +24,7 @@ import java.util.Scanner;
 
 public class GameWindowMain {
 
-    // גודל תא רק לרינדור הראשון - לפני שהחלון בכלל קיים, אין עדיין
-    // "גודל חלון נוכחי" לשאול. מהרינדור השני ואילך (בטיימר) כבר שואלים
-    // את גודל החלון האמיתי בכל פעם מחדש - ר' currentCellWidth/Height.
     private static final int INITIAL_CELL_SIZE = 100;
-    // הגנה מפני חלון שנגרר קטן מדי - חילוק שלמים יכול להתקרב ל-0.
     private static final int MIN_CELL_SIZE = 20;
     private static final int SIDE_PANEL_WIDTH = 240;
 
@@ -59,7 +55,7 @@ public class GameWindowMain {
             this.snapshotFactory = new SnapshotFactory();
         }
 
-        GameSnapshot currentSnapshot(int cellWidth, int cellHeight) {
+        GameSnapshot currentSnapshot(int cellSize) {
             Position selected = engine.selectedPosition().orElse(null);
             List<Position> legalMoves = selected == null
                     ? List.<Position>of()
@@ -70,8 +66,8 @@ public class GameWindowMain {
 
             return snapshotFactory.createSnapshot(
                     board,
-                    cellWidth,
-                    cellHeight,
+                    cellSize,
+                    cellSize,
                     engine.now(),
                     selected,
                     engine.isGameOver(),
@@ -85,26 +81,39 @@ public class GameWindowMain {
         }
     }
 
-    private static int clampedCellSize(int rawSizePx, int cellCount) {
-        return Math.max(MIN_CELL_SIZE, rawSizePx / cellCount);
-    }
+    /**
+     * כל המספרים שקובעים "איפה כל דבר נמצא על המסך" ברגע נתון - מחושבים
+     * *במקום אחד בלבד* (computeLayout למטה) ומועברים מוכנים לכל מי שצריך
+     * אותם (רינדור, טיפול בקליק). זה בדיוק הלקח משתי הבעיות הקודמות: כל
+     * פעם ששני מקומות חישבו משהו דומה בנפרד, הם התבדרו זה מזה.
+     */
+    private record BoardLayout(int cellSize, int boardPixelSize, int offsetX, int offsetY) {}
 
     /**
-     * גודל תא נוכחי, בפועל, ברגע הקריאה - שואלת ישירות את ה-Swing frame
-     * (dropAnchor.contentSize()) אם הוא כבר קיים, ולא איזשהו משתנה שנשמר
-     * מ-resize קודם. זה מה שמבטיח שרינדור וטיפול בקליק, אפילו אם הם
-     * קורים במילישניות שונות, תמיד "רואים" בדיוק את אותו גודל - אין
-     * חלון-זמן שבו אחד מהם מסתמך על ערך שכבר התיישן.
+     * הלוח תמיד *ריבועי* - cellSize זהה לרוחב ולגובה, לא שני מספרים
+     * נפרדים. אם החלון עצמו לא ריבועי, לוקחים את הצד הקטן מבין השניים
+     * (השטח שנשאר באמצע, אחרי הפאנלים) לקביעת גודל הלוח, וממרכזים אותו -
+     * כך שנשארים שוליים ריקים בציר שיש בו עודף מקום, במקום למתוח את
+     * הלוח למלבן.
      */
-    private static Dimension currentBoardRawSizePx(Img windowAnchor) {
+    private static BoardLayout computeLayout(Dimension content, int cols, int rows) {
+        int middleWidth = Math.max(1, content.width - SIDE_PANEL_WIDTH * 2);
+        int middleHeight = Math.max(1, content.height);
+        int squareRawSize = Math.min(middleWidth, middleHeight);
+
+        int cellSize = Math.max(MIN_CELL_SIZE, squareRawSize / Math.max(cols, rows));
+        int boardPixelSize = cellSize * Math.max(cols, rows);
+
+        int offsetX = SIDE_PANEL_WIDTH + (middleWidth - boardPixelSize) / 2;
+        int offsetY = (middleHeight - boardPixelSize) / 2;
+        return new BoardLayout(cellSize, boardPixelSize, offsetX, offsetY);
+    }
+
+    private static Dimension currentContentSize(Img windowAnchor) {
         if (!windowAnchor.isReady()) {
-            return new Dimension(
-                    INITIAL_CELL_SIZE * 8 /* עמודות */, INITIAL_CELL_SIZE * 8 /* שורות */);
+            return new Dimension(SIDE_PANEL_WIDTH * 2 + INITIAL_CELL_SIZE * 8, INITIAL_CELL_SIZE * 8);
         }
-        Dimension content = windowAnchor.contentSize();
-        int rawWidth = Math.max(1, content.width - SIDE_PANEL_WIDTH * 2);
-        int rawHeight = Math.max(1, content.height);
-        return new Dimension(rawWidth, rawHeight);
+        return windowAnchor.contentSize();
     }
 
     public static void main(String[] args) {
@@ -113,62 +122,46 @@ public class GameWindowMain {
         BoardView boardView = new BoardView("src/main/resources/board.png");
         GameSceneView sceneView = new GameSceneView(boardView, SIDE_PANEL_WIDTH);
 
-        // Img לא צריך לטעון שום קובץ כדי לשמש "עוגן" לחלון - show()/onClick/
-        // contentSize() נוגעים רק בשדות ה-static (frame/label) המשותפים.
         Img windowAnchor = new Img();
 
-        // רינדור ראשון - עוד אין frame, אז currentBoardRawSizePx נופלת
-        // חזרה ל-INITIAL_CELL_SIZE. זה גם מה שפותח את החלון בפועל (show()).
-        Dimension initialRaw = currentBoardRawSizePx(windowAnchor);
-        int initialCellWidth = clampedCellSize(initialRaw.width, session[0].board.width());
-        int initialCellHeight = clampedCellSize(initialRaw.height, session[0].board.height());
-        sceneView.render(
-                session[0].currentSnapshot(initialCellWidth, initialCellHeight),
-                initialCellWidth * session[0].board.width(),
-                initialCellHeight * session[0].board.height());
+        // רינדור ראשון - עוד אין frame, אז currentContentSize נופלת חזרה
+        // לגודל התחלתי קבוע. זה גם מה שפותח את החלון בפועל (show()).
+        renderFrame(session, sceneView, windowAnchor);
 
         javax.swing.SwingUtilities.invokeLater(() -> {
             windowAnchor.onClick((pixelX, pixelY) -> {
-                Dimension raw = currentBoardRawSizePx(windowAnchor);
-                int cellWidth = clampedCellSize(raw.width, session[0].board.width());
-                int boardWidthPx = cellWidth * session[0].board.width();
-                int boardX = pixelX - sceneView.boardOffsetX();
-                if (boardX < 0 || boardX >= boardWidthPx) {
-                    return; // קליק בתוך אחד הפאנלים - לא על הלוח
+                BoardLayout layout = computeLayout(
+                        currentContentSize(windowAnchor), session[0].board.width(), session[0].board.height());
+                int boardX = pixelX - layout.offsetX();
+                int boardY = pixelY - layout.offsetY();
+                if (boardX < 0 || boardX >= layout.boardPixelSize()
+                        || boardY < 0 || boardY >= layout.boardPixelSize()) {
+                    return; // קליק מחוץ ללוח - בפאנל, או בשוליים הריקים סביב הלוח הממורכז
                 }
                 if (session[0].engine.isGameOver()) {
                     Rectangle restartButton = sceneView.restartButtonBounds();
-                    if (restartButton.contains(boardX, pixelY)) {
+                    if (restartButton.contains(boardX, boardY)) {
                         session[0] = new GameSession();
-                        int freshCellWidth = clampedCellSize(raw.width, session[0].board.width());
-                        int freshCellHeight = clampedCellSize(raw.height, session[0].board.height());
-                        sceneView.render(
-                                session[0].currentSnapshot(freshCellWidth, freshCellHeight),
-                                freshCellWidth * session[0].board.width(),
-                                freshCellHeight * session[0].board.height());
+                        renderFrame(session, sceneView, windowAnchor);
                     }
                     return;
                 }
-                session[0].controller.click(boardX, pixelY, cellWidth);
+                session[0].controller.click(boardX, boardY, layout.cellSize(), layout.cellSize());
             });
             windowAnchor.onRightClick((pixelX, pixelY) -> {
-                Dimension raw = currentBoardRawSizePx(windowAnchor);
-                int cellWidth = clampedCellSize(raw.width, session[0].board.width());
-                int boardWidthPx = cellWidth * session[0].board.width();
-                int boardX = pixelX - sceneView.boardOffsetX();
-                if (boardX < 0 || boardX >= boardWidthPx) {
+                BoardLayout layout = computeLayout(
+                        currentContentSize(windowAnchor), session[0].board.width(), session[0].board.height());
+                int boardX = pixelX - layout.offsetX();
+                int boardY = pixelY - layout.offsetY();
+                if (boardX < 0 || boardX >= layout.boardPixelSize()
+                        || boardY < 0 || boardY >= layout.boardPixelSize()) {
                     return;
                 }
                 if (session[0].engine.isGameOver()) {
                     return;
                 }
-                session[0].controller.rightClick(boardX, pixelY, cellWidth);
+                session[0].controller.rightClick(boardX, boardY, layout.cellSize(), layout.cellSize());
             });
-            // שימי לב: אין כאן onResize בכלל יותר - הוא לא נחוץ לנכונות,
-            // כי הטיימר למטה כבר שואל את הגודל האמיתי בכל טיק (עד 16ms
-            // מרגע גרירת שינוי הגודל). היה אפשר להוסיף אותו בחזרה רק כדי
-            // "לזרז" את הרינדור הראשון אחרי resize בכמה מילישניות - אבל
-            // זה שיפור קוסמטי, לא תיקון נכונות.
         });
 
         long[] previousTimeNanos = { System.nanoTime() };
@@ -178,13 +171,16 @@ public class GameWindowMain {
             previousTimeNanos[0] = now;
 
             session[0].engine.handleWait(elapsedMillis);
-
-            Dimension raw = currentBoardRawSizePx(windowAnchor);
-            int cellWidth = clampedCellSize(raw.width, session[0].board.width());
-            int cellHeight = clampedCellSize(raw.height, session[0].board.height());
-            GameSnapshot snapshot = session[0].currentSnapshot(cellWidth, cellHeight);
-            sceneView.render(snapshot, cellWidth * session[0].board.width(), cellHeight * session[0].board.height());
+            renderFrame(session, sceneView, windowAnchor);
         });
         timer.start();
+    }
+
+    private static void renderFrame(GameSession[] session, GameSceneView sceneView, Img windowAnchor) {
+        Dimension content = currentContentSize(windowAnchor);
+        BoardLayout layout = computeLayout(content, session[0].board.width(), session[0].board.height());
+        GameSnapshot snapshot = session[0].currentSnapshot(layout.cellSize());
+        sceneView.render(snapshot, content.width, content.height,
+                layout.boardPixelSize(), layout.offsetX(), layout.offsetY());
     }
 }

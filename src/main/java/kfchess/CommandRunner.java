@@ -31,13 +31,13 @@ public class CommandRunner {
     public void run(Command command) {
         switch (command.type()) {
             case CLICK:
-                engine.handleClick(boardMapper.pixelToPosition(command.x(), command.y(), CELL_SIZE_PIXELS));
+                engine.handleClick(boardMapper.pixelToPosition(command.x(), command.y(), CELL_SIZE_PIXELS, CELL_SIZE_PIXELS));
                 break;
             case WAIT:
                 engine.handleWait(command.milliseconds());
                 break;
             case JUMP:
-                engine.handleJump(boardMapper.pixelToPosition(command.x(), command.y(), CELL_SIZE_PIXELS));
+                engine.handleJump(boardMapper.pixelToPosition(command.x(), command.y(), CELL_SIZE_PIXELS, CELL_SIZE_PIXELS));
                 break;
             case PRINT_BOARD:
                 boardPrinter.print(engine.board());

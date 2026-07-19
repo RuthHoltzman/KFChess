@@ -12,14 +12,14 @@ public class GameController {
         this.boardMapper = boardMapper;
     }
 
-    // cellSizeInPixels עכשיו פרמטר (לא קבוע) - הקוראת (GameWindowMain) יודעת
-    // בכל רגע מהו גודל התא הנוכחי (הוא תלוי בגודל החלון), ומעבירה אותו
-    // הלאה בכל קליק - כך אין שום "מספר קבוע ישן" שיכול להתיישן.
-    public void click(int pixelX, int pixelY, int cellSizeInPixels) {
-        engine.handleClick(boardMapper.pixelToPosition(pixelX, pixelY, cellSizeInPixels));
+    // cellWidth/cellHeight עכשיו שני פרמטרים נפרדים (לא cellSize יחיד) -
+    // הקוראת (GameWindowMain) יודעת בכל רגע מהם, ומעבירה אותם הלאה בכל
+    // קליק - כדי שמיפוי ציר ה-Y ישתמש בגובה התא האמיתי, לא ברוחבו.
+    public void click(int pixelX, int pixelY, int cellWidth, int cellHeight) {
+        engine.handleClick(boardMapper.pixelToPosition(pixelX, pixelY, cellWidth, cellHeight));
     }
 
-    public void rightClick(int pixelX, int pixelY, int cellSizeInPixels) {
-        engine.handleJump(boardMapper.pixelToPosition(pixelX, pixelY, cellSizeInPixels));
+    public void rightClick(int pixelX, int pixelY, int cellWidth, int cellHeight) {
+        engine.handleJump(boardMapper.pixelToPosition(pixelX, pixelY, cellWidth, cellHeight));
     }
 }
