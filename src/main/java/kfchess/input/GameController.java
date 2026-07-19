@@ -12,10 +12,14 @@ public class GameController {
         this.boardMapper = boardMapper;
     }
 
-    public void click(int pixelX, int pixelY) {
-        engine.handleClick(boardMapper.pixelToPosition(pixelX, pixelY));
+    // cellSizeInPixels עכשיו פרמטר (לא קבוע) - הקוראת (GameWindowMain) יודעת
+    // בכל רגע מהו גודל התא הנוכחי (הוא תלוי בגודל החלון), ומעבירה אותו
+    // הלאה בכל קליק - כך אין שום "מספר קבוע ישן" שיכול להתיישן.
+    public void click(int pixelX, int pixelY, int cellSizeInPixels) {
+        engine.handleClick(boardMapper.pixelToPosition(pixelX, pixelY, cellSizeInPixels));
     }
-    public void rightClick(int pixelX, int pixelY) {
-    engine.handleJump(boardMapper.pixelToPosition(pixelX, pixelY));
-}
+
+    public void rightClick(int pixelX, int pixelY, int cellSizeInPixels) {
+        engine.handleJump(boardMapper.pixelToPosition(pixelX, pixelY, cellSizeInPixels));
+    }
 }

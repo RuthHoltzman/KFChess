@@ -29,11 +29,16 @@ import java.util.Optional;
  */
 public class GameEngine {
 
-    
     private static final long MILLISECONDS_PER_SQUARE = 1000;
     private static final long DEFAULT_JUMP_DURATION_MS = 1000;
 
-    // משך זמן אפקט הלכידה (השעון החול הצהוב) - לא משנה אם הכלי נלכד על ידי כלי רגיל או על ידי כלי קופץ, האפקט זהה.
+    /**
+     * כמה זמן (במילישניות) אפקט "לכידה" (ר' CaptureEffect) נשאר חי אחרי
+     * שכלי הוסר מהלוח - חלון קצר שנועד רק לאפשר ל-UI לצייר אפקט חזותי
+     * (למשל טבעת דוהה) במקום שבו הכלי נעלם, כדי שההיעלמות לא תיראה
+     * כאילו "כלום לא קרה". ציבורי כדי ש-SnapshotFactory יוכל לחשב לפיו
+     * את שבר ההתקדמות (progress) של כל אפקט, בלי לשכפל את המספר.
+     */
     public static final long CAPTURE_EFFECT_DURATION_MS = 450;
 
     // משכי "מנוחה" (cooldown) אחרי הליכה/קפיצה - כמה זמן הכלי חסום מפעולה.
@@ -63,6 +68,15 @@ public class GameEngine {
     // אמיתי: קליק על כלי שנח לא בוחר אותו בכלל - בדיוק כמו כלי שנמצא
     // כרגע בתנועה (IN_TRANSIT) או בקפיצה (JUMPING).
     private final Map<Piece, Long> restEndTimes = new HashMap<>();
+    // תנועה ארוכה (למשל צריח e1->e8) מפורקת עכשיו לשרשרת של קפיצות של
+    // משבצת אחת - כל קפיצה מעדכנת את הלוח מיד כשהיא מסתיימת, וכך אפשר
+    // לבדוק בזמן אמת אם משבצת הביניים תפוסה. chainFinalTarget הוא היעד
+    // ה*סופי* של השרשרת (e8), לעומת motion.to() שהוא רק הקפיצה הנוכחית.
+    // chainOriginalFrom הוא המשבצת שממנה התחילה השרשרת כולה (e1), רק
+    // כדי שיומן המהלכים ירשום שורה אחת נקייה במקום שורה לכל משבצת.
+    // סוס אף פעם לא מקבל entry כאן - אין לו "משבצת ביניים" הגיונית.
+    private final Map<Piece, Position> chainFinalTarget = new HashMap<>();
+    private final Map<Piece, Position> chainOriginalFrom = new HashMap<>();
     private Position selectedPosition;
 
     // ניקוד ורשימת מהלכים לכל צבע - נאספים כאן (ולא ב-UI) כי הם חלק
@@ -71,8 +85,6 @@ public class GameEngine {
     private final Map<PieceColor, Integer> scores = new EnumMap<>(PieceColor.class);
     private final Map<PieceColor, List<String>> moveLog = new EnumMap<>(PieceColor.class);
 
-    private final Map<Piece, Position> chainFinalTarget = new HashMap<>();
-    private final Map<Piece, Position> chainOriginalFrom = new HashMap<>();    
     public GameEngine(Game game, RuleEngine ruleEngine, RaelTime clock) {
         this.game = game;
         this.ruleEngine = ruleEngine;
@@ -187,6 +199,9 @@ public class GameEngine {
             return;
         }
 
+        // תנועה "ניתנת לשרשור" = קו ישר או אלכסון (חייל/צריח/רץ/מלכה/מלך).
+        // לסוס אין משבצת ביניים הגיונית (התבנית שלו (2,1) לא ליניארית),
+        // ולכן הוא תמיד ממשיך כקפיצה ישירה אחת - בדיוק כמו היום.
         boolean isSlidingMove = to.row() == from.row() || to.col() == from.col()
                 || Math.abs(to.row() - from.row()) == Math.abs(to.col() - from.col());
         boolean isMultiSquare = Math.max(Math.abs(to.row() - from.row()), Math.abs(to.col() - from.col())) > 1;
@@ -199,7 +214,6 @@ public class GameEngine {
             chainFinalTarget.put(piece, to);
             chainOriginalFrom.put(piece, from);
         }
-
 
         long startTime = clock.now();
         long arrivalTime = startTime + travelTimeFor(from, nextHop);
@@ -287,6 +301,10 @@ public class GameEngine {
         }
 
         if (defender.isPresent() && defender.get().isSameColor(movingPiece)) {
+            // "כמעט התנגשות" עם כלי ידידותי: הכלי הנוסע לא נכנס למשבצת
+            // הזו בכלל ונשאר בדיוק במשבצת שממנה יצא לקפיצה הזו - שהיא,
+            // בדיוק בזכות פירוק התנועה למשבצת-משבצת, "המשבצת הקודמת"
+            // המבוקשת. השרשרת נגמרת כאן, בלי לכידה ובלי עדכון לוח.
             recordBlockedMove(movingPiece, chainOriginalFrom.getOrDefault(movingPiece, motion.from()), motion.to());
             movingPiece.markArrived();
             restEndTimes.put(movingPiece, clock.now() + SHORT_REST_DURATION_MS);
@@ -296,9 +314,20 @@ public class GameEngine {
         }
 
         Position finalTarget = chainFinalTarget.get(movingPiece);
+        // השרשרת ממשיכה רק אם המשבצת ריקה *וגם* עוד לא הגענו ליעד הסופי.
+        // אם היה כלי אויב כאן (defender.isPresent()) - הלכידה עוצרת את
+        // התנועה כאן ועכשיו, בדיוק כמו בשחמט רגיל (אי אפשר "לעוף" דרך
+        // כלי שנלכד ולהמשיך הלאה מעבר לו).
         boolean chainContinues = defender.isEmpty() && finalTarget != null && !finalTarget.equals(motion.to());
-        
+
         if (chainContinues) {
+            // עוד דרך לעבור, והמשבצת ריקה: מזיזים בלוח בלי לדווח על המהלך
+            // עדיין (המהלך "האמיתי" מבחינת היומן/הניקוד מסתיים רק כשהשרשרת
+            // נגמרת - אחרת כל מהלך ארוך היה מייצר שורה נפרדת ליומן לכל
+            // משבצת בדרך). לא נכנסים למנוחה בכלל - חוזרים ל-IN_TRANSIT מיד
+            // (שתי הקריאות קורות בו-זמנית, לפני כל רינדור, אז הכלי לעולם
+            // לא "נראה" IDLE אפילו לפריים אחד) ומתחילים את קפיצת המשבצת
+            // הבאה לכיוון היעד הסופי.
             board().movePieceTo(motion.from(), motion.to());
             movingPiece.markArrived();
             movingPiece.markInTransit();
@@ -310,8 +339,9 @@ public class GameEngine {
                     startTime + MILLISECONDS_PER_SQUARE));
             return;
         }
-        
-        
+
+        // כאן השרשרת נגמרת (הגענו ליעד הסופי, או שהיה כלי אויב בדרך ותפסנו
+        // אותו) - כאן, ורק כאן, מדווחים על המהלך המלא ליומן/לניקוד.
         checkForKingCapture(movingPiece, defender);
         defender.ifPresent(captured -> registerCaptureEffect(captured, motion.to()));
         recordMove(movingPiece, chainOriginalFrom.getOrDefault(movingPiece, motion.from()), motion.to(),
@@ -320,7 +350,7 @@ public class GameEngine {
         movingPiece.markArrived();
         restEndTimes.put(movingPiece, clock.now() + SHORT_REST_DURATION_MS);
         chainFinalTarget.remove(movingPiece);
-        chainOriginalFrom.remove(movingPiece);        
+        chainOriginalFrom.remove(movingPiece);
         maybePromote(movingPiece, motion.to());
     }
 
@@ -350,15 +380,15 @@ public class GameEngine {
         moveLog.get(movingPiece.color()).add(notation);
     }
 
-/** מהלך שנעצר כי כלי ידידותי היה במשבצת הבאה - "כמעט התנגשות". */
-    private void recordBlockedMove(Piece movingPiece, Position from, Position blockedAt) {
-        String notation = movingPiece.kind().code() + squareName(from) + "-" + squareName(blockedAt) + " (blocked)";
-        moveLog.get(movingPiece.color()).add(notation);
-    }
-     
     /** מהלך תקיפה שנכשל מול כלי קופץ - מתועד ברשימת המהלכים בלי שינוי ניקוד. */
     private void recordFailedCapture(Piece movingPiece, Position from, Position to) {
         String notation = movingPiece.kind().code() + squareName(from) + "x" + squareName(to) + "?!";
+        moveLog.get(movingPiece.color()).add(notation);
+    }
+
+    /** מהלך שנעצר כי כלי ידידותי היה במשבצת הבאה - "כמעט התנגשות". */
+    private void recordBlockedMove(Piece movingPiece, Position from, Position blockedAt) {
+        String notation = movingPiece.kind().code() + squareName(from) + "-" + squareName(blockedAt) + " (blocked)";
         moveLog.get(movingPiece.color()).add(notation);
     }
 

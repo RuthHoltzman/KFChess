@@ -19,6 +19,13 @@ import java.util.List;
  * לתוך הסצנה המלאה, כדי שקואורדינטות הכפתור (restartButtonBounds) יהיו
  * תמיד ביחס ללוח בלבד - בדיוק כמו קואורדינטות העכבר שמגיעות מ-GameWindowMain
  * אחרי שכבר הוחסר מהן boardOffsetX().
+ * <p>
+ * גודל הלוח (boardWidthPx/boardHeightPx) הוא עכשיו פרמטר של render()
+ * ולא שדה קבוע בקונסטרוקטור - כדי שהלוח יוכל להשתנות בגודל בין פריים
+ * לפריים (שינוי גודל חלון). המחלקה עדיין שומרת את הערכים ה*אחרונים*
+ * שקיבלה כשדות mutable, כדי ש-boardOffsetX()/totalWidthPx()/וכו' - שאין
+ * להן פרמטרים, ונקראות גם מחוץ ל-render (למשל מ-GameWindowMain כדי
+ * לבדוק קואורדינטות קליק) - עדיין ידעו למה להתייחס.
  */
 public class GameSceneView {
 
@@ -37,14 +44,16 @@ public class GameSceneView {
 
     private final BoardView boardView;
     private final SidePanelView sidePanelView;
-    private final int boardWidthPx;
-    private final int boardHeightPx;
 
-    public GameSceneView(BoardView boardView, int boardWidthPx, int boardHeightPx, int panelWidth) {
+    // "הגודל האחרון שידוע" - מתעדכן בתחילת כל render(). לא זיכרון-מצב
+    // אמיתי (אין כאן שום דבר שתלוי בהיסטוריה), רק נוחות כדי שמתודות
+    // בלי פרמטרים (boardOffsetX/totalWidthPx/וכו') ידעו למה להתייחס.
+    private int boardWidthPx;
+    private int boardHeightPx;
+
+    public GameSceneView(BoardView boardView, int panelWidth) {
         this.boardView = boardView;
         this.sidePanelView = new SidePanelView(panelWidth);
-        this.boardWidthPx = boardWidthPx;
-        this.boardHeightPx = boardHeightPx;
     }
 
     /** ה-X שבו הלוח מתחיל בתוך הקנבס המורכב - קלט העכבר צריך להתאים אליו. */
@@ -63,7 +72,8 @@ public class GameSceneView {
     /**
      * מיקום/גודל כפתור ה-Restart, ביחס ללוח בלבד (לא לכל הסצנה) - כדי
      * ש-GameWindowMain יוכל לבדוק אם קליק (אחרי החסרת boardOffsetX) נפל
-     * בתוכו, בלי לשכפל את המספרים במקום נוסף.
+     * בתוכו, בלי לשכפל את המספרים במקום נוסף. מתייחס לגודל הלוח *האחרון*
+     * שצויר - נכון תמיד אחרי לפחות render() אחד.
      */
     public Rectangle restartButtonBounds() {
         int x = (boardWidthPx - BUTTON_WIDTH) / 2;
@@ -71,10 +81,21 @@ public class GameSceneView {
         return new Rectangle(x, y, BUTTON_WIDTH, BUTTON_HEIGHT);
     }
 
-    public void render(GameSnapshot snapshot) {
+    /**
+     * @param boardWidthPx  הרוחב הנוכחי (בפיקסלים) שבו רוצים לצייר את הלוח -
+     *                      נקבע כל פעם מחדש לפי גודל החלון הנוכחי, לא קבוע.
+     * @param boardHeightPx כנ"ל לגובה.
+     */
+    public void render(GameSnapshot snapshot, int boardWidthPx, int boardHeightPx) {
+        this.boardWidthPx = boardWidthPx;
+        this.boardHeightPx = boardHeightPx;
+
+        BoardGeometry geometry = new BoardGeometry(
+                boardWidthPx, boardHeightPx, snapshot.boardHeightCells(), snapshot.boardWidthCells());
+
         Img scene = new Img().newCanvas(totalWidthPx(), totalHeightPx(), OUTER_BACKGROUND);
 
-        Img boardCanvas = boardView.render(snapshot);
+        Img boardCanvas = boardView.render(snapshot, geometry);
         if (snapshot.gameOver()) {
             drawGameOverOverlay(boardCanvas, snapshot.winner());
         }

@@ -14,6 +14,10 @@ import kfchess.io.BoardPrinter;
  */
 public class CommandRunner {
 
+    // ה-console harness (טקסט בלבד, לא ה-GUI) עדיין עובד עם גודל תא קבוע -
+    // אין כאן חלון להתאים אליו, אז אין סיבה שהוא ישתנה.
+    private static final int CELL_SIZE_PIXELS = 100;
+
     private final GameEngine engine;
     private final BoardMapper boardMapper;
     private final BoardPrinter boardPrinter;
@@ -27,13 +31,13 @@ public class CommandRunner {
     public void run(Command command) {
         switch (command.type()) {
             case CLICK:
-                engine.handleClick(boardMapper.pixelToPosition(command.x(), command.y()));
+                engine.handleClick(boardMapper.pixelToPosition(command.x(), command.y(), CELL_SIZE_PIXELS));
                 break;
             case WAIT:
                 engine.handleWait(command.milliseconds());
                 break;
             case JUMP:
-                engine.handleJump(boardMapper.pixelToPosition(command.x(), command.y()));
+                engine.handleJump(boardMapper.pixelToPosition(command.x(), command.y(), CELL_SIZE_PIXELS));
                 break;
             case PRINT_BOARD:
                 boardPrinter.print(engine.board());

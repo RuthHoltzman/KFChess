@@ -106,6 +106,32 @@ public class Img {
     }
 
     /**
+     * כמו readAsFreshCanvas, אבל מציירת את התמונה בגודל יעד נתון (לא
+     * הגודל המקורי של הקובץ) - נחוץ כדי שרקע הלוח (board.png) יוכל
+     * להתאים את עצמו לגודל החלון הנוכחי, בדיוק כמו שספרייטי הכלים
+     * כבר עושים דרך read(path, targetSize, ...).
+     */
+    public Img readAsFreshCanvas(String path, int targetWidth, int targetHeight) {
+        BufferedImage source = IMAGE_CACHE.get(path);
+        if (source == null) {
+            try {
+                source = ImageIO.read(new File(path));
+            } catch (IOException e) {
+                throw new IllegalArgumentException("Cannot load image: " + path);
+            }
+            if (source == null) throw new IllegalArgumentException("Unsupported image: " + path);
+            IMAGE_CACHE.put(path, source);
+        }
+        BufferedImage copy = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = copy.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.drawImage(source, 0, 0, targetWidth, targetHeight, null);
+        g.dispose();
+        img = copy;
+        return this;
+    }
+
+    /**
      * יוצרת קנבס ריק (לא נטען מקובץ) בגודל נתון, מלא בצבע רקע אחיד.
      * זו הדרך היחידה ליצור "משטח ציור" גדול יותר מתמונת הלוח עצמה -
      * למשל כדי להרכיב עליו את הלוח ולצדדיו את פאנלי הניקוד/המהלכים -
@@ -228,29 +254,65 @@ public class Img {
     public void show() {
         if (img == null) throw new IllegalStateException("Image not loaded.");
 
-         if (frame == null) {
-        // פעם ראשונה - יוצרים את החלון
-        SwingUtilities.invokeLater(() -> {
-            frame = new JFrame("Image");
-            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            label = new JLabel(new ImageIcon(img));
-            frame.add(label);
-            frame.pack();
-            frame.setLocationRelativeTo(null);
-            frame.setVisible(true);
-        });
-    } else {
-        // החלון כבר קיים - רק מעדכנים את התמונה בתוכו
-        SwingUtilities.invokeLater(() -> {
-            label.setIcon(new ImageIcon(img));
-            frame.pack();
-            frame.repaint();
-        });
-        }
+    if (frame == null) {
+            // פעם ראשונה - יוצרים את החלון. pack() כאן קובע רק את הגודל
+            // ההתחלתי (לפי גודל התמונה הראשונה) - אחרי זה setResizable
+            // משאיר למשתמשת לגרור ולשנות גודל בעצמה.
+            SwingUtilities.invokeLater(() -> {
+                frame = new JFrame("Image");
+                frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+                frame.setResizable(true);
+                label = new JLabel(new ImageIcon(img));
+                // ברירת המחדל של JLabel היא למרכז אייקון בתוך גבולות ה-label -
+                // וה-label עצמו נמתח (BorderLayout.CENTER) לכל שטח החלון, שכמעט
+                // תמיד קצת יותר גדול מהתמונה המצוירת בפועל (בגלל חלוקת שלמים
+                // בחישוב גודל התא). התוצאה: התמונה "צפה" עם רווח מסביבה, ואז
+                // קליק שנמדד ביחס ל-label (שמתחיל ב-0,0 של כל השטח הנמתח) לא
+                // תואם לקואורדינטות בתוך התמונה עצמה. עיגון לפינה השמאלית-
+                // עליונה מבטל את המירכוז הזה לגמרי: התמונה תמיד מצוירת החל
+                // מ-(0,0) - בדיוק אותה נקודת התחלה שממנה נמדדות קואורדינטות
+                // העכבר - כך שאין יותר שום פער לפצות עליו בזמן טיפול בקליק.
+                label.setHorizontalAlignment(SwingConstants.LEFT);
+                label.setVerticalAlignment(SwingConstants.TOP);
+                frame.add(label);
+                frame.pack();
+                frame.setLocationRelativeTo(null);
+                frame.setVisible(true);
+            });
+        } else {
+            // החלון כבר קיים - רק מעדכנים את התמונה בתוכו. בכוונה *לא*
+            // קוראים ל-pack() כאן: pack() היה מכריח את החלון לחזור לגודל
+            // התמונה בכל פריים (60 פעם בשנייה), מה שמבטל כל שינוי גודל
+            // ידני שהמשתמשת עושה בעכבר, עוד לפני שהיא מספיקה לראות אותו.
+            SwingUtilities.invokeLater(() -> {
+                label.setIcon(new ImageIcon(img));
+                frame.repaint();
+            });
+            }
+    
     }
 
     /* ----------- access (optional) ----------- */
     public BufferedImage get() { return img; }
+
+    /**
+     * הגודל הפנימי הזמין לציור *ברגע הזה* (לא ערך שנשמר מ-resize קודם) -
+     * לקריאה בכל פעם שצריך לחשב גיאומטריה, כדי שרינדור וטיפול בקליק
+     * תמיד יסתמכו על אותו מקור-אמת חי, בלי סיכון ששניהם "לא מסונכרנים"
+     * (למשל קליק שמגיע ממש אחרי גרירת שינוי גודל, לפני שמשתנה שמור
+     * כלשהו הספיק להתעדכן).
+     */
+    /** האם show() כבר יצר בפועל את החלון - שימושי כדי לא לקרוא ל-contentSize() לפני שהוא קיים. */
+    public boolean isReady() {
+        return frame != null;
+    }
+
+    public Dimension contentSize() {
+        if (frame == null) {
+            throw new IllegalStateException("Call show() before contentSize().");
+        }
+        return frame.getContentPane().getSize();
+    }
 
 public void onClick(java.util.function.BiConsumer<Integer, Integer> handler) {
     if (label == null) {
@@ -276,6 +338,24 @@ public void onRightClick(java.util.function.BiConsumer<Integer, Integer> handler
             if (javax.swing.SwingUtilities.isRightMouseButton(e)) {
                 handler.accept(e.getX(), e.getY());
             }
+        }
+    });
+}
+
+/**
+ * נקרא בכל פעם שהמשתמשת גוררת ומשנה את גודל החלון. מדווח את שטח
+ * הציור *הפנימי* בפועל (getContentPane) ולא את frame.getWidth()/getHeight()
+ * הגולמיים - אלה כוללים גם את מסגרת החלון וכותרתו, שאינם חלק מהשטח
+ * שבו באמת מציירים את הלוח.
+ */
+public void onResize(java.util.function.BiConsumer<Integer, Integer> handler) {
+    if (label == null) {
+        throw new IllegalStateException("Call show() before onResize().");
+    }
+    frame.addComponentListener(new java.awt.event.ComponentAdapter() {
+        @Override
+        public void componentResized(java.awt.event.ComponentEvent e) {
+            handler.accept(frame.getContentPane().getWidth(), frame.getContentPane().getHeight());
         }
     });
 }

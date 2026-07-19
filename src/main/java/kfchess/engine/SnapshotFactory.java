@@ -19,16 +19,11 @@ public class SnapshotFactory {
     private static final double JUMP_HEIGHT_FRACTION = 0.35;
 
     private final PieceVisualStateTracker visualStateTracker = new PieceVisualStateTracker();
-    private final int cellWidth;
-    private final int cellHeight;
-
-    public SnapshotFactory(int cellWidth, int cellHeight) {
-        this.cellWidth = cellWidth;
-        this.cellHeight = cellHeight;
-    }
 
     public GameSnapshot createSnapshot(
             Board board,
+            int cellWidth,
+            int cellHeight,
             long now,
             Position selectedPosition,
             boolean gameOver,

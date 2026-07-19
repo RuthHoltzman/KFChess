@@ -33,7 +33,7 @@ public class Main {
         GameEngine engine = new GameEngine(game, new RuleEngine(), new RaelTime());
 
         CommandRunner commandRunner = new CommandRunner(
-                engine, BoardMapper.withDefaultCellSize(), new BoardPrinter());
+                engine, new BoardMapper(), new BoardPrinter());
         ConsoleRunner consoleRunner = new ConsoleRunner(scanner, new Controller(), commandRunner);
 
         consoleRunner.run();
