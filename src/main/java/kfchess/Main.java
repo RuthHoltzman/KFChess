@@ -1,4 +1,8 @@
 package kfchess;
+import kfchess.bus.EventBus;
+import kfchess.bus.GameLifecycleEvent;
+import kfchess.bus.MoveLoggedEvent;
+import kfchess.bus.ScoreUpdatedEvent;
 import kfchess.engine.GameEngine;
 import kfchess.input.BoardMapper;
 import kfchess.input.Controller;
@@ -30,8 +34,17 @@ public class Main {
         }
 
         Game game = new Game(board);
-        GameEngine engine = new GameEngine(game, new RuleEngine(), new RaelTime());
-
+        EventBus bus = new EventBus();
+        // מאזיני הדגמה זמניים - מוכיחים שה-bus עובד בפועל (ר' פלט [BUS] בקונסולה).
+        // בשלב 2 (שרת ה-WebSocket) אלה יוחלפו/יורחבו במאזינים אמיתיים ששולחים
+        // ללקוחות, ואז אפשר יהיה למחוק את השלושה האלה.
+        bus.subscribe(MoveLoggedEvent.class,
+                e -> System.out.println("[BUS] move: " + e.color() + " " + e.notation()));
+        bus.subscribe(ScoreUpdatedEvent.class,
+                e -> System.out.println("[BUS] score: " + e.color() + " = " + e.newScore()));
+        bus.subscribe(GameLifecycleEvent.class,
+                e -> System.out.println("[BUS] lifecycle: " + e.phase() + " winner=" + e.winner()));
+        GameEngine engine = new GameEngine(game, new RuleEngine(), new RaelTime(), bus);
         CommandRunner commandRunner = new CommandRunner(
                 engine, new BoardMapper(), new BoardPrinter());
         ConsoleRunner consoleRunner = new ConsoleRunner(scanner, new Controller(), commandRunner);

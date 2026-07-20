@@ -17,6 +17,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import kfchess.bus.EventBus;
+import kfchess.bus.GameLifecycleEvent;
+import kfchess.bus.MoveLoggedEvent;
+import kfchess.bus.ScoreUpdatedEvent;
+import kfchess.bus.SoundEvent;
 /**
  * "המוח" של המשחק: מקבל אירועים ברמת התחום (קליק על תא, המתנה, קפיצה)
  * ומתרגם אותם לשינויים ב-Game/Board, תוך אכיפת חוקי התנועה דרך RuleEngine.
@@ -51,7 +56,7 @@ public class GameEngine {
     private final Game game;
     private final RuleEngine ruleEngine;
     private final RaelTime clock;
-
+    private final EventBus bus;
     private final List<Motion> activeMotions = new ArrayList<>();
     private final Map<Piece, Long> jumpEndTimes = new HashMap<>();
     // זמני התחלה של קפיצות פעילות - נשמר במקביל ל-jumpEndTimes (ולא בתוכו),
@@ -85,10 +90,11 @@ public class GameEngine {
     private final Map<PieceColor, Integer> scores = new EnumMap<>(PieceColor.class);
     private final Map<PieceColor, List<String>> moveLog = new EnumMap<>(PieceColor.class);
 
-    public GameEngine(Game game, RuleEngine ruleEngine, RaelTime clock) {
+    public GameEngine(Game game, RuleEngine ruleEngine, RaelTime clock, EventBus bus) {
         this.game = game;
         this.ruleEngine = ruleEngine;
         this.clock = clock;
+        this.bus = bus;
         for (PieceColor color : PieceColor.values()) {
             scores.put(color, 0);
             moveLog.put(color, new ArrayList<>());
@@ -374,22 +380,29 @@ public class GameEngine {
         boolean isCapture = captured != null;
         if (isCapture) {
             scores.merge(movingPiece.color(), captured.kind().value(), Integer::sum);
+            bus.publish(new ScoreUpdatedEvent(movingPiece.color(), scores.get(movingPiece.color())));
+
         }
         String notation = movingPiece.kind().code() + squareName(from)
                 + (isCapture ? "x" : "-") + squareName(to);
         moveLog.get(movingPiece.color()).add(notation);
+        bus.publish(new MoveLoggedEvent(movingPiece.color(), notation));
+        bus.publish(new SoundEvent(isCapture ? SoundEvent.Type.CAPTURE : SoundEvent.Type.MOVE));
     }
 
     /** מהלך תקיפה שנכשל מול כלי קופץ - מתועד ברשימת המהלכים בלי שינוי ניקוד. */
     private void recordFailedCapture(Piece movingPiece, Position from, Position to) {
         String notation = movingPiece.kind().code() + squareName(from) + "x" + squareName(to) + "?!";
         moveLog.get(movingPiece.color()).add(notation);
+        bus.publish(new MoveLoggedEvent(movingPiece.color(), notation));
+        bus.publish(new SoundEvent(SoundEvent.Type.ILLEGAL));
     }
 
     /** מהלך שנעצר כי כלי ידידותי היה במשבצת הבאה - "כמעט התנגשות". */
     private void recordBlockedMove(Piece movingPiece, Position from, Position blockedAt) {
         String notation = movingPiece.kind().code() + squareName(from) + "-" + squareName(blockedAt) + " (blocked)";
         moveLog.get(movingPiece.color()).add(notation);
+        bus.publish(new MoveLoggedEvent(movingPiece.color(), notation));
     }
 
     /** ממיר Position לסימון שח-מטי מוכר (עמודה a.. + שורה ממוספרת מלמטה). */
@@ -402,12 +415,11 @@ public class GameEngine {
     private void checkForKingCapture(Piece movingPiece, Optional<Piece> defender) {
         defender.ifPresent(captured -> {
             if (captured.kind() == PieceKind.KING) {
-                // מי שלכד את המלך (לא המלך שנלכד) הוא המנצח.
                 game.markGameOver(movingPiece.color());
+                bus.publish(new GameLifecycleEvent(GameLifecycleEvent.Phase.ENDED, movingPiece.color()));
             }
         });
     }
-
     private void maybePromote(Piece piece, Position at) {
         if (piece.kind() != PieceKind.PAWN) {
             return;

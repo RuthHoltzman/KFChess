@@ -1,5 +1,6 @@
 package kfchess;
 
+import kfchess.bus.EventBus;
 import kfchess.engine.GameEngine;
 import kfchess.engine.GameSnapshot;
 import kfchess.engine.SnapshotFactory;
@@ -50,7 +51,7 @@ public class GameWindowMain {
         GameSession() {
             this.board = new BoardParser(new Scanner(STARTING_BOARD_TEXT)).readBoard();
             this.game = new Game(board);
-            this.engine = new GameEngine(game, new RuleEngine(), new RaelTime());
+            this.engine = new GameEngine(game, new RuleEngine(), new RaelTime(), new EventBus());
             this.controller = new GameController(engine, new BoardMapper());
             this.snapshotFactory = new SnapshotFactory();
         }
@@ -58,7 +59,7 @@ public class GameWindowMain {
         GameSnapshot currentSnapshot(int cellSize) {
             Position selected = engine.selectedPosition().orElse(null);
             List<Position> legalMoves = selected == null
-                    ? List.<Position>of()
+                    ? List.of()
                     : engine.legalMovesFrom(selected);
             String winner = engine.winner()
                     .map(color -> color == PieceColor.WHITE ? "White" : "Black")
