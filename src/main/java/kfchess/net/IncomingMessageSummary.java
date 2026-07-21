@@ -14,6 +14,17 @@ public final class IncomingMessageSummary {
     private IncomingMessageSummary() {
     }
 
+    // "type" גולמי מתוך ה-JSON, בלי לבנות שורה מלאה - נחוץ ל-GameClient כדי להחליט אם להדפיס מיד או לשמור בשקט.
+    public static String messageType(String json) {
+        JsonObject message = JsonParser.parseString(json).getAsJsonObject();
+        return message.has("type") ? message.get("type").getAsString() : "UNKNOWN";
+    }
+
+    // true אם זו הודעת SNAPSHOT - אלה שמגיעות ברצף מהיר (כ-30/שנייה) ולא כדאי להדפיס אוטומטית לקונסולה.
+    public static boolean isSnapshot(String json) {
+        return "SNAPSHOT".equals(messageType(json));
+    }
+
     // קוראת רק את שדה "type" ומפיקה שורה מתאימה; הודעה לא מזוהה/פגומה מקבלת שורה גנרית ולא זורקת חריגה.
     public static String describe(String json) {
         JsonObject message = JsonParser.parseString(json).getAsJsonObject();
@@ -23,9 +34,19 @@ public final class IncomingMessageSummary {
                     + " gameId=" + message.get("gameId").getAsString();
             case "SNAPSHOT" -> "[SNAPSHOT] now=" + message.get("now").getAsLong()
                     + " pieces=" + message.getAsJsonArray("pieces").size()
-                    + " gameOver=" + message.get("gameOver").getAsBoolean();
+                    + " gameOver=" + message.get("gameOver").getAsBoolean()
+                    + " selected=" + describeSelected(message);
             case "ERROR" -> "[ERROR] " + message.get("message").getAsString();
             default -> "[UNKNOWN] " + json;
         };
+    }
+
+    // "selected" הוא null-אבל-מושמט (Gson לא שולח שדה null כברירת מחדל) - has() בודק בדיוק את זה.
+    private static String describeSelected(JsonObject message) {
+        if (!message.has("selected")) {
+            return "none";
+        }
+        JsonObject selected = message.getAsJsonObject("selected");
+        return "(" + selected.get("row").getAsInt() + "," + selected.get("col").getAsInt() + ")";
     }
 }

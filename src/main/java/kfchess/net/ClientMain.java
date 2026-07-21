@@ -32,7 +32,7 @@ public final class ClientMain {
     // לולאת קלט פשוטה: מפרקת כל שורה למילה ראשונה (הפקודה) ושני מספרים (row/col), עד "quit".
     private static void readCommandsFromConsole(GameClient client) {
         Scanner console = new Scanner(System.in);
-        System.out.println("commands: click ROW COL | jump ROW COL | quit");
+        System.out.println("commands: click ROW COL | jump ROW COL | status | quit");
         while (console.hasNextLine()) {
             String line = console.nextLine().trim();
             if (line.equalsIgnoreCase("quit")) {
@@ -44,8 +44,13 @@ public final class ClientMain {
 
     private static void handleLine(GameClient client, String line) {
         String[] parts = line.split("\\s+");
+        // "status" בלי ארגומנטים - מדפיס את ה-snapshot האחרון לפי דרישה, במקום שיוצף אוטומטית.
+        if (parts.length == 1 && parts[0].equalsIgnoreCase("status")) {
+            client.printLatestSnapshot();
+            return;
+        }
         if (parts.length != 3) {
-            System.out.println("expected: click/jump ROW COL");
+            System.out.println("expected: click/jump ROW COL, or: status");
             return;
         }
         try {

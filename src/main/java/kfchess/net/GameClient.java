@@ -15,6 +15,7 @@ import java.net.URI;
 public class GameClient extends WebSocketClient {
 
     private final Gson gson = new Gson();
+    private volatile String latestMessage;
 
     public GameClient(URI serverUri) {
         super(serverUri);
@@ -26,10 +27,23 @@ public class GameClient extends WebSocketClient {
         System.out.println("connected to " + getURI());
     }
 
-    // נקרא לכל הודעה נכנסת מהשרת (ROLE_ASSIGNED/SNAPSHOT/ERROR) - מתרגם לשורה קריאה אחת ומדפיס.
+    // נקרא לכל הודעה נכנסת מהשרת - תמיד נשמרת (ל-status), אבל מודפסת מיד רק אם היא לא SNAPSHOT
+    // (אלה מגיעות ברצף מהיר, ר' printLatestSnapshot להצגה לפי דרישה במקום הצפת מסוף).
     @Override
     public void onMessage(String message) {
-        System.out.println(IncomingMessageSummary.describe(message));
+        latestMessage = message;
+        if (!IncomingMessageSummary.isSnapshot(message)) {
+            System.out.println(IncomingMessageSummary.describe(message));
+        }
+    }
+
+    // מדפיס את התקציר של ה-snapshot האחרון שהתקבל - נקרא רק לפי דרישה (פקודת "status" ב-ClientMain).
+    public void printLatestSnapshot() {
+        if (latestMessage == null) {
+            System.out.println("no message received yet");
+            return;
+        }
+        System.out.println(IncomingMessageSummary.describe(latestMessage));
     }
 
     @Override

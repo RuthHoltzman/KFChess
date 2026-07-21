@@ -169,8 +169,18 @@ kfchess/net/
 טסט חדש: `IncomingMessageSummaryTest` (4 מקרים - שלושת סוגי ההודעות +
 type לא מזוהה).
 
-**עדיין לא נבדק בפועל** (רות צריכה: `mvn test`, ואז להריץ `ClientMain`
-מול `ServerMain` שכבר רץ, ולנסות "click 6 4").
+**עודכן אחרי בדיקה ידנית ראשונה** (רות הריצה, גילתה שהקונסולה מוצפת
+ב-SNAPSHOT כ-30/שנייה ואי אפשר להקליד): `GameClient.onMessage` כבר לא
+מדפיס SNAPSHOT אוטומטית - רק שומר אותו בשקט (`latestMessage`); מדפיס
+מיד רק הודעות נדירות (ROLE_ASSIGNED/ERROR). נוספה פקודת `status` ל-
+`ClientMain` שמדפיסה את ה-snapshot האחרון לפי דרישה. `IncomingMessageSummary`
+קיבל גם `selected` בתקציר וגם `isSnapshot()`/`messageType()` חדשים.
+**חשוב:** זה משנה רק מה ש-`ClientMain` (כלי בדיקה זמני) מדפיס למסוף -
+`GameClient` ימשיך לקבל ולעבד כל הודעה תמיד; כשיתחבר ל-GUI, "print"
+יוחלף ב"עדכן את הציור", בכל ההודעות, באותו קצב מלא.
+
+**עדיין לא נבדק בפועל אחרי העדכון הזה** (רות צריכה: `mvn test`, ואז
+`ClientMain` מול `ServerMain` רץ - "click 6 4" ואז "status").
 
 ## הצעד הבא (איפה להמשיך)
 
