@@ -11,87 +11,135 @@
 לפי מצגת ההוראות (`CTD 26 (Server).pptx.pdf`), חלוקה ל-6 שלבים:
 
 1. **Bus (pub/sub)** - ✅ הושלם, committed.
-2. **שרת WebSocket חד-תהליכי בסיסי** - 🔶 בעבודה. הוכן תשתית (ר' למטה),
-   **קוד השרת עצמו עוד לא נכתב**.
+2. **שרת WebSocket חד-תהליכי בסיסי** - ✅ **הקוד נכתב במלואו** (ר' למטה).
+   **עדיין לא הורץ בפועל ולא committed** - רות צריכה להריץ `mvn test`
+   ואז לבדוק חיבור אמיתי (ר' "איך לבדוק שזה עובד" למטה).
 3. Home screen v1 - login בשל (shell), 2 שחקנים בלבד - ⬜ לא התחיל.
 4. חשבונות + ELO (SQLite) - ⬜ לא התחיל.
 5. Matchmaking (Play) + ניתוק/auto-resign - ⬜ לא התחיל.
 6. חדרים (Create/Join/Cancel) + לוגים - ⬜ לא התחיל.
 
-## החלטות ארכיטקטורה שכבר נסגרו (Phase 2)
+## החלטות ארכיטקטורה שנסגרו (Phase 2) - כולן ממומשות בפועל
 
-- ספריית WebSocket: **Java-WebSocket** (org.java-websocket) - עדיין
-  **לא נוסף** ל-pom.xml.
-- JSON: **Gson** - עדיין **לא נוסף** ל-pom.xml.
-- פרוטוקול הודעות: אובייקט JSON עם שדה `"type"` (לא מחרוזת פקודה קצרה).
-  קליק/קפיצה נשלחים כ-`{"type":"CLICK","row":..,"col":..}` (מיקום על
-  הלוח, לא פיקסלים - הלקוח כבר עושה pixel→Position בעצמו לפני השליחה,
-  ר' `BoardMapper`).
-- מבנה השרת: `Map<gameId, GameSession>` - תומך בכמה משחקים במקביל
-  מההתחלה (גם לפני שיש UI לחדרים). כל `GameSession` מחזיק `GameEngine`
-  משלו + `EventBus` משלו + את חיבורי ה-WebSocket שמשתתפים בו (לבן/שחור/
-  צופים - הראשון שמתחבר=לבן, השני=שחור, השאר=צופים).
-- **עדיין לא נכתבו הקבצים בפועל**: `kfchess.net` package (או שם דומה)
-  עם `GameServer`, `GameSession`, `ClientCommand`, `SnapshotMessage`
-  וכו'. השיחה עברה לניקוי ארכיטקטוני של `GameEngine` לפני שהגענו לכתוב
-  את קוד השרת עצמו - זו הנקודה הבאה להמשיך ממנה.
+- ספריית WebSocket: **Java-WebSocket 1.6.0** (org.java-websocket) - **נוסף** ל-pom.xml.
+- JSON: **Gson 2.14.0** - **נוסף** ל-pom.xml.
+- פרוטוקול הודעות: אובייקט JSON עם שדה `"type"`. קליק/קפיצה נשלחים כ-
+  `{"type":"CLICK","row":..,"col":..}` / `{"type":"JUMP",...}` (מיקום על
+  הלוח, לא פיקסלים).
+- מבנה השרת: `Map<gameId, GameSession>` ב-`GameServer`, נוצר lazily.
+  **gameId נלקח מנתיב החיבור עצמו** (`ws://host:port/room1` → "room1",
+  חיבור לשורש → "default") - כדי לתמוך בכמה משחקים במקביל גם בלי UI
+  לחדרים (שלב 6 עדיין לא קיים). מומש ב-`GameIdResolver` (מחלקה נפרדת,
+  טהורה וניתנת לבדיקה, לא מתודה פרטית בתוך GameServer).
+- **מודל תפקידים**: `ClientRole{WHITE,BLACK,SPECTATOR}` - רחב יותר מ-
+  `PieceColor` כי לצופה אין צבע כלל. הראשון שמתחבר ל-GameSession=WHITE,
+  השני=BLACK, כל השאר=SPECTATOR.
+- **מודל thread-safety ("שרת חד-תהליכי")**: כל שינוי במצב המשחק (GameEngine)
+  קורה אך ורק מ-thread אחד - thread הטיק. פקודות שמגיעות מ-threads הרשת
+  (`onMessage`) לא נוגעות ב-engine בכלל, רק נכנסות לתור
+  (`GameSession.enqueueCommand`, `ConcurrentLinkedQueue`); `tick()` הוא
+  היחיד שמרוקן את התור ומפעיל את הפקודות, ואז מקדם את שעון המשחק.
+- **חלוקת אחריות GameSession מול GameServer**: GameSession לא יודע כלום
+  על Gson/רשת - הוא רק מחזיק מצב משחק ובונה DTO (`SnapshotMessage`).
+  GameServer אחראי בלעדית על סריאליזציה + שליחה בפועל + ניתוב gameId.
 
-## מה שכבר קיים ומוכן לשרת (בוצע ו-committed)
+## מה שכבר קיים ומוכן לשרת (מלפני השיחה הזו, committed)
 
 ### Bus (`kfchess.bus`)
 `EventBus` גנרי (subscribe/publish לפי סוג), 4 סוגי אירועים:
 `ScoreUpdatedEvent`, `MoveLoggedEvent`, `SoundEvent`, `GameLifecycleEvent`.
-`GameEngine` מקבל `EventBus` בקונסטרוקטור ומפרסם בדיוק בנקודות שהוא
-כבר מעדכן ניקוד/יומן/סיום משחק.
 
-### מבנה `kfchess.engine` (אחרי refactor)
+### מבנה `kfchess.engine`
+`GameEngine` (חוקי המשחק), `PieceTimers`, `MoveHistory`, `NetworkActions`
+(מנתב קליק/קפיצה לפי צבע שחקן - זה מה ש-GameSession משתמש בו), `snapshot/`
+(לא רלוונטי לשרת - רינדור Swing מקומי בלבד).
+
+## מה שנוצר בשיחה הזו - חבילת `kfchess.net` (לא committed עדיין!)
+
+קבצי production:
 ```
-kfchess/engine/
-  GameEngine.java     (398 שורות) - רק חוקי המשחק
-  PieceTimers.java    - תזמוני קפיצה/מנוחה לכלי (package-private methods
-                        על GameEngine: isAvailableToAct, beginJump,
-                        tryMove, advanceGameState - חשופים ל-NetworkActions)
-  MoveHistory.java    - ניקוד + יומן מהלכים
-  NetworkActions.java - **קיים ומוכן** - מנתב קליק/קפיצה לפי צבע שחקן,
-                        עם בחירה (selection) נפרדת לכל צבע (בניגוד ל-
-                        GameEngine.handleClick(Position) הרגיל, שמשותף
-                        לכל השחקנים - מתאים למשחק מקומי, לא לרשת).
-                        השרת יחזיק NetworkActions אחד לכל GameSession
-                        ויקרא ל-networkActions.handleClick(color, pos)
-                        במקום ל-engine.handleClick(pos).
-  snapshot/           - הכל שקשור אך ורק לרינדור UI מקומי (Swing), לא
-                        רלוונטי לשרת בכלל: GameSnapshot, SnapshotFactory,
-                        PieceVisualState(Tracker), JumpVisual,
-                        CaptureEffect(Snapshot/Tracker), PieceSnapshot.
+kfchess/net/
+  ClientCommandType.java   - enum CLICK/JUMP
+  ClientCommand.java       - DTO נכנס (type/row/col) + isValid()
+  PositionDto.java         - row/col שטוח, from(Position)
+  PieceDto.java            - color/kind/state/row/col שטוח, from(Piece,Position)
+  ClientRole.java          - WHITE/BLACK/SPECTATOR + toPieceColor()
+  RoleAssignedMessage.java - נשלח פעם אחת ב-onOpen
+  ErrorMessage.java        - JSON פגום/פקודה לא תקינה
+  SnapshotMessage.java     - מצב הלוח המלא, נשלח בכל טיק
+  GameIdResolver.java      - resourceDescriptor -> gameId (טהור, נבדק ביחידה)
+  GameSession.java         - "המוח" של משחק בודד: תור פקודות + tick() + snapshotFor()
+  GameServer.java          - extends WebSocketServer, Map<gameId,GameSession>,
+                             onOpen/onClose/onMessage/onError/onStart, לולאת טיק
+                             על ScheduledExecutorService נפרד
+  ServerMain.java          - main(), פורט ברירת מחדל 8887 (args[0] לשינוי)
 ```
 
-### מודל המשחק הרלוונטי לפרוטוקול
-- `Board.pieceAt(Position)` - לבניית snapshot (לולאה כפולה row/col, אין
-  מיפוי position→piece ישיר ב-Board).
-- `Piece.color()/kind()/state()` - `PieceColor{WHITE,BLACK}`,
-  `PieceKind{KING,QUEEN,ROOK,BISHOP,KNIGHT,PAWN}`,
-  `PieceState{IDLE,IN_TRANSIT,JUMPING}`.
-- `GameEngine.scores()` / `.moveLog()` / `.isGameOver()` / `.winner()`.
+קבצי טסט (`src/test/java/texttests/`, לפי הבקשה של רות - טסט לכל
+פונקציה/לוגיקה משמעותית):
+```
+ClientCommandTest, PositionDtoTest, PieceDtoTest, MessageDtoTest,
+GameIdResolverTest, GameSessionTest (7 מקרים: הקצאת תפקידים, הסרת חיבור,
+ניתוב פקודות לפי צבע, ביצוע מהלך בפועל (IN_TRANSIT), התעלמות מפקודת
+צופה, חוסן מול חיבור לא-מזוהה, מצב פתיחה), FakeWebSocket (עזר טסטים
+בלבד - stub ל-org.java_websocket.WebSocket, לא נקרא בפועל ע"י GameSession
+אלא רק משמש כמפתח-זהות).
+```
+
+גם `.gitignore` עודכן (נוסף `.idea/` ו-`*.iml`) ו-`pom.xml` (Java-WebSocket + Gson).
+
+**שום דבר מכל זה עדיין לא בוצע לו commit** - כל commit עד עכשיו רק
+הוצע בצ'אט, רות מריצה בעצמה.
+
+## בעיה קיימת שהתגלתה ולא טופלה (לא קשורה לעבודת השרת)
+
+`BoardParserTest` (4 מתוך 6 הטסטים שלו) נכשל ב-`mvn test`: הטסטים
+מצפים ש-`BoardParser.readBoard()` יחזיר `null` על קלט פגום, אבל הקוד
+בפועל **זורק** `IllegalArgumentException` (ובכוונה - יש הערת קוד מפורשת
+על כך ב-BoardParser.java). כנראה טסט ישן שלא עודכן אחרי שינוי התנהגות.
+**הוחלט עם רות להשאיר את זה בצד בינתיים** ולא לתקן כחלק מעבודת השרת.
+
+## איך לבדוק שהשרת עובד (אחרי שרות מריצה `mvn test`/`mvn compile` בהצלחה)
+
+1. IntelliJ: לפתוח את `ServerMain.java` → Run על ה-`main`. אמורה להיכתב
+   שורה `GameServer started on port 8887`.
+2. לבדוק חיבור מקונסולת דפדפן (F12):
+   ```js
+   let ws = new WebSocket("ws://localhost:8887/default");
+   ws.onmessage = e => console.log(e.data);
+   ws.send('{"type":"CLICK","row":6,"col":4}');
+   ```
+   אמורה לקפוץ מיד הודעת `ROLE_ASSIGNED`, ואז זרם `SNAPSHOT` כ-30
+   פעמים בשנייה; אחרי ה-CLICK אמור להופיע `"selected":{"row":6,"col":4}`
+   באחד ה-snapshots הבאים.
 
 ## הצעד הבא (איפה להמשיך)
 
-לכתוב את קוד השרת בפועל:
-1. להוסיף ל-`pom.xml`: Java-WebSocket + Gson.
-2. חבילה חדשה (למשל `kfchess.net`): DTOs (`ClientCommand`,
-   `SnapshotMessage`, `PieceDto`, `RoleAssignedMessage`, `ErrorMessage`),
-   `GameSession` (עוטף Board+Game+GameEngine+EventBus+NetworkActions
-   +רשימת חיבורים), `GameServer extends WebSocketServer`
-   (`Map<String,GameSession>`, `onOpen/onClose/onMessage`, tick loop
-   תקופתי שקורא ל-`engine.handleWait` ומשדר snapshot).
-3. אחרי שהשרת עובד - לקוח: `GameClient` (WebSocket client) + לחבר את
-   `GameWindowMain` אליו (מצב רשת, לא רק מקומי).
+לפי התוכנית המקורית - סעיף 3: **לקוח**. לבנות `GameClient` (WebSocket
+client, אותה ספריית Java-WebSocket) ולחבר את `GameWindowMain` אליו כך
+שיוכל לרוץ במצב רשת (לא רק מקומי) - שולח CLICK/JUMP לשרת במקום לקרוא
+ל-engine ישירות, ומצייר לפי snapshot שמתקבל מהשרת במקום מה-GameEngine
+המקומי.
+
+לפני זה: לוודא עם רות ש-`mvn test` ירוק (חוץ מ-BoardParserTest הידוע),
+להריץ סמוק-טסט ידני לשרת (הסעיף למעלה), ולעשות commit לכל מה שכבר נכתב.
 
 ## סגנון עבודה מוסכם עם רות
 
-- לשאול לפני החלטות ארכיטקטורה משמעותיות (AskUserQuestion / בצ'אט).
-- לערוך את הקבצים ישירות (לא רק להציג קוד בצ'אט להעתקה - זה היה בשלב
-  מוקדם יותר וגרם לבאגים בהעתקה ידנית).
+- לשאול לפני החלטות ארכיטקטורה משמעותיות (AskUserQuestion / בצ'אט),
+  **ולהסביר לפני כל שינוי בקבצים - לא רק להריץ Write/Edit בלי להודיע**.
+- לוודא שהגישה המוצעת היא "הדרך המומלצת" (למשל: השוואת Java-WebSocket
+  מול Spring Boot, בדיקת דפוס queue+tick-thread מול מקורות ברשת) לפני
+  שממשיכים.
+- לערוך את הקבצים ישירות (לא רק להציג קוד בצ'אט להעתקה).
+- **לכתוב טסט לכל פונקציה/לוגיקה משמעותית** (יש לרות תיקייה ייעודית -
+  `src/test/java/texttests/`) - לא רק ל-production code אלא גם ל-DTOs.
+- **אחרי כל שינוי: להציע פקודת commit מדויקת (git add + git commit -m)
+  אבל לא להריץ אותה בעצמי** - רות מריצה. חשוב: לא לגעת בקבצים אחרים
+  שכבר יש לה שינויים לא-committed בהם (יש כמה כאלה מעבודה שלה עצמה).
 - אחרי כל שינוי מבני: לבדוק איזון סוגריים + חיפוש הפניות ישנות שנשברו,
-  לפני שמבקשים ממנה להריץ `mvn compile` (אין JDK 17 בסביבת הכלים).
+  לפני שמבקשים ממנה להריץ `mvn compile`/`mvn test` (אין JDK/Maven
+  מלאים בסביבת הכלים - יש רק JRE 11, אין javac, אין הרשאות התקנה).
 - רות שמה דגש חזק על קוד מסודר/לא-ארוך-מדי - להעדיף מחלקות קטנות
-  וממוקדות (single responsibility) על פני הוספת עוד ועוד ל-GameEngine.
+  וממוקדות (single responsibility). דוגמה מהשיחה הזו: `GameIdResolver`
+  הוצא כמחלקה נפרדת מ-GameServer בדיוק כדי שיהיה ניתן לבדוק אותו ביחידה.
