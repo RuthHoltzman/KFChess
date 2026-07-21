@@ -55,7 +55,14 @@ public class NetworkGameWindowMain {
             System.err.println("failed to connect to " + serverUri);
             return;
         }
+        launch(client);
+    }
 
+    // פותחת את חלון המשחק עבור לקוח שכבר מחובר לשרת (connectBlocking() כבר
+    // הצליח) - מופרדת מ-main() כדי ש-HomeScreenMain תוכל לקרוא לה ישירות
+    // אחרי שהיא מחברת GameClient משלה (לפי room שהוזן במסך הבית), בלי לשכפל
+    // כאן את כל חיווט ה-Swing/Timer.
+    public static void launch(GameClient client) {
         Gson gson = new Gson();
         ClientSnapshotReconstructor reconstructor = new ClientSnapshotReconstructor();
         SnapshotFactory snapshotFactory = new SnapshotFactory();
