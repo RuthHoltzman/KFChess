@@ -43,7 +43,7 @@ class MessageDtoTest {
     @Test
     void snapshotMessage_withNullSelectedAndWinner_serializesWithoutThrowing() {
         SnapshotMessage snapshot = new SnapshotMessage(
-                List.of(), null, List.of(), Map.of(), Map.of(), false, null, 1234L,
+                8, 8, List.of(), null, List.of(), Map.of(), Map.of(), false, null, 1234L,
                 List.of(), List.of(), List.of());
 
         JsonObject json = gson.toJsonTree(snapshot).getAsJsonObject();
@@ -58,7 +58,7 @@ class MessageDtoTest {
     @Test
     void snapshotMessage_gameOverWithWinner_serializesWinnerField() {
         SnapshotMessage snapshot = new SnapshotMessage(
-                List.of(), null, List.of(), Map.of(), Map.of(), true, "WHITE", 5000L,
+                8, 8, List.of(), null, List.of(), Map.of(), Map.of(), true, "WHITE", 5000L,
                 List.of(), List.of(), List.of());
 
         JsonObject json = gson.toJsonTree(snapshot).getAsJsonObject();
