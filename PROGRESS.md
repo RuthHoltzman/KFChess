@@ -42,6 +42,24 @@
 - **חלוקת אחריות GameSession מול GameServer**: GameSession לא יודע כלום
   על Gson/רשת - הוא רק מחזיק מצב משחק ובונה DTO (`SnapshotMessage`).
   GameServer אחראי בלעדית על סריאליזציה + שליחה בפועל + ניתוב gameId.
+- **snapshot מאוחד (לא "מקומי" מול "רשת" נפרדים)**: `SnapshotMessage`
+  כולל גם `motions`/`jumps`/`captureEffects` - בדיוק אותו מידע שה-UI
+  המקומי (Swing, SnapshotFactory) כבר מצייר כאנימציה, נלקח ישירות מ-
+  `engine.activeMotions()/activeJumps()/recentCaptureEffects()` (כבר
+  היו public על GameEngine, שום לוגיקה כפולה לא נכתבה). הלקוח מחשב
+  התקדמות אנימציה (0..1) מתוך `now` (מגיע באותה הודעה) מול
+  startTime/arrivalTime של כל פריט - אין צורך בסנכרון שעונים בין
+  שרת ללקוח.
+- **מינימום DTOs, לא שכבה נפרדת "בשביל העיקרון"**: `Position`/`Motion`/
+  `CaptureEffect` (המחלקות האמיתיות של הפרויקט) נשלחות ישירות ל-Gson
+  בלי עטיפה - הן כבר בדיוק בצורה הרצויה, ו-Gson מסריאלז כל אובייקט
+  Java לבד (לא צריך getters/DTO). **רק** `PieceDto`/`JumpDto` נשארו,
+  כי `Piece`/`JumpVisual` **בכוונה** לא יודעים את מיקומם על הלוח
+  (Board הוא מקור האמת היחיד למיקום) - אז צריך משהו שמצמיד להם מיקום
+  מבחוץ; שני אלה עצמם רק עוטפים את האובייקט האמיתי + Position, בלי
+  להעתיק אף שדה ידנית. (הוחלט לצמצם מ-`PositionDto`/`MotionDto`/
+  `CaptureEffectDto` שנכתבו קודם ונמחקו - אין עדיין אף לקוח שתלוי
+  בצורת ה-JSON, אז אין עלות "תאימות לאחור" לצמצום הזה.)
 
 ## מה שכבר קיים ומוכן לשרת (מלפני השיחה הזו, committed)
 
@@ -56,17 +74,18 @@
 
 ## מה שנוצר בשיחה הזו - חבילת `kfchess.net` (לא committed עדיין!)
 
-קבצי production:
+קבצי production (12, אחרי צמצום - ר' "מינימום DTOs" למעלה):
 ```
 kfchess/net/
   ClientCommandType.java   - enum CLICK/JUMP
   ClientCommand.java       - DTO נכנס (type/row/col) + isValid()
-  PositionDto.java         - row/col שטוח, from(Position)
-  PieceDto.java            - color/kind/state/row/col שטוח, from(Piece,Position)
+  PieceDto.java            - מצמיד Piece+Position (Piece לא יודע מיקום בעצמו)
+  JumpDto.java             - מצמיד JumpVisual+Position (אותה סיבה)
   ClientRole.java          - WHITE/BLACK/SPECTATOR + toPieceColor()
   RoleAssignedMessage.java - נשלח פעם אחת ב-onOpen
   ErrorMessage.java        - JSON פגום/פקודה לא תקינה
-  SnapshotMessage.java     - מצב הלוח המלא, נשלח בכל טיק
+  SnapshotMessage.java     - מצב הלוח המלא (כולל אנימציות), נשלח בכל טיק;
+                             Position/Motion/CaptureEffect משודרים ישירות בלי DTO
   GameIdResolver.java      - resourceDescriptor -> gameId (טהור, נבדק ביחידה)
   GameSession.java         - "המוח" של משחק בודד: תור פקודות + tick() + snapshotFor()
   GameServer.java          - extends WebSocketServer, Map<gameId,GameSession>,
@@ -78,12 +97,12 @@ kfchess/net/
 קבצי טסט (`src/test/java/texttests/`, לפי הבקשה של רות - טסט לכל
 פונקציה/לוגיקה משמעותית):
 ```
-ClientCommandTest, PositionDtoTest, PieceDtoTest, MessageDtoTest,
-GameIdResolverTest, GameSessionTest (7 מקרים: הקצאת תפקידים, הסרת חיבור,
-ניתוב פקודות לפי צבע, ביצוע מהלך בפועל (IN_TRANSIT), התעלמות מפקודת
-צופה, חוסן מול חיבור לא-מזוהה, מצב פתיחה), FakeWebSocket (עזר טסטים
-בלבד - stub ל-org.java_websocket.WebSocket, לא נקרא בפועל ע"י GameSession
-אלא רק משמש כמפתח-זהות).
+ClientCommandTest, PieceDtoTest, JumpDtoTest, MessageDtoTest,
+GameIdResolverTest, GameSessionTest (9 מקרים, כולל: הקצאת תפקידים, הסרת
+חיבור, ניתוב פקודות לפי צבע, ביצוע מהלך בפועל (IN_TRANSIT + motions
+תואם), התעלמות מפקודת צופה, חוסן מול חיבור לא-מזוהה, מצב פתיחה),
+FakeWebSocket (עזר טסטים בלבד - stub ל-org.java_websocket.WebSocket,
+לא נקרא בפועל ע"י GameSession אלא רק משמש כמפתח-זהות).
 ```
 
 גם `.gitignore` עודכן (נוסף `.idea/` ו-`*.iml`) ו-`pom.xml` (Java-WebSocket + Gson).

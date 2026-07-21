@@ -3,9 +3,11 @@ package kfchess.net;
 import kfchess.bus.EventBus;
 import kfchess.engine.GameEngine;
 import kfchess.engine.NetworkActions;
+import kfchess.engine.snapshot.JumpVisual;
 import kfchess.io.BoardParser;
 import kfchess.model.Board;
 import kfchess.model.Game;
+import kfchess.model.Piece;
 import kfchess.model.PieceColor;
 import kfchess.model.Position;
 import kfchess.realtime.RaelTime;
@@ -113,31 +115,51 @@ public class GameSession {
         return Map.copyOf(connections);
     }
 
-    // בונה את הודעת המצב (snapshot) עבור צופה ספציפי - selected/legalMoves הם רק ביחס לצבע שלו.
-    public SnapshotMessage snapshotFor(ClientRole viewerRole) {
-        List<PieceDto> pieces = collectPieces();
-        Optional<Position> selected = viewerRole.toPieceColor()
-                .flatMap(networkActions::selectedPositionFor);
-        PositionDto selectedDto = selected.map(PositionDto::from).orElse(null);
-        List<PositionDto> legalMoves = selected
-                .map(pos -> engine.legalMovesFrom(pos).stream().map(PositionDto::from).toList())
-                .orElse(List.of());
-        String winner = engine.winner().map(PieceColor::name).orElse(null);
-
-        return new SnapshotMessage(pieces, selectedDto, legalMoves,
-                scoresByName(), moveLogByName(), engine.isGameOver(), winner, engine.now());
+    /** תוצאת סריקת הלוח: הכלים לשידור + מיקום כל כלי (זהות, לא ערך) - דרוש כדי לאתר קפיצות (ר' collectJumps). */
+    private record BoardScan(List<PieceDto> pieces, Map<Piece, Position> positionByPiece) {
     }
 
-    // סורק את כל הלוח (row/col) ואוסף PieceDto לכל משבצת תפוסה - אין מיפוי position->piece ישיר ב-Board.
-    private List<PieceDto> collectPieces() {
+    // בונה את הודעת המצב (snapshot) עבור צופה ספציפי - selected/legalMoves הם רק ביחס לצבע שלו.
+    // motions/jumps/captureEffects זהים לכל הצופים - זה בדיוק מה שה-UI המקומי מצייר כאנימציה.
+    public SnapshotMessage snapshotFor(ClientRole viewerRole) {
+        BoardScan scan = scanBoard();
+        Optional<Position> selected = viewerRole.toPieceColor()
+                .flatMap(networkActions::selectedPositionFor);
+        List<Position> legalMoves = selected.map(engine::legalMovesFrom).orElse(List.of());
+        String winner = engine.winner().map(PieceColor::name).orElse(null);
+
+        return new SnapshotMessage(scan.pieces(), selected.orElse(null), legalMoves,
+                scoresByName(), moveLogByName(), engine.isGameOver(), winner, engine.now(),
+                engine.activeMotions(), collectJumps(scan.positionByPiece()), engine.recentCaptureEffects());
+    }
+
+    // סורק את כל הלוח (row/col) פעם אחת - אוסף גם PieceDto לשידור וגם piece->position לצורך collectJumps.
+    private BoardScan scanBoard() {
         List<PieceDto> pieces = new ArrayList<>();
+        Map<Piece, Position> positionByPiece = new HashMap<>();
         for (int row = 0; row < board.height(); row++) {
             for (int col = 0; col < board.width(); col++) {
                 Position position = new Position(row, col);
-                board.pieceAt(position).ifPresent(piece -> pieces.add(PieceDto.from(piece, position)));
+                board.pieceAt(position).ifPresent(piece -> {
+                    pieces.add(PieceDto.from(piece, position));
+                    positionByPiece.put(piece, position);
+                });
             }
         }
-        return pieces;
+        return new BoardScan(pieces, positionByPiece);
+    }
+
+    // ממיר את כל הקפיצות הפעילות ל-DTO; JumpVisual לא יודע את מיקומו בעצמו, לכן משתמשים במפה מ-scanBoard.
+    // (motions/captureEffects לא צריכים המרה כזו - engine.activeMotions()/recentCaptureEffects() כבר משודרים ישירות.)
+    private List<JumpDto> collectJumps(Map<Piece, Position> positionByPiece) {
+        List<JumpDto> jumps = new ArrayList<>();
+        for (JumpVisual jump : engine.activeJumps()) {
+            Position position = positionByPiece.get(jump.piece());
+            if (position != null) {
+                jumps.add(JumpDto.from(jump, position));
+            }
+        }
+        return jumps;
     }
 
     // ממיר Map<PieceColor,Integer> של הניקוד ל-Map<String,Integer> לפי שם הצבע, לשידור ב-JSON.

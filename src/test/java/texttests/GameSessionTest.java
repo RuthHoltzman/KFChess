@@ -82,13 +82,33 @@ class GameSessionTest {
 
         boolean foundInTransit = false;
         for (JsonElement element : pieces) {
-            JsonObject piece = element.getAsJsonObject();
-            if (piece.get("row").getAsInt() == 6 && piece.get("col").getAsInt() == 4) {
-                assertEquals("IN_TRANSIT", piece.get("state").getAsString());
+            JsonObject pieceDto = element.getAsJsonObject();
+            JsonObject position = pieceDto.getAsJsonObject("position");
+            if (position.get("row").getAsInt() == 6 && position.get("col").getAsInt() == 4) {
+                assertEquals("IN_TRANSIT", pieceDto.getAsJsonObject("piece").get("state").getAsString());
                 foundInTransit = true;
             }
         }
         assertTrue(foundInTransit);
+    }
+
+    @Test
+    void tick_clickThenLegalTarget_snapshotIncludesMatchingMotion() {
+        GameSession session = new GameSession();
+        FakeWebSocket white = new FakeWebSocket();
+        session.assignRole(white);
+
+        session.enqueueCommand(white, click(6, 4));
+        session.enqueueCommand(white, click(5, 4));
+        session.tick(0);
+
+        JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
+        JsonArray motions = snapshot.getAsJsonArray("motions");
+
+        assertEquals(1, motions.size());
+        JsonObject motion = motions.get(0).getAsJsonObject();
+        assertEquals(6, motion.getAsJsonObject("from").get("row").getAsInt());
+        assertEquals(5, motion.getAsJsonObject("to").get("row").getAsInt());
     }
 
     @Test
@@ -128,5 +148,8 @@ class GameSessionTest {
         JsonObject scores = snapshot.getAsJsonObject("scores");
         assertEquals(0, scores.get("WHITE").getAsInt());
         assertEquals(0, scores.get("BLACK").getAsInt());
+        assertEquals(0, snapshot.getAsJsonArray("motions").size());
+        assertEquals(0, snapshot.getAsJsonArray("jumps").size());
+        assertEquals(0, snapshot.getAsJsonArray("captureEffects").size());
     }
 }

@@ -3,29 +3,24 @@ package kfchess.net;
 import kfchess.model.Piece;
 import kfchess.model.Position;
 
-/** ייצוג JSON שטוח של כלי בודד + מיקומו על הלוח, לשימוש ב-SnapshotMessage. */
+/**
+ * מצמיד כלי למיקומו על הלוח - Piece בכוונה לא יודע את מיקומו בעצמו
+ * (Board הוא מקור האמת היחיד למיקום, ר' תיעוד Piece.java), אז זו
+ * העטיפה הדקה ביותר האפשרית שעדיין נותנת ללקוח את שניהם יחד. Gson
+ * מסריאלז את piece/position ישירות (color/kind/state/row/col) בלי
+ * שצריך להעתיק אף שדה ידנית.
+ */
 public class PieceDto {
 
-    private final String color;
-    private final String kind;
-    private final String state;
-    private final int row;
-    private final int col;
+    private final Piece piece;
+    private final Position position;
 
-    public PieceDto(String color, String kind, String state, int row, int col) {
-        this.color = color;
-        this.kind = kind;
-        this.state = state;
-        this.row = row;
-        this.col = col;
+    public PieceDto(Piece piece, Position position) {
+        this.piece = piece;
+        this.position = position;
     }
 
     public static PieceDto from(Piece piece, Position position) {
-        return new PieceDto(
-                piece.color().name(),
-                piece.kind().name(),
-                piece.state().name(),
-                position.row(),
-                position.col());
+        return new PieceDto(piece, position);
     }
 }
