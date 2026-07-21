@@ -1,4 +1,4 @@
-package kfchess.net;
+package kfchess.net.client;
 
 import kfchess.engine.snapshot.CaptureEffect;
 import kfchess.engine.snapshot.JumpVisual;
@@ -7,6 +7,8 @@ import kfchess.model.Piece;
 import kfchess.model.PieceColor;
 import kfchess.model.PieceState;
 import kfchess.model.Position;
+import kfchess.net.JumpDto;
+import kfchess.net.PieceDto;
 import kfchess.realtime.Motion;
 
 import java.util.ArrayList;

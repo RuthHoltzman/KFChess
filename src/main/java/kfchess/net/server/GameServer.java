@@ -1,7 +1,11 @@
-package kfchess.net;
+package kfchess.net.server;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
+import kfchess.net.ClientCommand;
+import kfchess.net.ClientRole;
+import kfchess.net.ErrorMessage;
+import kfchess.net.RoleAssignedMessage;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;

@@ -1,4 +1,4 @@
-package kfchess.net;
+package kfchess.net.client;
 
 import java.net.URI;
 import java.net.URISyntaxException;

@@ -12,7 +12,7 @@ package kfchess.model;
 public class Piece {
 
     // מונה גלובלי - כל כלי מקבל מזהה עולה, פעם אחת, בבנאי. נחוץ כדי
-    // שהלקוח (ר' kfchess.net.ClientSnapshotReconstructor) יוכל לזהות
+    // שהלקוח (ר' kfchess.net.client.ClientSnapshotReconstructor) יוכל לזהות
     // "זה אותו כלי שהיה קודם" בין הודעות JSON נפרדות (שבהן זהות אובייקט
     // Java רגילה הולכת לאיבוד בכל פענוח) - בלי מזהה יציב כזה, אין דרך
     // אמינה להבחין בין "כלי המשיך לזוז" ל"כלי חדש נוצר באותו מיקום".

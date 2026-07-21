@@ -1,4 +1,4 @@
-package kfchess.net;
+package kfchess.net.server;
 
 import kfchess.bus.EventBus;
 import kfchess.engine.GameEngine;
@@ -10,6 +10,11 @@ import kfchess.model.Game;
 import kfchess.model.Piece;
 import kfchess.model.PieceColor;
 import kfchess.model.Position;
+import kfchess.net.ClientCommand;
+import kfchess.net.ClientRole;
+import kfchess.net.JumpDto;
+import kfchess.net.PieceDto;
+import kfchess.net.SnapshotMessage;
 import kfchess.realtime.RaelTime;
 import kfchess.rules.RuleEngine;
 import org.java_websocket.WebSocket;

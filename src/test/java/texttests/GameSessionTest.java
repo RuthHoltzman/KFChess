@@ -6,7 +6,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import kfchess.net.ClientCommand;
 import kfchess.net.ClientRole;
-import kfchess.net.GameSession;
+import kfchess.net.server.GameSession;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;

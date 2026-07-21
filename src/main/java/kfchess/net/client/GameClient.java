@@ -1,6 +1,8 @@
-package kfchess.net;
+package kfchess.net.client;
 
 import com.google.gson.Gson;
+import kfchess.net.ClientCommand;
+import kfchess.net.ClientCommandType;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
