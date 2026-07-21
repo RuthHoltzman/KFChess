@@ -18,8 +18,9 @@
    כל אחד יכול להזיז רק את הכלים שלו, שני הלוחות מסונכרים בזמן אמת,
    וסגירת חלון + פתיחת לקוח חדש מצטרפת מחדש לאותו משחק (ר' "אימות ידני"
    למטה).
-3. Home screen v1 - login בשל (shell), 2 שחקנים בלבד - ⬜ **הצעד הבא** (ר' למטה).
-4. חשבונות + ELO (SQLite) - ⬜ לא התחיל.
+3. Home screen v1 - login בשל (shell), 2 שחקנים בלבד - ✅ **הושלם ואומת ידנית**
+   (ר' למטה). כרגע רק בחירת room (בלי חשבונות/סיסמה - זה שלב 4).
+4. חשבונות + ELO (SQLite) - ⬜ **הצעד הבא** (ר' למטה).
 5. Matchmaking (Play) + ניתוק/auto-resign - ⬜ לא התחיל.
 6. חדרים (Create/Join/Cancel) + לוגים - ⬜ לא התחיל.
 
@@ -100,17 +101,36 @@
 ### `kfchess.GameWindowMain` (מקומי) ו-`kfchess.NetworkGameWindowMain` (רשת)
 שני נקודות כניסה עם Swing - חולקות את כל שכבת הציור (`SnapshotFactory`,
 `GameSceneView`, `BoardView`, `BoardLayoutCalculator`) בלי שכפול.
+`NetworkGameWindowMain.main()` נשארה נקודת כניסה ישירה לבדיקות (מתחברת
+ל-URI קבוע/מ-`args[0]`), אבל כל הלוגיקה של "פתיחת חלון המשחק בהינתן
+`GameClient` שכבר מחובר" הוצאה למתודה `public static launch(GameClient)`
+נפרדת - כדי ש-`HomeScreenMain` תוכל להשתמש באותו קוד בדיוק בלי לשכפל
+אותו.
+
+### `kfchess.HomeScreenMain` (מסך בית, שלב 3 v1)
+חלון Swing נפרד: שדה room (ברירת מחדל `"default"`) + כפתור Connect.
+מתחבר ב-thread רקע (כי `connectBlocking()` חוסם, ולא רוצים להקפיא את
+ה-EDT) ל-`ws://localhost:8887/<room>`; הצליח → סוגר את עצמו וקורא
+ל-`NetworkGameWindowMain.launch(client)`; נכשל → מציג שגיאה ב-label
+בתוך אותו חלון (בלי popup) ומאפשר לנסות שוב. `buildUri(room)` היא
+פונקציה טהורה ונפרדת (trim + נפילה ל-`"default"` על קלט ריק/רווחים/
+`null`) - נבדקת ישירות ב-`HomeScreenMainTest` בלי להרים UI. עדיין אין
+כאן חשבונות/סיסמה בכלל (שלב 4) - "login" בשלב הזה הוא רק בחירת room;
+מי מקבל WHITE/BLACK/SPECTATOR עדיין נקבע בשרת לפי סדר התחברות
+(`ClientRole`, ר' למעלה), לא כאן.
 
 ## איך להריץ ולבדוק (IntelliJ)
 
 1. Run על `kfchess.net.server.ServerMain` - אמורה להיכתב שורה
    `GameServer started on port 8887`.
-2. Run על `kfchess.NetworkGameWindowMain` - נכנס כ-WHITE.
-3. **לשני שחקנים בו-זמנית**: בקונפיגורציית `NetworkGameWindowMain`
-   (Edit Configurations → Modify options → **Allow multiple instances**),
-   ואז Run עליה **שוב** בלי לעצור את הריצה הראשונה - נכנס כ-BLACK, לאותו
-   URI ברירת מחדל (`ws://localhost:8887/default`), כדי להיכנס לאותה
-   `GameSession`.
+2. Run על `kfchess.HomeScreenMain` - נפתח מסך בית, מזינים room (או
+   משאירים `default`) ולוחצים Connect - נכנס כ-WHITE. (אפשר גם Run
+   ישירות על `kfchess.NetworkGameWindowMain`, בלי מסך בית, לבדיקות מהירות.)
+3. **לשני שחקנים בו-זמנית**: בקונפיגורציית `HomeScreenMain` (או
+   `NetworkGameWindowMain`) (Edit Configurations → Modify options →
+   **Allow multiple instances**), ואז Run עליה **שוב** בלי לעצור את
+   הריצה הראשונה - מתחברים לאותו room (`default` אם לא שינו) כדי
+   להיכנס לאותה `GameSession`, נכנס כ-BLACK.
 4. בדיקת פרוטוקול גולמי (כמו קודם): מקונסולת דפדפן (F12) עם `WebSocket`
    ישיר, או `kfchess.net.client.ClientMain` (לקוח קונסולה).
 
@@ -126,14 +146,17 @@
   קיימת (המצב חי על השרת, לא בלקוח) - **בכוונה**, לא באג. **שימו לב**:
   עדיין **אין** טיפול בניתוק (auto-resign/timeout, שלב 5) - אם צד מתנתק,
   המשחק פשוט ממתין, אף אחד לא מפסיד.
+- `HomeScreenMain` **אומת ידנית ע"י רות ועובד** - הזנת room, Connect,
+  ומעבר לחלון המשחק (`NetworkGameWindowMain.launch`).
 
 ## הצעד הבא
 
-**שלב 3**: Home screen v1 - כרגע `NetworkGameWindowMain` מתחבר ישר
-ל-URI קבוע (`ws://localhost:8887/default`, או מ-`args[0]`) בלי שום
-מסך פתיחה. הצעד הבא הוא מסך login/home בסיסי (shell - בלי חשבונות
-אמיתיים עדיין, זה שלב 4) שמאפשר לבחור/להזין room ולהתחבר משם, בשביל
-2 שחקנים בלבד (לא matchmaking - זה שלב 5).
+**שלב 4**: חשבונות + ELO (SQLite) - כרגע אין שום authentication אמיתי;
+`HomeScreenMain` (שלב 3) רק בוחר room, ותפקיד WHITE/BLACK/SPECTATOR
+נקבע לפי סדר התחברות בלבד (`ClientRole`). הצעד הבא הוא הוספת חשבונות
+אמיתיים (username+password, ככל הנראה עם SQLite) ודירוג ELO לכל
+שחקן/ת - כולל החלטה איך זה משתלב עם מסך הבית הקיים (למשל: שדה
+username/password לפני שדה ה-room, או מסך login נפרד לפניו).
 
 ## סגנון עבודה מוסכם עם רות
 
