@@ -35,6 +35,18 @@
             <artifactId>jinput</artifactId>
             <version>2.0.9</version>
         </dependency>
+        <!-- שרת WebSocket - שלב 2 (kfchess.net) -->
+        <dependency>
+            <groupId>org.java-websocket</groupId>
+            <artifactId>Java-WebSocket</artifactId>
+            <version>1.6.0</version>
+        </dependency>
+        <!-- JSON לפרוטוקול הודעות הלקוח/שרת - שלב 2 (kfchess.net) -->
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.14.0</version>
+        </dependency>
     </dependencies>
   
     <build>
