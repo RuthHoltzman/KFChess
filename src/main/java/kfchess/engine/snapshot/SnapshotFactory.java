@@ -1,4 +1,4 @@
-package kfchess.engine;
+package kfchess.engine.snapshot;
 
 import kfchess.model.Board;
 import kfchess.model.Piece;
@@ -101,7 +101,7 @@ public class SnapshotFactory {
         List<CaptureEffectSnapshot> captureEffectSnapshots = new ArrayList<>();
         for (CaptureEffect effect : captureEffects) {
             double progress = progressBetween(
-                    effect.removedAt(), effect.removedAt() + GameEngine.CAPTURE_EFFECT_DURATION_MS, now);
+                    effect.removedAt(), effect.removedAt() + CaptureEffectTracker.CAPTURE_EFFECT_DURATION_MS, now);
             if (progress >= 1.0) {
                 continue; // כבר דהה לגמרי - GameEngine ינקה אותו בטיק הבא, אין מה לצייר
             }

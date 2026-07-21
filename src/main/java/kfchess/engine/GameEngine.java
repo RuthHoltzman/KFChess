@@ -11,7 +11,6 @@ import kfchess.realtime.RaelTime;
 import kfchess.rules.RuleEngine;
 
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,15 +18,16 @@ import java.util.Optional;
 
 import kfchess.bus.EventBus;
 import kfchess.bus.GameLifecycleEvent;
-import kfchess.bus.MoveLoggedEvent;
-import kfchess.bus.ScoreUpdatedEvent;
-import kfchess.bus.SoundEvent;
+import kfchess.engine.snapshot.CaptureEffect;
+import kfchess.engine.snapshot.CaptureEffectTracker;
+import kfchess.engine.snapshot.JumpVisual;
+
 /**
  * "המוח" של המשחק: מקבל אירועים ברמת התחום (קליק על תא, המתנה, קפיצה)
  * ומתרגם אותם לשינויים ב-Game/Board, תוך אכיפת חוקי התנועה דרך RuleEngine.
  * <p>
  * שימו לב: הכלי הנבחר (selection), רשימת המהלכים הפעילים (activeMotions)
- * ורשימת הקפיצות הפעילות (jumpEndTimes) הן state per-engine ולא סטטי
+ * וזמני הקפיצה (ר' PieceTimers) הן state per-engine ולא סטטי
  * גלובלי - כל אלה מאפשרים בעתיד להריץ כמה משחקים/לוחות במקביל, וגם
  * מאפשרים לכמה כלים לזוז/לקפוץ בו-זמנית (בניגוד לקוד המקורי שתמך
  * בכלי אחד בתנועה ובקפיצה אחת בלבד באמצעות משתנים סטטיים).
@@ -35,44 +35,17 @@ import kfchess.bus.SoundEvent;
 public class GameEngine {
 
     private static final long MILLISECONDS_PER_SQUARE = 1000;
-    private static final long DEFAULT_JUMP_DURATION_MS = 1000;
-
-    /**
-     * כמה זמן (במילישניות) אפקט "לכידה" (ר' CaptureEffect) נשאר חי אחרי
-     * שכלי הוסר מהלוח - חלון קצר שנועד רק לאפשר ל-UI לצייר אפקט חזותי
-     * (למשל טבעת דוהה) במקום שבו הכלי נעלם, כדי שההיעלמות לא תיראה
-     * כאילו "כלום לא קרה". ציבורי כדי ש-SnapshotFactory יוכל לחשב לפיו
-     * את שבר ההתקדמות (progress) של כל אפקט, בלי לשכפל את המספר.
-     */
-    public static final long CAPTURE_EFFECT_DURATION_MS = 450;
-
-    // משכי "מנוחה" (cooldown) אחרי הליכה/קפיצה - כמה זמן הכלי חסום מפעולה.
-    // ציבוריים כי PieceVisualStateTracker משתמש באותם ערכים בדיוק כדי
-    // שהאנימציה (שעון החול) תמיד תואמת בדיוק את משך הזמן שבו הכלי באמת
-    // לא ניתן להזזה - אין שני מקורות אמת לאותו מספר.
-    public static final long SHORT_REST_DURATION_MS = 500;  // אחרי הליכה
-    public static final long LONG_REST_DURATION_MS = 1000;  // אחרי קפיצה
 
     private final Game game;
     private final RuleEngine ruleEngine;
     private final RaelTime clock;
     private final EventBus bus;
     private final List<Motion> activeMotions = new ArrayList<>();
-    private final Map<Piece, Long> jumpEndTimes = new HashMap<>();
-    // זמני התחלה של קפיצות פעילות - נשמר במקביל ל-jumpEndTimes (ולא בתוכו),
-    // כדי לא לגעת בלוגיקת הקפיצה הקיימת שכבר עובדת נכון; המפה הזו משרתת
-    // אך ורק את שכבת התצוגה (חישוב קשת הגובה של הקפיצה ב-SnapshotFactory).
-    private final Map<Piece, Long> jumpStartTimes = new HashMap<>();
-    // כלים שהוסרו לאחרונה מהלוח (לכידה רגילה, או "התאדות" תוקף מול כלי
-    // קופץ) - נשמר זמנית רק כדי שה-UI יוכל לצייר אפקט לכידה קצר; ר' תיעוד
-    // מלא ב-CaptureEffect.
-    private final List<CaptureEffect> recentCaptures = new ArrayList<>();
-    // מתי המנוחה הנוכחית של כל כלי (אם יש) מסתיימת - כל עוד clock.now()
-    // קטן מהערך הזה, הכלי לא זמין לבחירה/תנועה/קפיצה (ר' isAvailableToAct).
-    // זה מה שהופך את "המנוחה" ממשהו ויזואלי-בלבד (שהיה קודם) לכלל משחק
-    // אמיתי: קליק על כלי שנח לא בוחר אותו בכלל - בדיוק כמו כלי שנמצא
-    // כרגע בתנועה (IN_TRANSIT) או בקפיצה (JUMPING).
-    private final Map<Piece, Long> restEndTimes = new HashMap<>();
+    // "כמה זמן כלי נעול/קופץ/במנוחה" - הוצא למחלקה נפרדת, ר' PieceTimers.
+    private final PieceTimers pieceTimers = new PieceTimers();
+    // אפקטי לכידה זמניים (לאנימציית דהייה ב-UI בלבד) - הוצא למחלקה
+    // נפרדת, ר' CaptureEffectTracker.
+    private final CaptureEffectTracker captureEffects = new CaptureEffectTracker();
     // תנועה ארוכה (למשל צריח e1->e8) מפורקת עכשיו לשרשרת של קפיצות של
     // משבצת אחת - כל קפיצה מעדכנת את הלוח מיד כשהיא מסתיימת, וכך אפשר
     // לבדוק בזמן אמת אם משבצת הביניים תפוסה. chainFinalTarget הוא היעד
@@ -84,21 +57,15 @@ public class GameEngine {
     private final Map<Piece, Position> chainOriginalFrom = new HashMap<>();
     private Position selectedPosition;
 
-    // ניקוד ורשימת מהלכים לכל צבע - נאספים כאן (ולא ב-UI) כי הם חלק
-    // מהתקדמות המשחק עצמה, וצריך שיהיו זמינים גם ל-ConsoleRunner/בדיקות,
-    // לא רק לחלון ה-Swing.
-    private final Map<PieceColor, Integer> scores = new EnumMap<>(PieceColor.class);
-    private final Map<PieceColor, List<String>> moveLog = new EnumMap<>(PieceColor.class);
+    // ניקוד + יומן מהלכים לכל צבע - הוצא למחלקה נפרדת, ר' MoveHistory.
+    private final MoveHistory history;
 
     public GameEngine(Game game, RuleEngine ruleEngine, RaelTime clock, EventBus bus) {
         this.game = game;
         this.ruleEngine = ruleEngine;
         this.clock = clock;
         this.bus = bus;
-        for (PieceColor color : PieceColor.values()) {
-            scores.put(color, 0);
-            moveLog.put(color, new ArrayList<>());
-        }
+        this.history = new MoveHistory(game.board(), bus);
     }
 
     public boolean isGameOver() {
@@ -141,10 +108,7 @@ public class GameEngine {
         }
         board().pieceAt(target).ifPresent(piece -> {
             if (isAvailableToAct(piece)) {
-                piece.markJumping();
-                long startTime = clock.now();
-                jumpStartTimes.put(piece, startTime);
-                jumpEndTimes.put(piece, startTime + DEFAULT_JUMP_DURATION_MS);
+                pieceTimers.beginJump(piece, clock.now());
                 // אם הכלי שקפץ היה הכלי הנבחר, יש לבטל את הבחירה: הוא כבר
                 // לא IDLE, ולכן ממילא לא ניתן להזיז אותו - אבל בלי הביטול
                 // הזה ה-UI היה ממשיך לצייר עליו מסגרת "נבחר" כאילו אפשר
@@ -156,17 +120,23 @@ public class GameEngine {
         });
     }
 
+    // שתי המתודות הבאות package-private (לא private) כי NetworkActions
+    // צריך בדיוק אותה התנהגות בשביל המשחק הרשתי - בלי לשכפל אותה, ובלי
+    // ש-NetworkActions יצטרך להכיר את PieceTimers בכלל (הוא מכיר רק
+    // את GameEngine - ר' NetworkActions.java).
+
+    /** מתחיל קפיצה עבור כלי: מסמן אותו כ-JUMPING ורושם את זמני ההתחלה/סיום. */
+    void beginJump(Piece piece) {
+        pieceTimers.beginJump(piece, clock.now());
+    }
+
     /**
      * האם כלי זמין כרגע לפעולה (בחירה/תנועה/קפיצה): לא רק "IDLE" ברמת
      * המודל, אלא גם לא נמצא כרגע ב"מנוחה" (cooldown) אחרי הליכה/קפיצה
      * קודמת. זה מה שהופך את שעון החול הצהוב מקישוט בלבד לכלל משחק אמיתי.
      */
-    private boolean isAvailableToAct(Piece piece) {
-        if (!piece.isIdle()) {
-            return false;
-        }
-        Long restEndTime = restEndTimes.get(piece);
-        return restEndTime == null || clock.now() >= restEndTime;
+    boolean isAvailableToAct(Piece piece) {
+        return pieceTimers.isAvailableToAct(piece, clock.now());
     }
 
     private void trySelect(Position clicked) {
@@ -197,7 +167,9 @@ public class GameEngine {
         selectedPosition = null;
     }
 
-    private void tryMove(Piece piece, Position from, Position to) {
+    // package-private (לא private) כדי ש-NetworkActions יוכל לבצע מהלך
+    // אחרי שהוא כבר וידא בעלות/זמינות - אותה בדיוק לוגיקת חוקיות/שרשור.
+    void tryMove(Piece piece, Position from, Position to) {
         if (!isAvailableToAct(piece)) {
             return;
         }
@@ -232,45 +204,17 @@ public class GameEngine {
         return distance * MILLISECONDS_PER_SQUARE;
     }
 
-    private void advanceGameState() {
+    // package-private כדי ש-NetworkActions יוכל "לקדם" את שעון המשחק
+    // לפני שהוא מטפל בקליק, בדיוק כמו handleClick/handleWait/handleJump.
+    void advanceGameState() {
         // הסדר כאן קריטי: אם כלי מגן מסיים קפיצה בדיוק באותה מילישנייה
         // שבה כלי אחר מגיע אליו, הוא עדיין נחשב "באוויר" באותו טיק -
         // ולכן צריך לפתור הגעות מול מצב הקפיצה הישן, ורק אחר-כך לפוג
         // את הקפיצה עבור הטיק הבא.
         resolveArrivedMotions();
-        resolveExpiredJumps();
-        purgeExpiredCaptureEffects();
-        purgeExpiredRestEntries();
-    }
-
-    /** מנקה רשומות מנוחה שכבר פקעו, כדי שהמפה לא תגדל ללא גבול לאורך משחק ארוך. */
-    private void purgeExpiredRestEntries() {
-        restEndTimes.entrySet().removeIf(entry -> clock.now() >= entry.getValue());
-    }
-
-    /** מנקה אפקטי לכידה שכבר עברו את משך החיים שלהם (ר' CAPTURE_EFFECT_DURATION_MS). */
-    private void purgeExpiredCaptureEffects() {
-        recentCaptures.removeIf(effect -> clock.now() - effect.removedAt() >= CAPTURE_EFFECT_DURATION_MS);
-    }
-
-    /** רושם שכלי הוסר הרגע מהלוח, לצורך אפקט הלכידה הקצר ב-UI. */
-    private void registerCaptureEffect(Piece removedPiece, Position at) {
-        recentCaptures.add(new CaptureEffect(removedPiece.kind(), removedPiece.color(), at, clock.now()));
-    }
-
-    private void resolveExpiredJumps() {
-        List<Piece> finishedJumpers = new ArrayList<>();
-        for (Map.Entry<Piece, Long> entry : jumpEndTimes.entrySet()) {
-            if (clock.now() >= entry.getValue()) {
-                finishedJumpers.add(entry.getKey());
-            }
-        }
-        for (Piece piece : finishedJumpers) {
-            piece.markJumpEnded();
-            jumpEndTimes.remove(piece);
-            jumpStartTimes.remove(piece);
-            restEndTimes.put(piece, clock.now() + LONG_REST_DURATION_MS);
-        }
+        pieceTimers.resolveExpiredJumps(clock.now());
+        captureEffects.purgeExpired(clock.now());
+        pieceTimers.purgeExpiredRest(clock.now());
     }
 
     private void resolveArrivedMotions() {
@@ -311,9 +255,9 @@ public class GameEngine {
             // הזו בכלל ונשאר בדיוק במשבצת שממנה יצא לקפיצה הזו - שהיא,
             // בדיוק בזכות פירוק התנועה למשבצת-משבצת, "המשבצת הקודמת"
             // המבוקשת. השרשרת נגמרת כאן, בלי לכידה ובלי עדכון לוח.
-            recordBlockedMove(movingPiece, chainOriginalFrom.getOrDefault(movingPiece, motion.from()), motion.to());
+            history.recordBlockedMove(movingPiece, chainOriginalFrom.getOrDefault(movingPiece, motion.from()), motion.to());
             movingPiece.markArrived();
-            restEndTimes.put(movingPiece, clock.now() + SHORT_REST_DURATION_MS);
+            pieceTimers.beginShortRest(movingPiece, clock.now());
             chainFinalTarget.remove(movingPiece);
             chainOriginalFrom.remove(movingPiece);
             return;
@@ -349,12 +293,12 @@ public class GameEngine {
         // כאן השרשרת נגמרת (הגענו ליעד הסופי, או שהיה כלי אויב בדרך ותפסנו
         // אותו) - כאן, ורק כאן, מדווחים על המהלך המלא ליומן/לניקוד.
         checkForKingCapture(movingPiece, defender);
-        defender.ifPresent(captured -> registerCaptureEffect(captured, motion.to()));
-        recordMove(movingPiece, chainOriginalFrom.getOrDefault(movingPiece, motion.from()), motion.to(),
+        defender.ifPresent(captured -> captureEffects.register(captured, motion.to(), clock.now()));
+        history.recordMove(movingPiece, chainOriginalFrom.getOrDefault(movingPiece, motion.from()), motion.to(),
                 defender.orElse(null));
         board().movePieceTo(motion.from(), motion.to());
         movingPiece.markArrived();
-        restEndTimes.put(movingPiece, clock.now() + SHORT_REST_DURATION_MS);
+        pieceTimers.beginShortRest(movingPiece, clock.now());
         chainFinalTarget.remove(movingPiece);
         chainOriginalFrom.remove(movingPiece);
         maybePromote(movingPiece, motion.to());
@@ -365,51 +309,10 @@ public class GameEngine {
      * התוקף "מתאדה" (נעלם מהמקור) והמגן נשאר מוגן במקומו.
      */
     private void captureFailsAgainstJumpingDefender(Motion motion, Piece movingPiece) {
-        recordFailedCapture(movingPiece, motion.from(), motion.to());
-        registerCaptureEffect(movingPiece, motion.from());
+        history.recordFailedCapture(movingPiece, motion.from(), motion.to());
+        captureEffects.register(movingPiece, motion.from(), clock.now());
         board().removePieceAt(motion.from());
         movingPiece.markArrived();
-    }
-
-    /**
-     * מעדכן ניקוד (אם הייתה לכידה) ומוסיף שורה לרשימת המהלכים של הצבע
-     * שביצע את המהלך - נקרא *לפני* שהלוח מתעדכן בפועל, כדי שעדיין
-     * אפשר לדעת מי היה במשבצת היעד.
-     */
-    private void recordMove(Piece movingPiece, Position from, Position to, Piece captured) {
-        boolean isCapture = captured != null;
-        if (isCapture) {
-            scores.merge(movingPiece.color(), captured.kind().value(), Integer::sum);
-            bus.publish(new ScoreUpdatedEvent(movingPiece.color(), scores.get(movingPiece.color())));
-
-        }
-        String notation = movingPiece.kind().code() + squareName(from)
-                + (isCapture ? "x" : "-") + squareName(to);
-        moveLog.get(movingPiece.color()).add(notation);
-        bus.publish(new MoveLoggedEvent(movingPiece.color(), notation));
-        bus.publish(new SoundEvent(isCapture ? SoundEvent.Type.CAPTURE : SoundEvent.Type.MOVE));
-    }
-
-    /** מהלך תקיפה שנכשל מול כלי קופץ - מתועד ברשימת המהלכים בלי שינוי ניקוד. */
-    private void recordFailedCapture(Piece movingPiece, Position from, Position to) {
-        String notation = movingPiece.kind().code() + squareName(from) + "x" + squareName(to) + "?!";
-        moveLog.get(movingPiece.color()).add(notation);
-        bus.publish(new MoveLoggedEvent(movingPiece.color(), notation));
-        bus.publish(new SoundEvent(SoundEvent.Type.ILLEGAL));
-    }
-
-    /** מהלך שנעצר כי כלי ידידותי היה במשבצת הבאה - "כמעט התנגשות". */
-    private void recordBlockedMove(Piece movingPiece, Position from, Position blockedAt) {
-        String notation = movingPiece.kind().code() + squareName(from) + "-" + squareName(blockedAt) + " (blocked)";
-        moveLog.get(movingPiece.color()).add(notation);
-        bus.publish(new MoveLoggedEvent(movingPiece.color(), notation));
-    }
-
-    /** ממיר Position לסימון שח-מטי מוכר (עמודה a.. + שורה ממוספרת מלמטה). */
-    private String squareName(Position pos) {
-        char file = (char) ('a' + pos.col());
-        int rank = board().height() - pos.row();
-        return "" + file + rank;
     }
 
     private void checkForKingCapture(Piece movingPiece, Optional<Piece> defender) {
@@ -435,18 +338,14 @@ public class GameEngine {
         return Optional.ofNullable(selectedPosition);
     }
 
-    /** עותק הגנתי: ניקוד נוכחי לכל צבע (למשל להצגה בפאנל הצד). */
+    /** ניקוד נוכחי לכל צבע (למשל להצגה בפאנל הצד). */
     public Map<PieceColor, Integer> scores() {
-        return Map.copyOf(scores);
+        return history.scores();
     }
 
-    /** עותק הגנתי: רשימת המהלכים (בסימון שח-מטי) שביצע כל צבע עד כה. */
+    /** רשימת המהלכים (בסימון שח-מטי) שביצע כל צבע עד כה. */
     public Map<PieceColor, List<String>> moveLog() {
-        Map<PieceColor, List<String>> copy = new EnumMap<>(PieceColor.class);
-        for (Map.Entry<PieceColor, List<String>> entry : moveLog.entrySet()) {
-            copy.put(entry.getKey(), List.copyOf(entry.getValue()));
-        }
-        return copy;
+        return history.moveLog();
     }
     public long now() {
     return clock.now();
@@ -467,19 +366,12 @@ public class GameEngine {
      * ש-activeMotions() משמש לצייר הליכה הדרגתית בין משבצות.
      */
     public List<JumpVisual> activeJumps() {
-        List<JumpVisual> jumps = new ArrayList<>();
-        for (Map.Entry<Piece, Long> entry : jumpEndTimes.entrySet()) {
-            Piece piece = entry.getKey();
-            long endTime = entry.getValue();
-            long startTime = jumpStartTimes.getOrDefault(piece, endTime - DEFAULT_JUMP_DURATION_MS);
-            jumps.add(new JumpVisual(piece, startTime, endTime));
-        }
-        return jumps;
+        return pieceTimers.activeJumps();
     }
 
     /** עותק הגנתי של אפקטי הלכידה הפעילים כרגע (ר' CaptureEffect). */
     public List<CaptureEffect> recentCaptureEffects() {
-        return List.copyOf(recentCaptures);
+        return captureEffects.active();
     }
 
     /**

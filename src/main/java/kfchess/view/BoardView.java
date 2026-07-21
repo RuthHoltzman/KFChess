@@ -1,9 +1,9 @@
 package kfchess.view;
 
-import kfchess.engine.CaptureEffectSnapshot;
-import kfchess.engine.GameSnapshot;
-import kfchess.engine.PieceSnapshot;
-import kfchess.engine.PieceVisualState;
+import kfchess.engine.snapshot.CaptureEffectSnapshot;
+import kfchess.engine.snapshot.GameSnapshot;
+import kfchess.engine.snapshot.PieceSnapshot;
+import kfchess.engine.snapshot.PieceVisualState;
 import kfchess.model.Position;
 import java.awt.*;
 
