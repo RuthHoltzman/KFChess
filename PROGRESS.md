@@ -132,16 +132,56 @@ FakeWebSocket (עזר טסטים בלבד - stub ל-org.java_websocket.WebSocket
    פעמים בשנייה; אחרי ה-CLICK אמור להופיע `"selected":{"row":6,"col":4}`
    באחד ה-snapshots הבאים.
 
+## אימות ידני שכבר בוצע (השרת עובד!)
+
+רות הריצה בפועל: `mvn test` (ירוק, חוץ מ-BoardParserTest הידוע),
+הרצת `ServerMain` (SLF4J warning - לא-מזיק, אין provider מוגדר -
+תקין), וחיבור אמיתי מקונסולת דפדפן ל-`ws://localhost:8887/default` -
+התקבלו `ROLE_ASSIGNED` וזרם `SNAPSHOT` תקין עם 32 כלים בפריסת הפתיחה
+הנכונה. **שלב 2 מאומת end-to-end.**
+
+## מה שנוצר בשיחה הזו - התחלת "לקוח" (GameClient מינימלי, בלי GUI)
+
+לפני חיבור מלא ל-`GameWindowMain` (ר' "הצעד הבא"), נבנה קודם לקוח
+מינימלי מבוסס-קונסולה כדי לוודא שהתקשורת בכיוון ההפוך (לקוח → שרת)
+עובדת, בלי לגעת עדיין ב-GUI:
+
+```
+kfchess/net/
+  GameClient.java            - extends org.java_websocket.client.WebSocketClient.
+                               onOpen/onMessage/onClose/onError מדפיסים למסוף;
+                               sendClick(row,col)/sendJump(row,col) בונים
+                               ClientCommand וממירים ל-JSON.
+  IncomingMessageSummary.java - הופך הודעת JSON נכנסת לשורה קריאה אחת לפי
+                               שדה "type" (ROLE_ASSIGNED/SNAPSHOT/ERROR) -
+                               כדי לא להציף מסוף כמו בבדיקת הדפדפן; לוגיקה
+                               טהורה, נבדקת בלי חיבור רשת (כמו GameIdResolver).
+  ClientMain.java             - main(): connectBlocking() ואז לולאת קונסולה
+                               ("click ROW COL"/"jump ROW COL"/"quit") - מאפשר
+                               לבדוק תקשורת מלאה מטרמינל Java, בלי דפדפן.
+```
+
+שינוי בקובץ קיים: **`ClientCommand.java`** קיבל בנאי ציבורי חדש
+(`ClientCommand(ClientCommandType, int, int)`) - עד עכשיו רק השרת בנה
+אותו (דרך Gson.fromJson); עכשיו גם הלקוח יכול לבנות פקודה יוצאת בעצמו,
+באותו DTO (בלי לשכפל מבנה).
+
+טסט חדש: `IncomingMessageSummaryTest` (4 מקרים - שלושת סוגי ההודעות +
+type לא מזוהה).
+
+**עדיין לא נבדק בפועל** (רות צריכה: `mvn test`, ואז להריץ `ClientMain`
+מול `ServerMain` שכבר רץ, ולנסות "click 6 4").
+
 ## הצעד הבא (איפה להמשיך)
 
-לפי התוכנית המקורית - סעיף 3: **לקוח**. לבנות `GameClient` (WebSocket
-client, אותה ספריית Java-WebSocket) ולחבר את `GameWindowMain` אליו כך
-שיוכל לרוץ במצב רשת (לא רק מקומי) - שולח CLICK/JUMP לשרת במקום לקרוא
-ל-engine ישירות, ומצייר לפי snapshot שמתקבל מהשרת במקום מה-GameEngine
-המקומי.
-
-לפני זה: לוודא עם רות ש-`mvn test` ירוק (חוץ מ-BoardParserTest הידוע),
-להריץ סמוק-טסט ידני לשרת (הסעיף למעלה), ולעשות commit לכל מה שכבר נכתב.
+אחרי ש-GameClient המינימלי מאומת: **לחבר בפועל את `GameWindowMain`**
+כך שיוכל לרוץ במצב רשת. הבעיה המרכזית שצריך לפתור: GameWindowMain
+מצייר לפי `GameSnapshot` שנבנה ע"י `SnapshotFactory` מתוך אובייקטי
+דומיין אמיתיים (Piece/Motion/JumpVisual) - GameClient מקבל רק JSON.
+ההחלטה שהתקבלה: **בצד הלקוח בלבד** לשחזר אובייקטים זמניים מה-JSON
+ולהזין אותם ל-SnapshotFactory הקיים בלי לשנות אותו - כך קוד הציור
+נשאר משותף למשחק מקומי ולמשחק-רשת (ה-View **תמיד** נשאר בלקוח, השרת
+לא יודע עליו כלום - ר' דיון בצ'אט על ההפרדה client/server).
 
 ## סגנון עבודה מוסכם עם רות
 

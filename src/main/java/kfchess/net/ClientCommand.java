@@ -1,9 +1,10 @@
 package kfchess.net;
 
 /**
- * DTO גולמי להודעה שמגיעה מהלקוח, לפני שהיא מנותבת ל-NetworkActions.
- * נבנה ע"י Gson מ-JSON גולמי (ר' GameSession.enqueueCommand) - אין בנאי
- * מפורש בכוונה, Gson ממלא את השדות ישירות דרך reflection.
+ * DTO דו-כיווני להודעת קליק/קפיצה: בצד השרת נבנה ע"י Gson מ-JSON גולמי
+ * (ר' GameSession.enqueueCommand, ללא צורך בבנאי - reflection ישיר על
+ * השדות). בצד הלקוח (ר' GameClient) נבנה דרך הבנאי הציבורי ואז מומר
+ * ל-JSON לפני שליחה - אותו DTO בשני הכיוונים, בלי לשכפל מבנה.
  * <p>
  * מיקום (row/col) הוא מיקום על הלוח, לא פיקסלים - הלקוח כבר עושה
  * pixel→Position בעצמו לפני השליחה (ר' BoardMapper בצד הלקוח).
@@ -13,6 +14,13 @@ public class ClientCommand {
     private ClientCommandType type;
     private Integer row;
     private Integer col;
+
+    /** לשימוש הלקוח בלבד - בונה פקודה לשליחה. השרת לא משתמש בבנאי הזה, רק ב-Gson.fromJson. */
+    public ClientCommand(ClientCommandType type, int row, int col) {
+        this.type = type;
+        this.row = row;
+        this.col = col;
+    }
 
     public ClientCommandType type() {
         return type;
