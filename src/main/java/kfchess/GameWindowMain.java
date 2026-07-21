@@ -16,6 +16,8 @@ import kfchess.rules.RuleEngine;
 import kfchess.view.BoardView;
 import kfchess.view.GameSceneView;
 import kfchess.view.Img;
+import kfchess.view.layout.BoardLayoutCalculator;
+import kfchess.view.layout.BoardLayoutCalculator.BoardLayout;
 
 import javax.swing.Timer;
 import java.awt.Dimension;
@@ -26,7 +28,6 @@ import java.util.Scanner;
 public class GameWindowMain {
 
     private static final int INITIAL_CELL_SIZE = 100;
-    private static final int MIN_CELL_SIZE = 20;
     private static final int SIDE_PANEL_WIDTH = 240;
 
     private static final String STARTING_BOARD_TEXT = """
@@ -82,40 +83,9 @@ public class GameWindowMain {
         }
     }
 
-    /**
-     * כל המספרים שקובעים "איפה כל דבר נמצא על המסך" ברגע נתון - מחושבים
-     * *במקום אחד בלבד* (computeLayout למטה) ומועברים מוכנים לכל מי שצריך
-     * אותם (רינדור, טיפול בקליק). זה בדיוק הלקח משתי הבעיות הקודמות: כל
-     * פעם ששני מקומות חישבו משהו דומה בנפרד, הם התבדרו זה מזה.
-     */
-    private record BoardLayout(int cellSize, int boardPixelSize, int offsetX, int offsetY) {}
-
-    /**
-     * הלוח תמיד *ריבועי* - cellSize זהה לרוחב ולגובה, לא שני מספרים
-     * נפרדים. אם החלון עצמו לא ריבועי, לוקחים את הצד הקטן מבין השניים
-     * (השטח שנשאר באמצע, אחרי הפאנלים) לקביעת גודל הלוח, וממרכזים אותו -
-     * כך שנשארים שוליים ריקים בציר שיש בו עודף מקום, במקום למתוח את
-     * הלוח למלבן.
-     */
-    private static BoardLayout computeLayout(Dimension content, int cols, int rows) {
-        int middleWidth = Math.max(1, content.width - SIDE_PANEL_WIDTH * 2);
-        int middleHeight = Math.max(1, content.height);
-        int squareRawSize = Math.min(middleWidth, middleHeight);
-
-        int cellSize = Math.max(MIN_CELL_SIZE, squareRawSize / Math.max(cols, rows));
-        int boardPixelSize = cellSize * Math.max(cols, rows);
-
-        int offsetX = SIDE_PANEL_WIDTH + (middleWidth - boardPixelSize) / 2;
-        int offsetY = (middleHeight - boardPixelSize) / 2;
-        return new BoardLayout(cellSize, boardPixelSize, offsetX, offsetY);
-    }
-
-    private static Dimension currentContentSize(Img windowAnchor) {
-        if (!windowAnchor.isReady()) {
-            return new Dimension(SIDE_PANEL_WIDTH * 2 + INITIAL_CELL_SIZE * 8, INITIAL_CELL_SIZE * 8);
-        }
-        return windowAnchor.contentSize();
-    }
+    // חישוב הגיאומטריה (BoardLayout/computeLayout/currentContentSize) הוצא
+    // ל-kfchess.view.layout.BoardLayoutCalculator - משותף עם NetworkGameWindowMain,
+    // כדי לא לשכפל אותו שם. ר' התיעוד במחלקה עצמה.
 
     public static void main(String[] args) {
         GameSession[] session = { new GameSession() };
@@ -131,8 +101,9 @@ public class GameWindowMain {
 
         javax.swing.SwingUtilities.invokeLater(() -> {
             windowAnchor.onClick((pixelX, pixelY) -> {
-                BoardLayout layout = computeLayout(
-                        currentContentSize(windowAnchor), session[0].board.width(), session[0].board.height());
+                BoardLayout layout = BoardLayoutCalculator.computeLayout(
+                        BoardLayoutCalculator.currentContentSize(windowAnchor, SIDE_PANEL_WIDTH, INITIAL_CELL_SIZE),
+                        session[0].board.width(), session[0].board.height(), SIDE_PANEL_WIDTH);
                 int boardX = pixelX - layout.offsetX();
                 int boardY = pixelY - layout.offsetY();
                 if (boardX < 0 || boardX >= layout.boardPixelSize()
@@ -150,8 +121,9 @@ public class GameWindowMain {
                 session[0].controller.click(boardX, boardY, layout.cellSize(), layout.cellSize());
             });
             windowAnchor.onRightClick((pixelX, pixelY) -> {
-                BoardLayout layout = computeLayout(
-                        currentContentSize(windowAnchor), session[0].board.width(), session[0].board.height());
+                BoardLayout layout = BoardLayoutCalculator.computeLayout(
+                        BoardLayoutCalculator.currentContentSize(windowAnchor, SIDE_PANEL_WIDTH, INITIAL_CELL_SIZE),
+                        session[0].board.width(), session[0].board.height(), SIDE_PANEL_WIDTH);
                 int boardX = pixelX - layout.offsetX();
                 int boardY = pixelY - layout.offsetY();
                 if (boardX < 0 || boardX >= layout.boardPixelSize()
@@ -178,8 +150,9 @@ public class GameWindowMain {
     }
 
     private static void renderFrame(GameSession[] session, GameSceneView sceneView, Img windowAnchor) {
-        Dimension content = currentContentSize(windowAnchor);
-        BoardLayout layout = computeLayout(content, session[0].board.width(), session[0].board.height());
+        Dimension content = BoardLayoutCalculator.currentContentSize(windowAnchor, SIDE_PANEL_WIDTH, INITIAL_CELL_SIZE);
+        BoardLayout layout = BoardLayoutCalculator.computeLayout(
+                content, session[0].board.width(), session[0].board.height(), SIDE_PANEL_WIDTH);
         GameSnapshot snapshot = session[0].currentSnapshot(layout.cellSize());
         sceneView.render(snapshot, content.width, content.height,
                 layout.boardPixelSize(), layout.offsetX(), layout.offsetY());
