@@ -27,6 +27,8 @@ import java.util.Map;
 public class SnapshotMessage {
 
     private final String type = "SNAPSHOT";
+    private final int boardWidthCells;
+    private final int boardHeightCells;
     private final List<PieceDto> pieces;
     private final Position selected;
     private final List<Position> legalMoves;
@@ -39,10 +41,12 @@ public class SnapshotMessage {
     private final List<JumpDto> jumps;
     private final List<CaptureEffect> captureEffects;
 
-    public SnapshotMessage(List<PieceDto> pieces, Position selected, List<Position> legalMoves,
-                           Map<String, Integer> scores, Map<String, List<String>> moveLog,
+    public SnapshotMessage(int boardWidthCells, int boardHeightCells, List<PieceDto> pieces, Position selected,
+                           List<Position> legalMoves, Map<String, Integer> scores, Map<String, List<String>> moveLog,
                            boolean gameOver, String winner, long now,
                            List<Motion> motions, List<JumpDto> jumps, List<CaptureEffect> captureEffects) {
+        this.boardWidthCells = boardWidthCells;
+        this.boardHeightCells = boardHeightCells;
         this.pieces = pieces;
         this.selected = selected;
         this.legalMoves = legalMoves;

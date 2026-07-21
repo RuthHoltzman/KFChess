@@ -23,4 +23,14 @@ public class PieceDto {
     public static PieceDto from(Piece piece, Position position) {
         return new PieceDto(piece, position);
     }
+
+    // צריך רק בצד הלקוח - כדי לקרוא בחזרה מה ש-Gson פיענח מ-JSON נכנס
+    // (ר' ClientSnapshotReconstructor). השרת ממשיך להשתמש רק ב-from().
+    public Piece piece() {
+        return piece;
+    }
+
+    public Position position() {
+        return position;
+    }
 }

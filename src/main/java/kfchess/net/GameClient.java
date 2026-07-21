@@ -37,6 +37,14 @@ public class GameClient extends WebSocketClient {
         }
     }
 
+    // JSON הגולמי של ההודעה האחרונה שהתקבלה (או null אם עוד לא התקבל כלום) -
+    // צריך ל-NetworkGameWindowMain כדי "לסקור" (polling) מ-Timer של Swing
+    // במקום callback מ-thread הרשת; volatile כבר מבטיח קריאה בטוחה בין
+    // threads (ר' onMessage), אז אין צורך בסנכרון נוסף כאן.
+    public String latestMessage() {
+        return latestMessage;
+    }
+
     // מדפיס את התקציר של ה-snapshot האחרון שהתקבל - נקרא רק לפי דרישה (פקודת "status" ב-ClientMain).
     public void printLatestSnapshot() {
         if (latestMessage == null) {

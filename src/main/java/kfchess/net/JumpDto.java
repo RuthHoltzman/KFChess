@@ -21,4 +21,13 @@ public class JumpDto {
     public static JumpDto from(JumpVisual jump, Position position) {
         return new JumpDto(position, jump);
     }
+
+    // צריך רק בצד הלקוח - ר' PieceDto.piece()/position() לאותה סיבה.
+    public Position at() {
+        return at;
+    }
+
+    public JumpVisual jump() {
+        return jump;
+    }
 }

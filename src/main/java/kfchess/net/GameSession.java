@@ -128,7 +128,7 @@ public class GameSession {
         List<Position> legalMoves = selected.map(engine::legalMovesFrom).orElse(List.of());
         String winner = engine.winner().map(PieceColor::name).orElse(null);
 
-        return new SnapshotMessage(scan.pieces(), selected.orElse(null), legalMoves,
+        return new SnapshotMessage(board.width(), board.height(), scan.pieces(), selected.orElse(null), legalMoves,
                 scoresByName(), moveLogByName(), engine.isGameOver(), winner, engine.now(),
                 engine.activeMotions(), collectJumps(scan.positionByPiece()), engine.recentCaptureEffects());
     }
