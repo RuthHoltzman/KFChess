@@ -12,27 +12,20 @@ import java.net.URISyntaxException;
  * מסך הבית (שלב 3, "v1") - חלון Swing פשוט שמאפשר להזין room ולהתחבר
  * אליו, לפני שנפתח חלון המשחק עצמו (NetworkGameWindowMain.launch).
  * <p>
- * החל משלב 4 יש authentication אמיתי לפני המסך הזה (LoginScreenMain),
- * שמעביר לכאן את ה-Account המחובר דרך launch(Account) - מוצג רק כתווית
- * "Logged in as" (עדיין **לא** משפיע על WHITE/BLACK/SPECTATOR: זה עדיין
- * נקבע בשרת לפי סדר ההתחברות בלבד, ר' ClientRole - חיווט ה-username
- * לפרוטוקול הרשת עצמו ולעדכון ELO הוא צעד נפרד, עדיין לא בוצע).
- * main() ישיר (בלי login) עדיין עובד לבדיקות מהירות - עם account=null,
- * ואז שורת "Logged in as" פשוט לא מוצגת.
+ * מאז שלב 4 יש authentication אמיתי לפני המסך הזה (kfchess.LoginScreenMain,
+ * המיין היחיד להרצת הלקוח) - הוא קורא ל-launch(Account) עם ה-Account
+ * המחובר, ומוצג כאן רק כתווית "Logged in as" (עדיין **לא** משפיע על
+ * WHITE/BLACK/SPECTATOR: זה עדיין נקבע בשרת לפי סדר ההתחברות בלבד, ר'
+ * ClientRole - חיווט ה-username לפרוטוקול הרשת עצמו ולעדכון ELO הוא צעד
+ * נפרד, עדיין לא בוצע). אין כאן main() עצמאי בכוונה - ר' LoginScreenMain.
  */
 public class HomeScreenMain {
 
     private static final String SERVER_HOST_AND_PORT = "ws://localhost:8887";
     private static final String DEFAULT_ROOM = "default";
 
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> buildAndShow(null));
-    }
-
-    // נקודת הכניסה מ-LoginScreenMain אחרי login/register מוצלח - נפרדת מ-
-    // main() בדיוק כמו ש-NetworkGameWindowMain.launch(GameClient) נפרדת
-    // מ-main() שלה, כדי שהמסך הקודם (כאן: login) יוכל לפתוח את המסך הבא
-    // בלי לשכפל את כל חיווט ה-Swing.
+    // נקודת הכניסה היחידה למסך הזה - נקראת מ-LoginScreenMain אחרי
+    // login/register מוצלח, עם ה-Account שהתקבל.
     public static void launch(Account account) {
         SwingUtilities.invokeLater(() -> buildAndShow(account));
     }

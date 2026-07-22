@@ -64,8 +64,9 @@
     `SnapshotMessage`, `PieceDto`, `JumpDto`, `ClientRole`, `RoleAssignedMessage`,
     `ErrorMessage`).
   - `kfchess.net.server` - `GameServer`, `GameSession`, `ServerMain`, `GameIdResolver`.
-  - `kfchess.net.client` - `GameClient`, `ClientMain`, `IncomingMessageSummary`,
-    `IncomingSnapshot`, `ClientSnapshotReconstructor`.
+  - `kfchess.net.client` - `GameClient`, `IncomingMessageSummary`,
+    `IncomingSnapshot`, `ClientSnapshotReconstructor` (`ClientMain` היה כאן
+    גם הוא - **הוסר** בניקוי המיינים, ר' למטה).
 - **`ClientSnapshotReconstructor`** (בצד הלקוח) - הופך `IncomingSnapshot`
   (JSON מפוענח) ל-`Board`+`Motion`+`JumpVisual` אמיתיים, עם **אותו אובייקט
   Piece בדיוק** בין הודעות עוקבות (לפי `piece.id()`) - כדי ש-`SnapshotFactory`
@@ -98,16 +99,16 @@
 `ClientSnapshotReconstructorTest` שבודק שימור זהות בין הודעות במפורש).
 
 ### `kfchess.view.layout.BoardLayoutCalculator`
-גיאומטריית הלוח, משותפת בין שני החלונות.
+גיאומטריית הלוח - במקור נכתבה כדי לשתף קוד בין חלון המשחק המקומי
+(`GameWindowMain`, **הוסר**, ר' "ניקוי המיינים" למטה) לחלון הרשת, נשארה
+מחלקה עצמאית ונבדקת גם אחריו.
 
-### `kfchess.GameWindowMain` (מקומי) ו-`kfchess.NetworkGameWindowMain` (רשת)
-שני נקודות כניסה עם Swing - חולקות את כל שכבת הציור (`SnapshotFactory`,
-`GameSceneView`, `BoardView`, `BoardLayoutCalculator`) בלי שכפול.
-`NetworkGameWindowMain.main()` נשארה נקודת כניסה ישירה לבדיקות (מתחברת
-ל-URI קבוע/מ-`args[0]`), אבל כל הלוגיקה של "פתיחת חלון המשחק בהינתן
-`GameClient` שכבר מחובר" הוצאה למתודה `public static launch(GameClient)`
-נפרדת - כדי ש-`HomeScreenMain` תוכל להשתמש באותו קוד בדיוק בלי לשכפל
-אותו.
+### `kfchess.NetworkGameWindowMain` (חלון המשחק, רשת בלבד)
+נקודת הכניסה היחידה ל"חלון המשחק עצמו" - חולקת את כל שכבת הציור
+(`SnapshotFactory`, `GameSceneView`, `BoardView`, `BoardLayoutCalculator`)
+עם מה שהיה קודם קוד מקומי (הוסר). **אין לה `main()` עצמאי** (הוסר, ר'
+"ניקוי המיינים") - נפתחת אך ורק דרך `public static launch(GameClient)`,
+שנקראת מ-`HomeScreenMain` אחרי חיבור מוצלח.
 
 ### `kfchess.HomeScreenMain` (מסך בית, שלב 3 v1)
 חלון Swing נפרד: שדה room (ברירת מחדל `"default"`) + כפתור Connect.
@@ -137,18 +138,45 @@
   לא לפי SELECT-then-INSERT (חוסך race condition). `login` לא מבדיל
   כלפי חוץ בין "username לא קיים" ל"סיסמה שגויה" (הגנה מפני user
   enumeration) - שניהם `Optional.empty()`. elo התחלתי: **1200**.
-- **`LoginScreenMain`** - מסך Swing חדש, **לפני** `HomeScreenMain`:
-  username+password, כפתורי **Login** ו-**Register נפרדים** (לא
-  auto-register - החלטה מפורשת של רות). הצלחה → `HomeScreenMain.launch(account)`.
-- **`HomeScreenMain`** קיבל שינוי קטן: `launch(Account)` (במקום `buildAndShow()`
+- **`LoginScreenMain`** - מסך Swing חדש, **לפני** `HomeScreenMain`, וגם
+  **המיין היחיד להרצת הלקוח** (ר' "ניקוי המיינים" למטה): username+password,
+  כפתורי **Login** ו-**Register נפרדים** (לא auto-register - החלטה
+  מפורשת של רות). הצלחה → `HomeScreenMain.launch(account)`.
+- **`HomeScreenMain`** קיבל שינוי: `launch(Account)` (במקום `buildAndShow()`
   חסר-פרמטרים) - `account` מוצג רק כתווית "Logged in as" בראש המסך;
   **עדיין לא** משפיע על WHITE/BLACK/SPECTATOR (זה עדיין לפי סדר התחברות
-  בשרת, `ClientRole`). `main()` ישיר של `HomeScreenMain` עדיין עובד
-  לבדיקות מהירות (`account=null`, השורה פשוט לא מוצגת).
+  בשרת, `ClientRole`). **אין לה יותר `main()` עצמאי** - ר' "ניקוי המיינים".
 - טסטים: `PasswordHasherTest`, `SqliteAccountRepositoryTest` (על קובץ
   DB זמני, `@TempDir`), `LoginScreenMainTest` (טסט ל-`validate()` הטהורה,
   בלי להרים UI - נדרש להפוך אותה מ-package-private ל-`public` כדי
   שתהיה נגישה מ-`texttests`).
+
+### ניקוי המיינים (אותה שיחה, אחרי בקשה מפורשת של רות)
+
+לפני זה היו יותר מדי נקודות `main()` בפרויקט ("למה יש כל כך הרבה
+main??"). המצב הסופי שסוכם ובוצע:
+
+- **`kfchess.net.server.ServerMain`** - השרת, תהליך נפרד (תמיד היה ככה -
+  זו המהות של client-server, לא "בלגן").
+- **`kfchess.LoginScreenMain`** - **המיין היחיד ללקוח/למשחק בפועל**.
+  Login/Register → `HomeScreenMain` (room) → `NetworkGameWindowMain`
+  (המשחק) - שרשרת אחת, בלי לבחור בין כמה נקודות כניסה.
+- **`kfchess.Main`** - **לא נגעתי בו בכלל** (המשחק קונסולה מקורי, לפני
+  הרשת) - רות ציינה שהוא צריך להישאר בשביל טסטים/מטלה קודמת.
+- **הוסרו לגמרי**: `kfchess.GameWindowMain` (משחק Swing מקומי, בלי שרת)
+  ו-`kfchess.net.client.ClientMain` (לקוח קונסולה גולמי לבדיקת פרוטוקול) -
+  שום קוד אחר לא היה תלוי בהם בפועל (רק הערות תיעוד, שעודכנו).
+- **הוסר `main()` העצמאי** מ-`NetworkGameWindowMain` ומ-`HomeScreenMain`
+  (המחלקות עצמן ומתודות ה-`launch()`/`launch(Account)` נשארו - הן חלק
+  מהשרשרת האמיתית).
+- אגב הניקוי נמצא ונמחק גם קוד מת ישיר (לא התבקש, אבל תוצאה ישירה של
+  המחיקות): `GameClient.printLatestSnapshot()` (השתמשה בו רק `ClientMain`
+  שנמחק).
+- **נמצא אך לא נמחק** (סיפרתי לרות, מחכה לתשובה): `GameSceneView.restartButtonBounds()`
+  - כבר לא נקרא משום מקום (שימש את `GameWindowMain` שהוסר), נשאר כתשתית
+  מוכנה לכפתור Restart אם/כשיתווסף ל-UI הרשת. גם `kfchess.input.GameController`
+  כבר לא בשימוש בשום מקום בקוד (לא ב-main, לא בטסט) - יתכן שגם הוא שריד
+  ממה שהוסר, אבל לא מחקתי אותו כי זה מעבר למה שסוכם במפורש.
 
 ## מה שנשאר לאמת (רות - עדיין לא נעשה)
 
@@ -171,31 +199,35 @@
    כדאי לבדוק אותם בנפרד. גם הופיעה תיקייה `src/main/java/kfchess/.claude/`
    (עם `settings.local.json`) שלא יצרתי - כנראה שריד מסשן אחר; שווה
    לבדוק אם היא אמורה להיות שם.
+4. **`kfchess.db`** כבר מופיע כקובץ לא-עקוב (`??`) ב-`git status` - כנראה
+   מהרצה קודמת. **לא נכלל בפקודת ה-commit למטה בכוונה** (זה state, לא
+   קוד) - כדאי להוסיף אותו ל-`.gitignore` (לא עשיתי - הקובץ כבר "מלוכלך"
+   משינויים לא-קשורים, ר' סעיף 3).
 
-## פקודת commit מוצעת (לא הרצתי - רק את שתי הפקודות `git status`/`git diff` לבדיקה)
+## פקודת commit מוצעת (לא הרצתי - רק `git status`/`git diff` לבדיקה)
 
 ```
-git add pom.xml src/main/java/kfchess/HomeScreenMain.java src/main/java/kfchess/LoginScreenMain.java src/main/java/kfchess/account/ src/test/java/texttests/PasswordHasherTest.java src/test/java/texttests/SqliteAccountRepositoryTest.java src/test/java/texttests/LoginScreenMainTest.java
-git commit -m "Stage 4 Part A: local accounts (SQLite) + login/register screen"
+git add pom.xml src/main/java/kfchess/HomeScreenMain.java src/main/java/kfchess/LoginScreenMain.java src/main/java/kfchess/NetworkGameWindowMain.java src/main/java/kfchess/account/ src/main/java/kfchess/GameWindowMain.java src/main/java/kfchess/net/client/ClientMain.java src/main/java/kfchess/net/client/GameClient.java src/main/java/kfchess/net/server/GameSession.java src/main/java/kfchess/view/GameSceneView.java src/main/java/kfchess/view/layout/BoardLayoutCalculator.java src/main/java/kfchess/input/GameController.java src/test/java/texttests/PasswordHasherTest.java src/test/java/texttests/SqliteAccountRepositoryTest.java src/test/java/texttests/LoginScreenMainTest.java
+git commit -m "Stage 4 Part A: local accounts (SQLite) + login/register screen; consolidate to a single client entry point (LoginScreenMain)"
 ```
 
 ## איך להריץ ולבדוק (IntelliJ)
 
 1. Run על `kfchess.net.server.ServerMain` - אמורה להיכתב שורה
    `GameServer started on port 8887`.
-2. Run על `kfchess.LoginScreenMain` (נקודת הכניסה החדשה, שלב 4) -
+2. Run על **`kfchess.LoginScreenMain`** - **זו הפעם היחידה שמריצים בתור
+   לקוח/שחקנית** (אין יותר `main()` נפרד ב-`HomeScreenMain`/
+   `NetworkGameWindowMain` - הוסרו בכוונה, ר' "ניקוי המיינים" למעלה).
    Register עם username+password חדשים (או Login אם כבר יש חשבון) →
-   נפתח מסך הבית עם "Logged in as". שם מזינים room (או משאירים
-   `default`) ולוחצים Connect - נכנס כ-WHITE. (אפשר גם Run ישירות על
-   `kfchess.HomeScreenMain` בלי login בכלל - לבדיקות מהירות, `account=null`;
-   או ישירות על `kfchess.NetworkGameWindowMain`, בלי מסך בית בכלל.)
-3. **לשני שחקנים בו-זמנית**: בקונפיגורציית `HomeScreenMain` (או
-   `NetworkGameWindowMain`) (Edit Configurations → Modify options →
-   **Allow multiple instances**), ואז Run עליה **שוב** בלי לעצור את
-   הריצה הראשונה - מתחברים לאותו room (`default` אם לא שינו) כדי
-   להיכנס לאותה `GameSession`, נכנס כ-BLACK.
-4. בדיקת פרוטוקול גולמי (כמו קודם): מקונסולת דפדפן (F12) עם `WebSocket`
-   ישיר, או `kfchess.net.client.ClientMain` (לקוח קונסולה).
+   נפתח מסך הבית עם "Logged in as" → מזינים room (או משאירים `default`)
+   ולוחצים Connect - נכנס כ-WHITE.
+3. **לשני שחקנים בו-זמנית**: בקונפיגורציית `LoginScreenMain` (Edit
+   Configurations → Modify options → **Allow multiple instances**), ואז
+   Run עליה **שוב** בלי לעצור את הריצה הראשונה - Register/Login עם
+   username שני (או אותו אחד - עדיין לא קשור לתפקיד, ר' `ClientRole`),
+   ואז Connect לאותו room (`default` אם לא שינו) - נכנס כ-BLACK.
+4. בדיקת פרוטוקול גולמי: מקונסולת דפדפן (F12) עם `WebSocket` ישיר
+   (`kfchess.net.client.ClientMain`, לקוח הקונסולה, הוסר - ר' "ניקוי המיינים").
 
 ## אימות ידני שבוצע בפועל
 

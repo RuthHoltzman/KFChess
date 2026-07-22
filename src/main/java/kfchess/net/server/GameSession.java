@@ -64,7 +64,7 @@ public class GameSession {
     private final Map<WebSocket, ClientRole> connections = new ConcurrentHashMap<>();
     private final Queue<PendingCommand> pendingCommands = new ConcurrentLinkedQueue<>();
 
-    // בנאי: בונה לוח פתיחה סטנדרטי + מנוע משחק טרי, בדיוק כמו GameWindowMain.GameSession המקומי.
+    // בנאי: בונה לוח פתיחה סטנדרטי + מנוע משחק טרי (אותה שיטת בנייה שהמשחק המקומי המקורי השתמש בה).
     public GameSession() {
         this.board = new BoardParser(new Scanner(STARTING_BOARD_TEXT)).readBoard();
         Game game = new Game(board);

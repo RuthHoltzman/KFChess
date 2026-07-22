@@ -47,15 +47,6 @@ public class GameClient extends WebSocketClient {
         return latestMessage;
     }
 
-    // מדפיס את התקציר של ה-snapshot האחרון שהתקבל - נקרא רק לפי דרישה (פקודת "status" ב-ClientMain).
-    public void printLatestSnapshot() {
-        if (latestMessage == null) {
-            System.out.println("no message received yet");
-            return;
-        }
-        System.out.println(IncomingMessageSummary.describe(latestMessage));
-    }
-
     @Override
     public void onClose(int code, String reason, boolean remote) {
         System.out.println("disconnected: " + reason);

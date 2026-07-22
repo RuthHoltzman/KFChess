@@ -18,16 +18,13 @@ import kfchess.view.layout.BoardLayoutCalculator.BoardLayout;
 
 import javax.swing.Timer;
 import java.awt.Dimension;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Map;
 
 /**
- * חלון Swing במצב רשת - מקביל ל-GameWindowMain, אבל בלי GameEngine
- * מקומי בכלל: כל מצב המשחק מגיע מהשרת (ר' GameClient), עובר שחזור
- * (ClientSnapshotReconstructor) חזרה לאובייקטי תחום אמיתיים, ואז מצויר
- * דרך אותו בדיוק SnapshotFactory/GameSceneView שהמשחק המקומי משתמש בהם -
+ * חלון Swing במצב רשת - בלי GameEngine מקומי בכלל: כל מצב המשחק מגיע
+ * מהשרת (ר' GameClient), עובר שחזור (ClientSnapshotReconstructor) חזרה
+ * לאובייקטי תחום אמיתיים, ואז מצויר דרך SnapshotFactory/GameSceneView -
  * זו ההחלטה שתועדה מראש ב-PROGRESS.md ("קוד הציור נשאר משותף").
  * <p>
  * קליק/קליק-ימני לא נוגעים במנוע בכלל - הם רק שולחים CLICK/JUMP לשרת
@@ -39,29 +36,16 @@ public class NetworkGameWindowMain {
 
     private static final int INITIAL_CELL_SIZE = 100;
     private static final int SIDE_PANEL_WIDTH = 240;
-    private static final String DEFAULT_SERVER_URI = "ws://localhost:8887/default";
     // גודל לוח זמני, רק כדי שהחלון יוכל להיפתח *לפני* שמתקבל snapshot
     // ראשון מהשרת - מוחלף מיד ברגע שמגיעה הודעה אמיתית (ר' boardWidthCells
     // /boardHeightCells שכבר מגיעים ברשת, לא hard-code בפועל).
     private static final int PLACEHOLDER_BOARD_SIZE = 8;
 
-    // נקודת הכניסה: מתחברת לשרת (בדיוק כמו ClientMain), פותחת את החלון,
-    // ואז מפעילה Timer של Swing שסוקר (polling) את ההודעה האחרונה מהשרת
-    // ומצייר לפיה - ר' תיעוד המחלקה למעלה למה polling ולא callback.
-    public static void main(String[] args) throws URISyntaxException, InterruptedException {
-        String serverUri = args.length > 0 ? args[0] : DEFAULT_SERVER_URI;
-        GameClient client = new GameClient(new URI(serverUri));
-        if (!client.connectBlocking()) {
-            System.err.println("failed to connect to " + serverUri);
-            return;
-        }
-        launch(client);
-    }
-
     // פותחת את חלון המשחק עבור לקוח שכבר מחובר לשרת (connectBlocking() כבר
-    // הצליח) - מופרדת מ-main() כדי ש-HomeScreenMain תוכל לקרוא לה ישירות
-    // אחרי שהיא מחברת GameClient משלה (לפי room שהוזן במסך הבית), בלי לשכפל
-    // כאן את כל חיווט ה-Swing/Timer.
+    // הצליח) - נקראת מ-HomeScreenMain אחרי שהיא מחברת GameClient משלה
+    // (לפי room שהוזן במסך הבית), בלי לשכפל כאן את כל חיווט ה-Swing/Timer.
+    // אין כאן main() עצמאי בכוונה - kfchess.LoginScreenMain הוא המיין
+    // היחיד להרצת הלקוח (Login/Register → room → המסך הזה, בשרשרת אחת).
     public static void launch(GameClient client) {
         Gson gson = new Gson();
         ClientSnapshotReconstructor reconstructor = new ClientSnapshotReconstructor();
@@ -73,8 +57,8 @@ public class NetworkGameWindowMain {
         Img windowAnchor = new Img();
 
         // "מצב אחרון ידוע" - מתחיל ריק (אין עדיין נתונים מהשרת), ומתעדכן
-        // בכל הודעת SNAPSHOT חדשה. מערך של איבר אחד, כמו session[0] ב-
-        // GameWindowMain - כדי שניתן יהיה לשנות אותו מתוך למבדה (קליק, Timer).
+        // בכל הודעת SNAPSHOT חדשה. מערך של איבר אחד - כדי שניתן יהיה
+        // לשנות אותו מתוך למבדה (קליק, Timer).
         ClientSnapshotReconstructor.Reconstructed[] latest = { emptyReconstructedBeforeFirstSnapshot() };
         String[] lastProcessedMessage = { null };
 
@@ -151,9 +135,9 @@ public class NetworkGameWindowMain {
 
     // מרכיב GameSnapshot מהמצב האחרון הידוע (latest[0]) ומצייר אותו - נקרא
     // בכל טיק, גם כשלא הגיעה הודעה חדשה (כדי שהציור יגיב מיד לשינוי גודל
-    // חלון), בדיוק כמו renderFrame ב-GameWindowMain המקומי. הבנייה מחדש של
-    // ה-layout בכל קריאה (ולא שימוש ב-layout ששמור מרגע הפענוח) היא מה
-    // שמונע פיקסלים "תקועים" אם המשתמשת משנה גודל חלון בין שתי הודעות SNAPSHOT.
+    // חלון). הבנייה מחדש של ה-layout בכל קריאה (ולא שימוש ב-layout ששמור
+    // מרגע הפענוח) היא מה שמונע פיקסלים "תקועים" אם המשתמשת משנה גודל
+    // חלון בין שתי הודעות SNAPSHOT.
     private static void renderFrame(SnapshotFactory snapshotFactory, GameSceneView sceneView, Img windowAnchor,
                                      ClientSnapshotReconstructor.Reconstructed[] latest) {
         ClientSnapshotReconstructor.Reconstructed state = latest[0];
