@@ -40,11 +40,29 @@ public class SnapshotMessage {
     private final List<Motion> motions;
     private final List<JumpDto> jumps;
     private final List<CaptureEffect> captureEffects;
+    // רלוונטי רק כש-gameOver=true: "הנמען הספציפי הזה כבר ביקש/ה RESTART,
+    // מחכה שהצד השני גם יבקש" - שני הצדדים צריכים לבקש RESTART כדי
+    // שהלוח יתאפס בפועל (ר' GameSession.applyRestartVote), אחרת מישהו
+    // יכול "לברוח" מהפסד לבד. תמיד false לצופה (SPECTATOR).
+    private final boolean restartRequestedByViewer;
 
+    // חתימה ישנה, בלי restartRequestedByViewer - נשארת כדי ש-
+    // ClientSnapshotReconstructorTest הקיים (8 קריאות) ימשיך לעבוד בלי
+    // שינוי; שקולה ל-restartRequestedByViewer=false (המקרה הרגיל - רלוונטי
+    // רק כש-gameOver=true בכלל).
     public SnapshotMessage(int boardWidthCells, int boardHeightCells, List<PieceDto> pieces, Position selected,
                            List<Position> legalMoves, Map<String, Integer> scores, Map<String, List<String>> moveLog,
                            boolean gameOver, String winner, long now,
                            List<Motion> motions, List<JumpDto> jumps, List<CaptureEffect> captureEffects) {
+        this(boardWidthCells, boardHeightCells, pieces, selected, legalMoves, scores, moveLog, gameOver, winner, now,
+                motions, jumps, captureEffects, false);
+    }
+
+    public SnapshotMessage(int boardWidthCells, int boardHeightCells, List<PieceDto> pieces, Position selected,
+                           List<Position> legalMoves, Map<String, Integer> scores, Map<String, List<String>> moveLog,
+                           boolean gameOver, String winner, long now,
+                           List<Motion> motions, List<JumpDto> jumps, List<CaptureEffect> captureEffects,
+                           boolean restartRequestedByViewer) {
         this.boardWidthCells = boardWidthCells;
         this.boardHeightCells = boardHeightCells;
         this.pieces = pieces;
@@ -58,5 +76,6 @@ public class SnapshotMessage {
         this.motions = motions;
         this.jumps = jumps;
         this.captureEffects = captureEffects;
+        this.restartRequestedByViewer = restartRequestedByViewer;
     }
 }

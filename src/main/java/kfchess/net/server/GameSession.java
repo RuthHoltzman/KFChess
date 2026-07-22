@@ -14,6 +14,7 @@ import kfchess.model.Piece;
 import kfchess.model.PieceColor;
 import kfchess.model.Position;
 import kfchess.net.ClientCommand;
+import kfchess.net.ClientCommandType;
 import kfchess.net.ClientRole;
 import kfchess.net.JumpDto;
 import kfchess.net.PieceDto;
@@ -23,12 +24,14 @@ import kfchess.rules.RuleEngine;
 import org.java_websocket.WebSocket;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Scanner;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -65,12 +68,26 @@ public class GameSession {
     private record ConnectedPlayer(ClientRole role, String username) {
     }
 
-    private final Board board;
-    private final GameEngine engine;
-    private final NetworkActions networkActions;
+    // לא-final מרגע שנוסף RESTART: resetGame() בונה לוח/מנוע חדשים לגמרי
+    // לתוך אותם שדות - ר' resetGame() למטה. עד אז (Part A/B) היו final,
+    // כי המשחק תמיד היה נבנה פעם אחת ולא מתאפס.
+    private Board board;
+    private GameEngine engine;
+    private NetworkActions networkActions;
+    private final EventBus bus = new EventBus();
     private final AccountRepository accountRepository;
     private final Map<WebSocket, ConnectedPlayer> connections = new ConcurrentHashMap<>();
     private final Queue<PendingCommand> pendingCommands = new ConcurrentLinkedQueue<>();
+    // מי (WHITE/BLACK) כבר ביקש/ה RESTART מאז שהמשחק הנוכחי נגמר - נמחק
+    // (clear()) בכל resetGame(). Set ולא boolean יחיד לכל צד, כי צריך
+    // לזהות "שני הצדדים ביקשו" (לא רק "מישהו ביקש") - ר' applyCommand.
+    private final Set<ClientRole> restartVotes = EnumSet.noneOf(ClientRole.class);
+
+    // איזה טקסט-לוח resetGame() בונה ממנו - STARTING_BOARD_TEXT בכל
+    // הבנאים הציבוריים (המשחק האמיתי); בנאי הבדיקה למטה יכול להחליף
+    // את זה בלוח קטן/מותאם, כדי ש-GameSessionTest יוכל להגיע ל"המשחק
+    // נגמר" במהלך אחד בודד במקום לשחק משחק שלם על 32 כלים.
+    private final String boardText;
 
     // בנאי ישן, בלי עדכון ELO בכלל (accountRepository=null) - נשאר כדי
     // ש-GameSessionTest הקיים ימשיך לעבוד בלי שינוי; משחק בלי repository
@@ -79,17 +96,39 @@ public class GameSession {
         this(null);
     }
 
-    // בנאי: בונה לוח פתיחה סטנדרטי + מנוע משחק טרי (אותה שיטת בנייה שהמשחק המקומי המקורי השתמש בה).
-    // נרשם ל-GameLifecycleEvent(ENDED) של ה-bus שהוא עצמו יוצר ומעביר ל-GameEngine -
-    // זה מה שמאפשר עדכון ELO בדיוק פעם אחת, ברגע שהמשחק נגמר בפועל (לא בכל tick).
+    // בנאי: ה-bus נוצר *פעם אחת* לכל חיי ה-GameSession (לא בכל resetGame) -
+    // כדי שההרשמה ל-GameLifecycleEvent(ENDED) (לעדכון ELO) תישאר תקפה גם
+    // אחרי restart, בלי צורך להירשם מחדש בכל פעם. resetGame() עצמה בונה
+    // רק את הלוח/מנוע/networkActions מחדש, על אותו bus.
     public GameSession(AccountRepository accountRepository) {
-        this.board = new BoardParser(new Scanner(STARTING_BOARD_TEXT)).readBoard();
-        Game game = new Game(board);
-        EventBus bus = new EventBus();
-        this.engine = new GameEngine(game, new RuleEngine(), new RaelTime(), bus);
-        this.networkActions = new NetworkActions(engine);
+        this(STARTING_BOARD_TEXT, accountRepository);
+    }
+
+    // לבדיקות בעיקר (public כי GameSessionTest חי בחבילה texttests, לא
+    // kfchess.net.server - package-private לא היה נגיש משם): מזריקה
+    // טקסט-לוח מותאם אישית במקום STARTING_BOARD_TEXT - אותו עיקרון בדיוק
+    // כמו הזרקת RuleEngine/RaelTime/EventBus/AccountRepository דרך הבנאי,
+    // רק שגם "מה הלוח" הופך לניתן-להזרקה. כך GameSessionTest יכול לבנות
+    // לוח שבו לכידת מלך היא מהלך אחד בודד, ולבדוק בפועל את applyRestartVote
+    // (שדורש שהמשחק *כבר* נגמר), בלי לשחק משחק אמיתי על 32 כלים.
+    public GameSession(String boardText, AccountRepository accountRepository) {
+        this.boardText = boardText;
         this.accountRepository = accountRepository;
         bus.subscribe(GameLifecycleEvent.class, this::onGameLifecycleEvent);
+        resetGame();
+    }
+
+    // בונה לוח פתיחה (STARTING_BOARD_TEXT בייצור, או הלוח שהוזרק לבדיקה)
+    // + מנוע משחק טרי - נקראת מהבנאי (משחק ראשון) וגם מ-applyCommand
+    // כששני הצדדים ביקשו RESTART (משחק הבא, על אותו boardText בדיוק).
+    // לא מאפסת connections/accountRepository/bus בכלל - אלה שייכים
+    // ל"מושב" (session) עצמו, לא למשחק הבודד שרץ בתוכו.
+    private void resetGame() {
+        this.board = new BoardParser(new Scanner(boardText)).readBoard();
+        Game game = new Game(board);
+        this.engine = new GameEngine(game, new RuleEngine(), new RaelTime(), bus);
+        this.networkActions = new NetworkActions(engine);
+        restartVotes.clear();
     }
 
     // בנאי ישן בלי username - נשאר כדי ש-GameSessionTest הקיים ימשיך לעבוד;
@@ -133,6 +172,10 @@ public class GameSession {
         if (player == null || !pending.command().isValid()) {
             return;
         }
+        if (pending.command().type() == ClientCommandType.RESTART) {
+            applyRestartVote(player.role());
+            return;
+        }
         player.role().toPieceColor().ifPresent(color -> {
             Position target = new Position(pending.command().row(), pending.command().col());
             switch (pending.command().type()) {
@@ -140,6 +183,19 @@ public class GameSession {
                 case JUMP -> networkActions.handleJump(color, target);
             }
         });
+    }
+
+    // מטפל בבקשת RESTART מצד אחד: מתעלם אם המשחק עדיין לא נגמר (אחרת
+    // אפשר "לברוח" מהפסד ע"י איפוס הלוח), ומתעלם מצופה (אין לו/ה בכלל
+    // צד לייצג). כשגם WHITE וגם BLACK ביקשו - מאפס בפועל (ר' resetGame).
+    private void applyRestartVote(ClientRole role) {
+        if (!engine.isGameOver() || role == ClientRole.SPECTATOR) {
+            return;
+        }
+        restartVotes.add(role);
+        if (restartVotes.contains(ClientRole.WHITE) && restartVotes.contains(ClientRole.BLACK)) {
+            resetGame();
+        }
     }
 
     // עותק הגנתי של כל החיבורים הפעילים - נחוץ ל-GameServer כדי לדעת למי לשדר snapshot.
@@ -201,10 +257,14 @@ public class GameSession {
                 .flatMap(networkActions::selectedPositionFor);
         List<Position> legalMoves = selected.map(engine::legalMovesFrom).orElse(List.of());
         String winner = engine.winner().map(PieceColor::name).orElse(null);
+        // רלוונטי רק כש-gameOver - "כבר ביקשתי RESTART, מחכה לצד השני" -
+        // תמיד false לצופה (SPECTATOR), כי אין לו/ה בכלל הצבעה על restart.
+        boolean restartRequestedByViewer = restartVotes.contains(viewerRole);
 
         return new SnapshotMessage(board.width(), board.height(), scan.pieces(), selected.orElse(null), legalMoves,
                 scoresByName(), moveLogByName(), engine.isGameOver(), winner, engine.now(),
-                engine.activeMotions(), collectJumps(scan.positionByPiece()), engine.recentCaptureEffects());
+                engine.activeMotions(), collectJumps(scan.positionByPiece()), engine.recentCaptureEffects(),
+                restartRequestedByViewer);
     }
 
     // סורק את כל הלוח (row/col) פעם אחת - אוסף גם PieceDto לשידור וגם piece->position לצורך collectJumps.

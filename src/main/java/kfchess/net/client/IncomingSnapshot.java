@@ -37,6 +37,7 @@ public class IncomingSnapshot {
     private List<Motion> motions;
     private List<JumpDto> jumps;
     private List<CaptureEffect> captureEffects;
+    private boolean restartRequestedByViewer;
 
     public String type() {
         return type;
@@ -92,5 +93,9 @@ public class IncomingSnapshot {
 
     public List<CaptureEffect> captureEffects() {
         return captureEffects == null ? List.of() : captureEffects;
+    }
+
+    public boolean restartRequestedByViewer() {
+        return restartRequestedByViewer;
     }
 }

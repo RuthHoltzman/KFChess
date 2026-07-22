@@ -7,5 +7,7 @@ package kfchess.net;
  */
 public enum ClientCommandType {
     CLICK,
-    JUMP
+    JUMP,
+    /** מבקש לאתחל את הלוח למשחק חדש - נאכף ע"י GameSession שרק אחרי שהמשחק נגמר, ורק אחרי ששני הצדדים ביקשו. */
+    RESTART
 }

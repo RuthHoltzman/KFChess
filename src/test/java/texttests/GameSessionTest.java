@@ -21,10 +21,44 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class GameSessionTest {
 
+    // לוח מזערי - מלך שחור ב-(0,0), צריח לבן ב-(1,0), צעד אחד ישר ביניהם
+    // (מהלך צריח חוקי לגמרי) - כדי שלכידת מלך תהיה מהלך אחד בודד בטסט,
+    // בלי לשחק משחק שלם על לוח הפתיחה הסטנדרטי (32 כלים). ר' הבנאי
+    // GameSession(String, AccountRepository) - הוזרק בדיוק בשביל זה.
+    private static final String ONE_MOVE_FROM_CAPTURE_BOARD = """
+            Board:
+            bK .  .  .  .  .  .  .
+            wR .  .  .  .  .  .  .
+            .  .  .  .  .  .  .  .
+            .  .  .  .  .  .  .  .
+            .  .  .  .  .  .  .  .
+            .  .  .  .  .  .  .  .
+            .  .  .  .  .  .  .  .
+            .  .  .  .  .  .  .  .
+            """;
+
     private final Gson gson = new Gson();
 
     private ClientCommand click(int row, int col) {
         return gson.fromJson("{\"type\":\"CLICK\",\"row\":" + row + ",\"col\":" + col + "}", ClientCommand.class);
+    }
+
+    private ClientCommand restart() {
+        return gson.fromJson("{\"type\":\"RESTART\"}", ClientCommand.class);
+    }
+
+    // בונה session על הלוח המזערי, מזיז את הצריח הלבן על המלך השחור, ומקדם
+    // את השעון מספיק (1000ms/משבצת, ר' GameEngine.MILLISECONDS_PER_SQUARE)
+    // כדי שהמהלך יסתיים בפועל ולכידת המלך תתרחש - אחרי הקריאה הזו
+    // engine.isGameOver()==true בוודאות.
+    private GameSession sessionAfterKingCapture(FakeWebSocket white, FakeWebSocket black) {
+        GameSession session = new GameSession(ONE_MOVE_FROM_CAPTURE_BOARD, null);
+        session.assignRole(white);
+        session.assignRole(black);
+        session.enqueueCommand(white, click(1, 0)); // בחירת הצריח הלבן
+        session.enqueueCommand(white, click(0, 0)); // צעד אחד למעלה - לכידת המלך השחור
+        session.tick(1500);
+        return session;
     }
 
     @Test
@@ -151,5 +185,76 @@ class GameSessionTest {
         assertEquals(0, snapshot.getAsJsonArray("motions").size());
         assertEquals(0, snapshot.getAsJsonArray("jumps").size());
         assertEquals(0, snapshot.getAsJsonArray("captureEffects").size());
+    }
+
+    @Test
+    void restart_beforeGameOver_isIgnoredAndDoesNotRevertTheMove() {
+        GameSession session = new GameSession();
+        FakeWebSocket white = new FakeWebSocket();
+        FakeWebSocket black = new FakeWebSocket();
+        session.assignRole(white);
+        session.assignRole(black);
+
+        // מהלך רגיל (חייל צעד אחד קדימה) - לא מסיים את המשחק בכלל.
+        session.enqueueCommand(white, click(6, 4));
+        session.enqueueCommand(white, click(5, 4));
+        session.tick(1500);
+
+        // שני הצדדים "מבקשים" RESTART בזמן שהמשחק עוד באמצע - אמור להתעלם לגמרי.
+        session.enqueueCommand(white, restart());
+        session.enqueueCommand(black, restart());
+        session.tick(0);
+
+        JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
+        assertFalse(snapshot.get("gameOver").getAsBoolean());
+        // אם ה-restart היה מתבצע בטעות, החייל היה חוזר ל-(6,4) - ולא נשאר ב-32 כלים באותם מיקומים.
+        assertEquals(32, snapshot.getAsJsonArray("pieces").size());
+    }
+
+    @Test
+    void restart_onlyOneSideRequests_doesNotResetBoard() {
+        FakeWebSocket white = new FakeWebSocket();
+        FakeWebSocket black = new FakeWebSocket();
+        GameSession session = sessionAfterKingCapture(white, black);
+
+        session.enqueueCommand(white, restart());
+        session.tick(0);
+
+        JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
+        assertTrue(snapshot.get("gameOver").getAsBoolean()); // עדיין נגמר - לא התאפס
+        assertEquals(1, snapshot.getAsJsonArray("pieces").size()); // רק הצריח הלבן נשאר (המלך נלכד)
+    }
+
+    @Test
+    void restart_bothSidesRequest_resetsBoardAndClearsGameOver() {
+        FakeWebSocket white = new FakeWebSocket();
+        FakeWebSocket black = new FakeWebSocket();
+        GameSession session = sessionAfterKingCapture(white, black);
+
+        session.enqueueCommand(white, restart());
+        session.enqueueCommand(black, restart());
+        session.tick(0);
+
+        JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
+        assertFalse(snapshot.get("gameOver").getAsBoolean());
+        assertEquals(2, snapshot.getAsJsonArray("pieces").size()); // הלוח המזערי חזר למצבו המקורי (bK + wR)
+    }
+
+    @Test
+    void restart_spectatorVoteDoesNotCountTowardsTheTwoSidesNeeded() {
+        FakeWebSocket white = new FakeWebSocket();
+        FakeWebSocket black = new FakeWebSocket();
+        GameSession session = sessionAfterKingCapture(white, black);
+        FakeWebSocket spectator = new FakeWebSocket();
+        assertEquals(ClientRole.SPECTATOR, session.assignRole(spectator));
+
+        // רק לבן + צופה מבקשים - שחור (הצד השני שבאמת נדרש) לא ביקש בכלל.
+        session.enqueueCommand(white, restart());
+        session.enqueueCommand(spectator, restart());
+        session.tick(0);
+
+        JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
+        assertTrue(snapshot.get("gameOver").getAsBoolean()); // עדיין לא התאפס
+        assertEquals(1, snapshot.getAsJsonArray("pieces").size());
     }
 }

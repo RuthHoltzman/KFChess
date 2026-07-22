@@ -49,4 +49,21 @@ class ClientCommandTest {
 
         assertFalse(command.isValid());
     }
+
+    @Test
+    void fromJson_restartCommandWithoutRowOrCol_isValid() {
+        // RESTART אין לו מיקום על הלוח בכלל - פטור מ-row/col (ר' ClientCommand.isValid()).
+        ClientCommand command = gson.fromJson("{\"type\":\"RESTART\"}", ClientCommand.class);
+
+        assertEquals(ClientCommandType.RESTART, command.type());
+        assertTrue(command.isValid());
+    }
+
+    @Test
+    void fromJson_restartCommandWithDummyRowAndCol_isValid() {
+        // ככה GameClient.sendRestart() בפועל שולח אותו (0,0 דמה) - גם זה תקין.
+        ClientCommand command = gson.fromJson("{\"type\":\"RESTART\",\"row\":0,\"col\":0}", ClientCommand.class);
+
+        assertTrue(command.isValid());
+    }
 }

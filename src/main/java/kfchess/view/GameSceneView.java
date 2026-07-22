@@ -86,7 +86,7 @@ public class GameSceneView {
 
         Img boardCanvas = boardView.render(snapshot, geometry);
         if (snapshot.gameOver()) {
-            drawGameOverOverlay(boardCanvas, snapshot.winner());
+            drawGameOverOverlay(boardCanvas, snapshot.winner(), snapshot.restartRequestedByViewer());
         }
         boardCanvas.drawOn(scene, boardOffsetX, boardOffsetY);
 
@@ -104,8 +104,15 @@ public class GameSceneView {
         scene.show();
     }
 
-    /** מציירת מסך "נגמר המשחק": רקע כהה חצי-שקוף, כותרת עם שם המנצח, וכפתור Restart. */
-    private void drawGameOverOverlay(Img boardCanvas, String winner) {
+    /**
+     * מציירת מסך "נגמר המשחק": רקע כהה חצי-שקוף, כותרת עם שם המנצח,
+     * וכפתור Restart. restartRequestedByViewer - האם *הצופה הזה בדיוק*
+     * כבר ביקש/ה RESTART (ר' GameSession.applyRestartVote - שני הצדדים
+     * צריכים לבקש כדי שהלוח יתאפס בפועל) - אם כן, מציגה "Waiting for
+     * opponent..." במקום "Game Over"/"Restart", כדי שהצד שכבר לחץ יידע
+     * שהקליק שלו נקלט ולא רק ילחץ שוב ושוב בלי משוב.
+     */
+    private void drawGameOverOverlay(Img boardCanvas, String winner, boolean restartRequestedByViewer) {
         boardCanvas.fillRect(0, 0, lastBoardPixelSize, lastBoardPixelSize, OVERLAY_BACKGROUND);
 
         int centerX = lastBoardPixelSize / 2;
@@ -115,7 +122,7 @@ public class GameSceneView {
         int titleWidth = boardCanvas.textWidth(title, TITLE_FONT_SIZE, true);
         boardCanvas.drawText(title, centerX - titleWidth / 2, titleBaselineY, TITLE_FONT_SIZE, TITLE_COLOR, true);
 
-        String subtitle = "Game Over";
+        String subtitle = restartRequestedByViewer ? "Waiting for opponent..." : "Game Over";
         int subtitleWidth = boardCanvas.textWidth(subtitle, SUBTITLE_FONT_SIZE, false);
         boardCanvas.drawText(subtitle, centerX - subtitleWidth / 2, titleBaselineY + 30,
                 SUBTITLE_FONT_SIZE, TITLE_COLOR, false);
@@ -124,7 +131,7 @@ public class GameSceneView {
         boardCanvas.fillRect(button.x, button.y, button.width, button.height, BUTTON_COLOR);
         boardCanvas.drawRect(button.x, button.y, button.width, button.height, BUTTON_BORDER_COLOR, 2);
 
-        String buttonText = "Restart";
+        String buttonText = restartRequestedByViewer ? "Waiting..." : "Restart";
         int buttonTextWidth = boardCanvas.textWidth(buttonText, BUTTON_FONT_SIZE, true);
         int buttonTextX = button.x + (button.width - buttonTextWidth) / 2;
         int buttonTextY = button.y + button.height / 2 + BUTTON_FONT_SIZE / 3;

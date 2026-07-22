@@ -50,10 +50,12 @@ public class NetworkGameWindowMain {
         Gson gson = new Gson();
         ClientSnapshotReconstructor reconstructor = new ClientSnapshotReconstructor();
         SnapshotFactory snapshotFactory = new SnapshotFactory();
-        NetworkClickHandler clickHandler = new NetworkClickHandler(client, new BoardMapper());
 
         BoardView boardView = new BoardView("src/main/resources/board.png");
         GameSceneView sceneView = new GameSceneView(boardView, SIDE_PANEL_WIDTH);
+        // sceneView צריך להיבנות לפני clickHandler - הוא נחוץ ל-NetworkClickHandler
+        // כדי לשאול restartButtonBounds() (ר' תיעוד שם) כשהמשחק נגמר.
+        NetworkClickHandler clickHandler = new NetworkClickHandler(client, new BoardMapper(), sceneView);
         Img windowAnchor = new Img();
 
         // "מצב אחרון ידוע" - מתחיל ריק (אין עדיין נתונים מהשרת), ומתעדכן
@@ -87,7 +89,7 @@ public class NetworkGameWindowMain {
     private static ClientSnapshotReconstructor.Reconstructed emptyReconstructedBeforeFirstSnapshot() {
         return new ClientSnapshotReconstructor.Reconstructed(
                 Board.createDefault(PLACEHOLDER_BOARD_SIZE, PLACEHOLDER_BOARD_SIZE),
-                List.of(), List.of(), List.of(), null, List.of(), false, null, 0L, Map.of(), Map.of());
+                List.of(), List.of(), List.of(), null, List.of(), false, null, 0L, Map.of(), Map.of(), false);
     }
 
     // נקרא בכל טיק של ה-Timer: קורא את ההודעה האחרונה שהתקבלה מ-GameClient
@@ -138,7 +140,8 @@ public class NetworkGameWindowMain {
                 board, layout.cellSize(), layout.cellSize(), state.now(),
                 state.selected(), state.gameOver(), state.winner(),
                 state.motions(), state.jumps(), state.captureEffects(),
-                state.legalMoves(), state.scores(), state.moveLog());
+                state.legalMoves(), state.scores(), state.moveLog(),
+                state.restartRequestedByViewer());
 
         sceneView.render(snapshot, content.width, content.height,
                 layout.boardPixelSize(), layout.offsetX(), layout.offsetY());

@@ -34,8 +34,16 @@ public class ClientCommand {
         return col;
     }
 
-    /** תקינות בסיסית - שדות חובה קיימים, לפני שממירים ל-Position. */
+    /**
+     * תקינות בסיסית - שדות חובה קיימים, לפני שממירים ל-Position. RESTART
+     * לא צריך row/col בכלל (אין לו מיקום על הלוח) - הלקוח שולח 0,0
+     * "דמה" שפשוט לא נקראים, אבל גם JSON גולמי בלי row/col בכלל (למשל
+     * {"type":"RESTART"}) תקין.
+     */
     public boolean isValid() {
-        return type != null && row != null && col != null;
+        if (type == null) {
+            return false;
+        }
+        return type == ClientCommandType.RESTART || (row != null && col != null);
     }
 }

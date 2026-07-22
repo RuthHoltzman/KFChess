@@ -256,22 +256,79 @@ main??"). המצב הסופי שסוכם ובוצע:
   נקבע לפי מי שמחזיק את התפקיד *ברגע שהמשחק נגמר* - לא פותר ניתוק-
   והחלפה באמצע משחק (זה שלב 5, `auto-resign`, עדיין לא קיים).
 
-## מה שנשאר לאמת (רות - עדיין לא נעשה, סבב Part B)
+### פיצ'ר Restart - שני הצדדים חייבים ללחוץ (אחרי שלב 4 Part B)
+
+רות בדקה ידנית את שלב 4 Part B, הגיעה ל-game over, הציון (ELO) התעדכן
+נכון - אבל גילתה שכפתור ה-Restart **מצויר** (`restartButtonBounds()`,
+ר' "ניקוי המיינים" למעלה) אבל **לא מחובר לשום קליק בפועל**. הוחלט (2
+שאלות ל-רות): (1) **שני הצדדים** חייבים ללחוץ Restart, לא מספיק צד אחד;
+(2) כן להוסיף משוב חזותי "Waiting for opponent..." כשרק צד אחד הצביע.
+
+- **פרוטוקול**: `ClientCommandType` קיבל ערך חדש `RESTART`. `ClientCommand.isValid()`
+  שונה - `RESTART` **פטור** מ-`row`/`col` (אין לו מיקום על הלוח בכלל),
+  בניגוד ל-`CLICK`/`JUMP` שחייבים את שניהם. `GameClient.sendRestart()`
+  חדש (שולח `{"type":"RESTART","row":0,"col":0}` - ה-0/0 דמה, לא בשימוש
+  בצד השרת בכלל).
+- **`GameSession` - המשחק צריך "להתאפס"**: לפני זה `board`/`engine`/
+  `networkActions` היו `final` (נבנים פעם אחת בבנאי) - כדי לתמוך ב-restart
+  הם הפכו לשדות רגילים (mutable), עם `private void resetGame()` חדשה
+  שבונה אותם מחדש מ-`boardText` השמור. ה-`EventBus` עצמו נשאר **קבוע
+  לאורך חיי ה-session** (לא נבנה מחדש ב-`resetGame()`) - כדי שההרשמה
+  ל-`GameLifecycleEvent` (עדכון ELO, Part B) תשרוד גם אחרי restart, לא
+  רק אחרי המשחק הראשון.
+- **הצבעת Restart**: `Set<ClientRole> restartVotes` (`EnumSet`) - חדש
+  ב-`GameSession`. `applyRestartVote(role)`: מתעלם לגמרי אם המשחק עוד
+  לא נגמר (`!engine.isGameOver()`) - כדי שלא "יברחו" ממצב הפסד באמצע
+  משחק - או אם זה צופה (`SPECTATOR`, אין לו מה "להצביע" בכלל). אחרת
+  מוסיף לסט, ואם **גם** WHITE **וגם** BLACK נמצאים בו - קורא ל-`resetGame()`
+  (שגם מנקה את הסט בעצמה, כדי שהמשחק הבא יתחיל "נקי").
+- **משוב "Waiting for opponent..."**: נוסף שדה בוליאני חדש
+  `restartRequestedByViewer` שעובר **דרך כל צינור ה-snapshot** (6 מחלקות:
+  `SnapshotMessage`→`IncomingSnapshot`→`ClientSnapshotReconstructor.Reconstructed`
+  →`SnapshotFactory`→`GameSnapshot`→`GameSceneView`) - כל שלב מוסיף אותו
+  כפרמטר/שדה אחרון, כדי לשמור על תאימות אחורה (הבנאים הישנים של
+  `SnapshotMessage` נשארו כ-overload עם `false`, בדיוק כמו ב-Part B, כדי
+  ש-`ClientSnapshotReconstructorTest`/`MessageDtoTest` הקיימים ימשיכו
+  לעבוד). ב-`GameSceneView.drawGameOverOverlay` - אם `true`: כותרת-משנה
+  "Waiting for opponent..." וטקסט כפתור "Waiting..."; אם `false` (עדיין
+  לא הצביע/גמר טרי): "Game Over" ו-"Restart".
+- **`NetworkClickHandler` - חיבור הקליק בפועל**: קיבל פרמטר שלישי חדש
+  לבנאי, `GameSceneView sceneView` (חייב להיבנות **לפני** ה-handler
+  ב-`NetworkGameWindowMain` - סדר קונסטרוקציה שהתהפך בכוונה). `handle(...)`
+  - אם `gameOver==true`, מפנה ל-`handleRestartClick` חדשה: בודקת האם
+  הקליק (אחרי המרה לקואורדינטת-לוח, כמו הקליקים הרגילים) נופל בתוך
+  `sceneView.restartButtonBounds()` (`Rectangle.contains`) - אם כן,
+  `client.sendRestart()`. אם לא ב-gameOver, אותה התנהגות כמו קודם
+  (CLICK/JUMP רגילים).
+- **טסטים חדשים**: `ClientCommandTest` (RESTART תקין בלי/עם row+col
+  דמה), `GameSessionTest` (4 טסטים חדשים - restart לפני game-over
+  מתעלם, צד אחד לא מספיק, שני הצדדים מאפסים בפועל, קול של צופה לא
+  נספר - כולם על לוח מזערי חדש `ONE_MOVE_FROM_CAPTURE_BOARD` עם מלך
+  שחור+צריח לבן בלבד, כדי שלכידת מלך תהיה מהלך אחד ולא משחק שלם),
+  `RecordingGameClient` חדש (מחלקת-בדיקה `extends GameClient`, דורסת
+  את שלוש שיטות השליחה כדי רק לרשום `boolean` - כמו `FakeWebSocket`
+  הקיים), `NetworkClickHandlerTest` עודכן (הבנאי בן-3-הפרמטרים + שני
+  טסטים חדשים לקליק שפוגע/מפספס את הכפתור, עם קואורדינטות שמחושבות
+  **מתוך** `restartButtonBounds()` בפועל ולא hard-coded - כדי לא להיתלות
+  בקבועי `BUTTON_WIDTH`/`BUTTON_HEIGHT` הפנימיים).
+- **אימות שבוצע כאן**: איזון סוגריים + grep להפניות ישנות על **כל**
+  הקבצים שנגעו בפיצ'ר הזה - כולם תקינים. **טרם `mvn test` אמיתי** (אין
+  לי javac/mvn, ר' מגבלה קבועה למטה) וטרם הרצה ידנית מקצה לקצה.
+
+## מה שנשאר לאמת (רות - עדיין לא נעשה, סבב Restart)
 
 שוב: אין לי `javac`/`mvn` בסביבה שלי (אין root, אין גישת רשת להוריד
 JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות שבורות לכל קובץ
 שנגעתי בו/נמחק, ואת נוסחת ה-ELO אימתתי גם בחישוב Python נפרד (לא רק
 "נראה הגיוני") - אבל **זה לא תחליף ל-`mvn test` אמיתי**. צריך:
 
-1. `mvn clean test` - לוודא שהכל מתקמפל (במיוחד: `GameSessionTest`
-   ו-`HomeScreenMainTest` הישנים משתמשים בחתימות הישנות של `assignRole`/
-   `buildUri` - אלה נשמרו כ-overload, אבל רק `mvn` באמת יוכיח שזה מתקמפל)
-   וש**כל** הטסטים ירוקים, כולל החדשים: `EloCalculatorTest`×3,
-   `UsernameResolverTest`×7, `GameIdResolverTest` (2 חדשים על 5 ישנים),
-   `SqliteAccountRepositoryTest` (4 חדשים על 5 ישנים), `HomeScreenMainTest`
-   (4 חדשים על 5 ישנים).
-2. **הרצה ידנית מקצה לקצה - זה החשוב באמת כאן** (בדיקה שקשה לכתוב
-   כטסט יחידה כי היא חוצה שרת+2 לקוחות+DB):
+1. `mvn clean test` - לוודא שהכל מתקמפל וש**כל** הטסטים ירוקים, כולל
+   סבב Part B (`EloCalculatorTest`×3, `UsernameResolverTest`×7,
+   `GameIdResolverTest`, `SqliteAccountRepositoryTest`, `HomeScreenMainTest`)
+   **וגם** סבב Restart החדש: `ClientCommandTest` (2 טסטים חדשים),
+   `GameSessionTest` (4 טסטים חדשים), `NetworkClickHandlerTest` (2 טסטים
+   חדשים + הבנאי המעודכן).
+2. **הרצה ידנית מקצה לקצה של ELO (עדיין לא בוצעה מאז שלב 4 Part B)**:
    - Run על `ServerMain`.
    - **Register שני חשבונות שונים** דרך `LoginScreenMain` (למשל
      "ruth" ו-"dani") - חשוב שיהיו **חשבונות שונים ולא אותו אחד פעמיים**,
@@ -282,15 +339,32 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
    - לבדוק ב-`kfchess.db` (או ע"י Login מחדש ובדיקת "ELO" בתווית) ששני
      החשבונות השתנו: המנצח/ת עלה, המפסיד/ה ירד, בסכום שהגיוני ל-K=32
      (למשל אם שני החשבונות התחילו ב-1200, אמור להיות 1216/1184).
-3. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
+   - **רות אישרה שזה כבר עבד בפועל** (ראתה ציון משתנה) - הבדיקה הזו
+     כאן היא בעיקר לחזור ולוודא שאין רגרסיה אחרי שינויי ה-Restart.
+3. **הרצה ידנית של Restart (חדש, טרם נבדק בפועל - זה היה הבאג המקורי
+   שרות דיווחה)**:
+   - לשחק עד game over עם שני חלונות (WHITE+BLACK).
+   - ללחוץ Restart **רק בצד אחד** - לוודא: הכפתור עצמו משנה טקסט ל-
+     "Waiting..." (וגם הכותרת ל-"Waiting for opponent...") אצל **שני**
+     הצדדים (לא רק אצל מי שלחץ), אבל הלוח **לא** מתאפס.
+   - ללחוץ Restart גם בצד השני - לוודא שהלוח **כן** מתאפס (חוזר למצב
+     פתיחה) אצל שניהם, וה"Waiting" נעלם.
+4. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
    מופיעים כ-modified ב-`git status` (line-ending, לא תוכן - לא נגעתי
    בהם), ותיקיית `src/main/java/kfchess/.claude/` שלא יצרתי.
 
 ## פקודת commit מוצעת (לא הרצתי - רק `git status`/`git diff` לבדיקה)
 
+Part B (אם עדיין לא בוצע commit נפרד לו):
 ```
 git add src/main/java/kfchess/HomeScreenMain.java src/main/java/kfchess/LoginScreenMain.java src/main/java/kfchess/account/ src/main/java/kfchess/net/server/ src/test/java/texttests/EloCalculatorTest.java src/test/java/texttests/GameIdResolverTest.java src/test/java/texttests/UsernameResolverTest.java src/test/java/texttests/HomeScreenMainTest.java src/test/java/texttests/SqliteAccountRepositoryTest.java PROGRESS.md
 git commit -m "Stage 4 Part B: wire logged-in username into the network protocol and auto-update ELO when a game ends"
+```
+
+פיצ'ר Restart (הסבב הזה):
+```
+git add src/main/java/kfchess/net/ClientCommandType.java src/main/java/kfchess/net/ClientCommand.java src/main/java/kfchess/net/SnapshotMessage.java src/main/java/kfchess/net/client/GameClient.java src/main/java/kfchess/net/client/NetworkClickHandler.java src/main/java/kfchess/net/client/IncomingSnapshot.java src/main/java/kfchess/net/client/ClientSnapshotReconstructor.java src/main/java/kfchess/net/server/GameSession.java src/main/java/kfchess/engine/snapshot/SnapshotFactory.java src/main/java/kfchess/engine/snapshot/GameSnapshot.java src/main/java/kfchess/view/GameSceneView.java src/main/java/kfchess/NetworkGameWindowMain.java src/test/java/texttests/ClientCommandTest.java src/test/java/texttests/GameSessionTest.java src/test/java/texttests/NetworkClickHandlerTest.java src/test/java/texttests/RecordingGameClient.java PROGRESS.md
+git commit -m "Add mutual Restart voting (both sides must click) with a Waiting for opponent visual cue"
 ```
 
 ## איך להריץ ולבדוק (IntelliJ)
@@ -328,19 +402,28 @@ git commit -m "Stage 4 Part B: wire logged-in username into the network protocol
 
 ## הצעד הבא
 
-**שלב 4 שלם** (Part A + Part B, ר' למעלה) - **טרם אומת סופית** ע"י רות
-(ר' "מה שנשאר לאמת" - בעיקר: הרצה ידנית עם שני חשבונות אמיתיים ומשחק
-עד הסוף, לוודא שה-ELO באמת משתנה נכון). אחרי האימות, השלב הבא הוא
-**שלב 5**: Matchmaking (כפתור "Play" שמוצא יריבה אוטומטית, במקום להקליד
-שם room ידנית) + טיפול בניתוק (auto-resign) - כרגע אם צד מתנתק באמצע
-משחק, שום דבר לא קורה (המשחק פשוט קופא, אף אחד לא מפסיד, ה-ELO לא
-מתעדכן). אחריו שלב 6: חדרים אמיתיים (Create/Join/Cancel) + לוגים.
+**שלב 4 שלם** (Part A + Part B) - ה-ELO **כבר אומת ידנית ע"י רות ועובד**.
+**פיצ'ר Restart שלם בקוד** (ר' סעיף למעלה) - **טרם אומת ידנית** (ר' "מה
+שנשאר לאמת", סעיף 3 - זה הצעד המיידי הבא: להריץ בפועל ולוודא ששני
+הצדדים חייבים ללחוץ, וש-"Waiting for opponent..." מוצג נכון). אחרי
+האימות הזה, השלב הבא הוא **שלב 5**: Matchmaking (כפתור "Play" שמוצא
+יריבה אוטומטית, במקום להקליד שם room ידנית) + טיפול בניתוק (auto-resign) -
+כרגע אם צד מתנתק באמצע משחק, שום דבר לא קורה (המשחק פשוט קופא, אף אחד
+לא מפסיד, ה-ELO לא מתעדכן). אחריו שלב 6: חדרים אמיתיים (Create/Join/Cancel)
++ לוגים.
 
 ## סגנון עבודה מוסכם עם רות
 
 - **לשאול ולהסביר לפני כל קובץ/מחלקה/פונקציה חדשה** - לא רק לפני
   שינויים ארכיטקטוניים גדולים. שורת הערה שמסבירה *למה* (לא רק *מה*)
   לפני כל פונקציה בקוד עצמו.
+- **הסלמה מפורשת (סבב Restart)**: "תסביר לי כל פונקציה וכל שינוי שאתה
+  עושה" - כלומר לא רק "לשאול לפני שינוי גדול", אלא להסביר **כל** שינוי,
+  ברמת כל פונקציה, בצ'אט עצמו (לא רק בהערת קוד) - גם בשינויים קטנים/
+  המשכיים. תקף לכל העבודה הנותרת בפרויקט הזה.
+- **PROGRESS.md הוא בשביל ה-AI בלבד, לא בשביל רות** - רות לא קוראת
+  אותו. כל הסבר מהותי (מה השתנה ולמה) חייב להיאמר בצ'אט במפורש, בנוסף
+  לעדכון הקובץ - לא במקומו.
 - לוודא שהגישה המוצעת היא "הדרך המומלצת" (סטנדרטית, לא היוריסטיקה/
   hard-code) לפני שממשיכים - למשל: `Piece.id()` יציב במקום התאמה לפי
   מיקום, `boardWidthCells`/`boardHeightCells` ברשת במקום hard-code 8x8.

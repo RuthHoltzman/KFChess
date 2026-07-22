@@ -66,4 +66,10 @@ public class GameClient extends WebSocketClient {
     public void sendJump(int row, int col) {
         send(gson.toJson(new ClientCommand(ClientCommandType.JUMP, row, col)));
     }
+
+    // מבקש מהשרת לאתחל את הלוח (שני הצדדים צריכים לבקש - ר' GameSession.applyCommand).
+    // row/col הם "דמה" (0,0) - RESTART לא צריך מיקום בכלל, ר' ClientCommand.isValid().
+    public void sendRestart() {
+        send(gson.toJson(new ClientCommand(ClientCommandType.RESTART, 0, 0)));
+    }
 }
