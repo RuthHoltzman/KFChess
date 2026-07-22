@@ -108,7 +108,31 @@
 (`SnapshotFactory`, `GameSceneView`, `BoardView`, `BoardLayoutCalculator`)
 עם מה שהיה קודם קוד מקומי (הוסר). **אין לה `main()` עצמאי** (הוסר, ר'
 "ניקוי המיינים") - נפתחת אך ורק דרך `public static launch(GameClient)`,
-שנקראת מ-`HomeScreenMain` אחרי חיבור מוצלח.
+שנקראת מ-`HomeScreenMain` אחרי חיבור מוצלח. טיפול הקליק עצמו **הוצא**
+ל-`NetworkClickHandler` (ר' מיד למטה) - `NetworkGameWindowMain` רק
+מחשב את ה-`BoardLayout` הנוכחי (תלוי בגודל חלון + מידות לוח חיים, לא
+ניתן להוציא) ומעביר אותו הלאה.
+
+### `kfchess.net.client.NetworkClickHandler` (הוצא מ-NetworkGameWindowMain)
+רות שאלה "האם הדרך הנוכחית הגיונית" אחרי שהתברר ש-`kfchess.input.GameController`
+הישן (טיפול קליק במשחק המקומי, שהוסר) הפך לקוד מת - כי הלוגיקה שם
+קראה ישירות ל-`GameEngine`, וזה לא מתאים למצב רשת (צריך *לשלוח* לשרת,
+לא לקרוא למנוע). התשובה: מטרת ה-refactor הזה **לא** להחזיר את
+`GameController` אלא לתת ל"טיפול קליק ברשת" בית משלו, באותה רוח -
+בדיוק כמו ש-`NetworkActions` (kfchess.engine) כבר עושה בצד השרת
+(מחלקה קטנה שרק מנתבת קליק, בלי לוגיקת משחק).
+- **`resolvePosition(pixelX, pixelY, layout)`** - טהורה לגמרי (בלי
+  Swing/רשת) - ממירה פיקסל למיקום לוגי או `Optional.empty()` אם מחוץ
+  ללוח. זו בדיוק הלוגיקה שההערה הישנה ב-`BoardLayoutCalculator` מזהירה
+  עליה כמקור לשני באגים קודמים ("קליק לא במקום") - עכשיו **נבדקת ישירות**
+  (`NetworkClickHandlerTest`, כולל כל 4 כיווני "מחוץ ללוח").
+- **`handle(pixelX, pixelY, layout, gameOver, isJump)`** - שכבה דקה:
+  בודקת gameOver, קוראת ל-resolvePosition, שולחת CLICK/JUMP ל-`GameClient`
+  אם יש תוצאה. לא נבדקת ישירות בהצלחה (מצריך `GameClient` מחובר בפועל) -
+  אותה גישה כמו `HomeScreenMain.connect()`/`LoginScreenMain.handleLogin()`
+  שגם הן לא נבדקות ישירות, רק החלקים הטהורים סביבן. כן נבדקים בטסטים
+  שני הענפים ש"בורחים" לפני שנוגעים ב-client (gameOver / קליק מחוץ ללוח,
+  עם `client=null` - מוכיח שאין נגיעה בו).
 
 ### `kfchess.HomeScreenMain` (מסך בית, שלב 3 v1)
 חלון Swing נפרד: שדה room (ברירת מחדל `"default"`) + כפתור Connect.

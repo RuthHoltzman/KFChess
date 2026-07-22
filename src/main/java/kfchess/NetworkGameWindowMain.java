@@ -5,11 +5,11 @@ import kfchess.engine.snapshot.GameSnapshot;
 import kfchess.engine.snapshot.SnapshotFactory;
 import kfchess.input.BoardMapper;
 import kfchess.model.Board;
-import kfchess.model.Position;
 import kfchess.net.client.ClientSnapshotReconstructor;
 import kfchess.net.client.GameClient;
 import kfchess.net.client.IncomingMessageSummary;
 import kfchess.net.client.IncomingSnapshot;
+import kfchess.net.client.NetworkClickHandler;
 import kfchess.view.BoardView;
 import kfchess.view.GameSceneView;
 import kfchess.view.Img;
@@ -50,7 +50,7 @@ public class NetworkGameWindowMain {
         Gson gson = new Gson();
         ClientSnapshotReconstructor reconstructor = new ClientSnapshotReconstructor();
         SnapshotFactory snapshotFactory = new SnapshotFactory();
-        BoardMapper boardMapper = new BoardMapper();
+        NetworkClickHandler clickHandler = new NetworkClickHandler(client, new BoardMapper());
 
         BoardView boardView = new BoardView("src/main/resources/board.png");
         GameSceneView sceneView = new GameSceneView(boardView, SIDE_PANEL_WIDTH);
@@ -68,9 +68,9 @@ public class NetworkGameWindowMain {
 
         javax.swing.SwingUtilities.invokeLater(() -> {
             windowAnchor.onClick((pixelX, pixelY) ->
-                    handleClick(client, boardMapper, windowAnchor, latest, pixelX, pixelY, false));
+                    handleClick(clickHandler, windowAnchor, latest, pixelX, pixelY, false));
             windowAnchor.onRightClick((pixelX, pixelY) ->
-                    handleClick(client, boardMapper, windowAnchor, latest, pixelX, pixelY, true));
+                    handleClick(clickHandler, windowAnchor, latest, pixelX, pixelY, true));
         });
 
         Timer timer = new Timer(16, e -> {
@@ -107,30 +107,19 @@ public class NetworkGameWindowMain {
         latest[0] = reconstructor.reconstruct(incoming);
     }
 
-    // מטפל בקליק (רגיל/ימני) על הלוח: ממיר פיקסלים למיקום לוגי (BoardMapper,
-    // אותה מחלקה שהמשחק המקומי משתמש בה) ושולח CLICK/JUMP לשרת. לא נוגע
-    // במנוע בכלל - אין GameEngine מקומי במצב רשת (ר' תיעוד המחלקה למעלה).
-    private static void handleClick(GameClient client, BoardMapper boardMapper, Img windowAnchor,
+    // מטפל בקליק (רגיל/ימני) על הלוח: מחשב את ה-BoardLayout הנוכחי (תלוי
+    // בגודל החלון בפועל + מידות הלוח האחרונות שהתקבלו - לא ניתן להוציא
+    // מכאן, כי שניהם תלויים במצב חי של Swing/latest[0]) ומעביר אותו ל-
+    // NetworkClickHandler, שמטפל בהמרת פיקסל→מיקום ובשליחה לשרת (ר' תיעוד
+    // המחלקה שם - שם גם נבדקת הלוגיקה הזו בפועל, בלי Swing/רשת אמיתיים).
+    private static void handleClick(NetworkClickHandler clickHandler, Img windowAnchor,
                                      ClientSnapshotReconstructor.Reconstructed[] latest,
                                      int pixelX, int pixelY, boolean isJump) {
-        if (latest[0].gameOver()) {
-            return; // אין עדיין כפתור Restart במצב רשת - ר' "הצעד הבא" ב-PROGRESS.md
-        }
         Board board = latest[0].board();
         BoardLayout layout = BoardLayoutCalculator.computeLayout(
                 BoardLayoutCalculator.currentContentSize(windowAnchor, SIDE_PANEL_WIDTH, INITIAL_CELL_SIZE),
                 board.width(), board.height(), SIDE_PANEL_WIDTH);
-        int boardX = pixelX - layout.offsetX();
-        int boardY = pixelY - layout.offsetY();
-        if (boardX < 0 || boardX >= layout.boardPixelSize() || boardY < 0 || boardY >= layout.boardPixelSize()) {
-            return; // קליק מחוץ ללוח - בפאנל, או בשוליים הריקים סביב הלוח הממורכז
-        }
-        Position clicked = boardMapper.pixelToPosition(boardX, boardY, layout.cellSize(), layout.cellSize());
-        if (isJump) {
-            client.sendJump(clicked.row(), clicked.col());
-        } else {
-            client.sendClick(clicked.row(), clicked.col());
-        }
+        clickHandler.handle(pixelX, pixelY, layout, latest[0].gameOver(), isJump);
     }
 
     // מרכיב GameSnapshot מהמצב האחרון הידוע (latest[0]) ומצייר אותו - נקרא
