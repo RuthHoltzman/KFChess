@@ -31,4 +31,24 @@ class HomeScreenMainTest {
     void buildUri_roomWithSurroundingWhitespace_isTrimmed() {
         assertEquals("ws://localhost:8887/room1", HomeScreenMain.buildUri("  room1  "));
     }
+
+    @Test
+    void buildUri_withUsername_appendsAsQueryParameter() {
+        assertEquals("ws://localhost:8887/room1?username=ruth", HomeScreenMain.buildUri("room1", "ruth"));
+    }
+
+    @Test
+    void buildUri_withNullUsername_sameAsWithoutUsername() {
+        assertEquals("ws://localhost:8887/room1", HomeScreenMain.buildUri("room1", null));
+    }
+
+    @Test
+    void buildUri_withBlankUsername_sameAsWithoutUsername() {
+        assertEquals("ws://localhost:8887/room1", HomeScreenMain.buildUri("room1", "   "));
+    }
+
+    @Test
+    void buildUri_withUsernameContainingSpecialCharacters_urlEncodesIt() {
+        assertEquals("ws://localhost:8887/room1?username=ruth+h", HomeScreenMain.buildUri("room1", "ruth h"));
+    }
 }

@@ -2,6 +2,8 @@ package kfchess.net.server;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
+import kfchess.account.AccountRepository;
+import kfchess.account.SqliteAccountRepository;
 import kfchess.net.ClientCommand;
 import kfchess.net.ClientRole;
 import kfchess.net.ErrorMessage;
@@ -29,6 +31,10 @@ public class GameServer extends WebSocketServer {
     private static final long TICK_INTERVAL_MILLIS = 33; // ~30 עדכונים בשנייה
 
     private final Gson gson = new Gson();
+    // repository אחד, משותף לכל ה-GameSession-ים (וגם ל-LoginScreenMain בצד
+    // הלקוח) - אותו קובץ kfchess.db בדיוק, כי אלה אותם חשבונות עצמם.
+    private final AccountRepository accountRepository =
+            new SqliteAccountRepository(SqliteAccountRepository.DEFAULT_DB_FILE);
     private final Map<String, GameSession> sessions = new ConcurrentHashMap<>();
     private final Map<WebSocket, String> gameIdByConnection = new ConcurrentHashMap<>();
     private final ScheduledExecutorService tickExecutor = Executors.newSingleThreadScheduledExecutor();
@@ -46,13 +52,16 @@ public class GameServer extends WebSocketServer {
         System.out.println("GameServer started on port " + getPort());
     }
 
-    // חיבור חדש: קובע/יוצר את המשחק לפי הנתיב, קובע תפקיד (לבן/שחור/צופה), ומודיע ללקוח מיד.
+    // חיבור חדש: קובע/יוצר את המשחק לפי הנתיב, קובע תפקיד (לבן/שחור/צופה)
+    // + משייך את ה-username אם הגיע אחד (ר' UsernameResolver - שלב 4 Part B,
+    // דרוש לעדכון ELO בסוף המשחק), ומודיע ללקוח מיד.
     @Override
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
         String gameId = GameIdResolver.resolve(handshake.getResourceDescriptor());
-        GameSession session = sessions.computeIfAbsent(gameId, id -> new GameSession());
+        String username = UsernameResolver.resolve(handshake.getResourceDescriptor()).orElse(null);
+        GameSession session = sessions.computeIfAbsent(gameId, id -> new GameSession(accountRepository));
         gameIdByConnection.put(conn, gameId);
-        ClientRole role = session.assignRole(conn);
+        ClientRole role = session.assignRole(conn, username);
         conn.send(gson.toJson(new RoleAssignedMessage(role.name(), gameId)));
     }
 

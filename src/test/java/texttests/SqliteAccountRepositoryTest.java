@@ -58,4 +58,32 @@ class SqliteAccountRepositoryTest {
     void login_unknownUsername_returnsEmpty() {
         assertEquals(Optional.empty(), repository.login("no-such-user", "whatever"));
     }
+
+    @Test
+    void currentElo_existingAccount_returnsStartingElo() throws UsernameTakenException {
+        repository.register("ruth", "s3cret");
+        assertEquals(Optional.of(1200), repository.currentElo("ruth"));
+    }
+
+    @Test
+    void currentElo_unknownUsername_returnsEmpty() {
+        assertEquals(Optional.empty(), repository.currentElo("no-such-user"));
+    }
+
+    @Test
+    void updateElo_existingAccount_changesCurrentElo() throws UsernameTakenException {
+        repository.register("ruth", "s3cret");
+        repository.updateElo("ruth", 1216);
+        assertEquals(Optional.of(1216), repository.currentElo("ruth"));
+    }
+
+    @Test
+    void updateElo_doesNotAffectOtherAccounts() throws UsernameTakenException {
+        repository.register("ruth", "s3cret");
+        repository.register("dani", "another-password");
+
+        repository.updateElo("ruth", 1216);
+
+        assertEquals(Optional.of(1200), repository.currentElo("dani"));
+    }
 }

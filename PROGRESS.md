@@ -20,9 +20,11 @@
    למטה).
 3. Home screen v1 - login בשל (shell), 2 שחקנים בלבד - ✅ **הושלם ואומת ידנית**
    (ר' למטה). כרגע רק בחירת room (בלי חשבונות/סיסמה - זה שלב 4).
-4. חשבונות + ELO (SQLite) - 🟡 **Part A בוצע** (login/register מקומי,
-   ר' למטה), **טרם אומת** (`mvn test`/הרצה ידנית - ר' "מה שנשאר לאמת").
-   Part B (חיבור username לפרוטוקול הרשת + עדכון ELO בפועל) - ⬜ לא התחיל.
+4. חשבונות + ELO (SQLite) - 🟡 **Part A + Part B בוצעו** (ר' למטה),
+   **טרם אומתו סופית** (`mvn test`/הרצה ידנית עם 2 חשבונות אמיתיים -
+   ר' "מה שנשאר לאמת"). Part A: login/register מקומי. Part B: ה-username
+   נשלח בפועל לשרת (query param על ה-URI) ו-ELO מתעדכן אוטומטית בסוף
+   כל משחק (`EloCalculator`, K=32).
 5. Matchmaking (Play) + ניתוק/auto-resign - ⬜ לא התחיל.
 6. חדרים (Create/Join/Cancel) + לוגים - ⬜ לא התחיל.
 
@@ -208,37 +210,87 @@ main??"). המצב הסופי שסוכם ובוצע:
   בלי שינוי - זה פיצ'ר חלקי אמיתי (ציור כן, טיפול-קליק על הכפתור עדיין
   לא, ר' "הצעד הבא"), לא קוד מת.
 
-## מה שנשאר לאמת (רות - עדיין לא נעשה)
+### שלב 4, Part B - חיבור username לפרוטוקול הרשת + עדכון ELO בפועל
 
-הסביבה שלי (Claude) יש בה רק JRE, בלי `javac`/`mvn` בכלל - לא הצלחתי
-להתקין (אין הרשאות root, ואין גישת רשת להורדת JDK/Maven) - בדקתי רק
-איזון סוגריים + חיפוש הפניות שבורות (`buildAndShow`/`HomeScreenMain`) -
-תקין, אבל **זה לא תחליף ל-`mvn test` אמיתי**. צריך:
+אחרי ש-Part A (חשבונות מקומיים) עבד, רות ביקשה במפורש להמשיך פונקציונליות
+במקום עיצוב - זה מה שנוסף:
 
-1. `mvn clean test` - לוודא שהכל מתקמפל וש-43 הטסטים הישנים + 12
-   החדשים (`PasswordHasherTest`×3, `SqliteAccountRepositoryTest`×5,
-   `LoginScreenMainTest`×6 - למעשה 14) ירוקים.
-2. הרצה ידנית: Run על `kfchess.LoginScreenMain` → Register עם username
-   חדש → אמור לפתוח את `HomeScreenMain` עם "Logged in as: <שם> (ELO 1200)"
-   → לסגור ולהריץ שוב, הפעם Login עם אותו username/password → אמור
-   להצליח ולהראות שוב אותה שורה.
-3. **שימו לב**: `git status` הראה גם קבצים לא-קשורים לסשן הזה שכבר
-   השתנו (`README.md`, `.gitignore`, `.github/copilot-instructions.md`,
-   ועוד כמה קבצי view/engine/realtime - נראה כמו שינויי line-ending, לא
-   תוכן) - **לא נגעתי בהם ולא כללתי אותם בפקודת ה-commit המוצעת למטה**.
-   כדאי לבדוק אותם בנפרד. גם הופיעה תיקייה `src/main/java/kfchess/.claude/`
-   (עם `settings.local.json`) שלא יצרתי - כנראה שריד מסשן אחר; שווה
-   לבדוק אם היא אמורה להיות שם.
-4. **`kfchess.db`** כבר מופיע כקובץ לא-עקוב (`??`) ב-`git status` - כנראה
-   מהרצה קודמת. **לא נכלל בפקודת ה-commit למטה בכוונה** (זה state, לא
-   קוד) - כדאי להוסיף אותו ל-`.gitignore` (לא עשיתי - הקובץ כבר "מלוכלך"
-   משינויים לא-קשורים, ר' סעיף 3).
+- **איך username "נוסע" מהלקוח לשרת**: כ-query parameter על ה-URI של
+  חיבור ה-WebSocket עצמו (כמו שה-room כבר עשה) - `ws://host:port/<room>?username=<username>`,
+  מקודד-URL (`URLEncoder`/`URLDecoder`, לא רק `+` בין מילים). `HomeScreenMain.buildUri`
+  קיבל overload חדש `buildUri(room, username)` - הישן `buildUri(room)`
+  נשאר (שקול ל-`username=null`, כדי ש-`HomeScreenMainTest` הקיים ימשיך
+  לעבוד בלי שינוי).
+- **באג סמוי שנמצא ותוקן**: `GameIdResolver` לא חתך query string בכלל -
+  לפני שהוספתי `?username=`, זה לא שם לב כי לא היה אף פעם query string
+  על ה-URI. תוקן (חותך הכל אחרי `?` לפני חישוב ה-gameId) + טסטים חדשים.
+- **`kfchess.net.server.UsernameResolver`** (חדש, מקביל ל-`GameIdResolver`
+  אבל מחלקה נפרדת - זה query parameter נפרד לגמרי מנתיב ה-room) - מחלץ
+  את ה-username מה-query string, `Optional.empty()` אם אין (חיבור בלי
+  login בכלל, למשל בדיקת פרוטוקול גולמי - עדיין נתמך, בלי שיוך חשבון).
+- **`GameSession`**: `Map<WebSocket, ClientRole>` הפך ל-`Map<WebSocket, ConnectedPlayer>`
+  (`record ConnectedPlayer(ClientRole role, String username)` פנימי) -
+  `connections()` הציבורית עדיין מחזירה `Map<WebSocket, ClientRole>` (לא
+  משנה את מה ש-`GameServer`/הטסטים הקיימים רואים). **בנאים/מתודות ישנים
+  נשארו כ-overload** (`GameSession()`, `assignRole(connection)`) בדיוק
+  כדי ש-`GameSessionTest` הקיים (8 טסטים) ימשיך לעבוד בלי שום שינוי.
+  נרשם ל-`GameLifecycleEvent(ENDED)` (קיים מראש ב-bus, מתפרסם **פעם
+  אחת בדיוק** ברגע לכידת המלך - לא בכל tick) ומעדכן ELO לשני הצדדים.
+  מדלג בשקט (בלי שגיאה) אם: אין `AccountRepository` בכלל (הבנאי הישן),
+  צד אחד לא היה מזוהה, או ששני הצדדים אותו username (בדיקה עצמית - אי
+  אפשר לדרג נגד עצמך).
+- **`GameServer`**: מחזיק `AccountRepository` אחד משותף (`SqliteAccountRepository`
+  על `kfchess.db` - **אותו קובץ בדיוק** ש-`LoginScreenMain` משתמש בו,
+  כי אלה אותם חשבונות), מעביר אותו לכל `GameSession` חדש + שולף username
+  מ-`UsernameResolver` ומעביר ל-`assignRole`.
+- **`kfchess.account.EloCalculator`** (חדש, טהור לגמרי - בלי SQLite/רשת) -
+  נוסחת ELO הסטנדרטית, K=32 (רות אישרה במפורש, לעומת 16 השמרני יותר).
+  `applyResult(winnerElo, loserElo)` מחזיר `int[]{newWinner, newLoser}`.
+  נבדק עם 3 דוגמאות מספריות מוכרות (דירוגים שווים, favorite מנצח, upset) -
+  חושבו ואומתו גם ב-Python בנפרד לפני כתיבת הטסט, לא רק "נראה הגיוני".
+- **`SqliteAccountRepository.DEFAULT_DB_FILE`** - קבוע ציבורי חדש
+  (`"kfchess.db"`) - במקום מחרוזת משוכפלת בין `LoginScreenMain` ל-`GameServer`.
+  גם `currentElo(username)`/`updateElo(username, newElo)` נוספו ל-
+  `AccountRepository`/`SqliteAccountRepository` + טסטים.
+- **מה שעדיין לא נפתר (מודע, לא שכחתי)**: "מי היה WHITE/BLACK" ל-ELO
+  נקבע לפי מי שמחזיק את התפקיד *ברגע שהמשחק נגמר* - לא פותר ניתוק-
+  והחלפה באמצע משחק (זה שלב 5, `auto-resign`, עדיין לא קיים).
+
+## מה שנשאר לאמת (רות - עדיין לא נעשה, סבב Part B)
+
+שוב: אין לי `javac`/`mvn` בסביבה שלי (אין root, אין גישת רשת להוריד
+JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות שבורות לכל קובץ
+שנגעתי בו/נמחק, ואת נוסחת ה-ELO אימתתי גם בחישוב Python נפרד (לא רק
+"נראה הגיוני") - אבל **זה לא תחליף ל-`mvn test` אמיתי**. צריך:
+
+1. `mvn clean test` - לוודא שהכל מתקמפל (במיוחד: `GameSessionTest`
+   ו-`HomeScreenMainTest` הישנים משתמשים בחתימות הישנות של `assignRole`/
+   `buildUri` - אלה נשמרו כ-overload, אבל רק `mvn` באמת יוכיח שזה מתקמפל)
+   וש**כל** הטסטים ירוקים, כולל החדשים: `EloCalculatorTest`×3,
+   `UsernameResolverTest`×7, `GameIdResolverTest` (2 חדשים על 5 ישנים),
+   `SqliteAccountRepositoryTest` (4 חדשים על 5 ישנים), `HomeScreenMainTest`
+   (4 חדשים על 5 ישנים).
+2. **הרצה ידנית מקצה לקצה - זה החשוב באמת כאן** (בדיקה שקשה לכתוב
+   כטסט יחידה כי היא חוצה שרת+2 לקוחות+DB):
+   - Run על `ServerMain`.
+   - **Register שני חשבונות שונים** דרך `LoginScreenMain` (למשל
+     "ruth" ו-"dani") - חשוב שיהיו **חשבונות שונים ולא אותו אחד פעמיים**,
+     אחרת ה-ELO מדלג בכוונה (ר' Part B למעלה, "בדיקה עצמית").
+   - שני חלונות `LoginScreenMain` (Allow multiple instances) - כל אחד
+     מתחבר לאותו room עם החשבון שלו.
+   - לשחק עד לכידת מלך (סיום משחק אמיתי).
+   - לבדוק ב-`kfchess.db` (או ע"י Login מחדש ובדיקת "ELO" בתווית) ששני
+     החשבונות השתנו: המנצח/ת עלה, המפסיד/ה ירד, בסכום שהגיוני ל-K=32
+     (למשל אם שני החשבונות התחילו ב-1200, אמור להיות 1216/1184).
+3. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
+   מופיעים כ-modified ב-`git status` (line-ending, לא תוכן - לא נגעתי
+   בהם), ותיקיית `src/main/java/kfchess/.claude/` שלא יצרתי.
 
 ## פקודת commit מוצעת (לא הרצתי - רק `git status`/`git diff` לבדיקה)
 
 ```
-git add pom.xml src/main/java/kfchess/HomeScreenMain.java src/main/java/kfchess/LoginScreenMain.java src/main/java/kfchess/NetworkGameWindowMain.java src/main/java/kfchess/account/ src/main/java/kfchess/GameWindowMain.java src/main/java/kfchess/net/client/ClientMain.java src/main/java/kfchess/net/client/GameClient.java src/main/java/kfchess/net/server/GameSession.java src/main/java/kfchess/view/GameSceneView.java src/main/java/kfchess/view/layout/BoardLayoutCalculator.java src/main/java/kfchess/input/GameController.java src/test/java/texttests/PasswordHasherTest.java src/test/java/texttests/SqliteAccountRepositoryTest.java src/test/java/texttests/LoginScreenMainTest.java
-git commit -m "Stage 4 Part A: local accounts (SQLite) + login/register screen; consolidate to a single client entry point (LoginScreenMain)"
+git add src/main/java/kfchess/HomeScreenMain.java src/main/java/kfchess/LoginScreenMain.java src/main/java/kfchess/account/ src/main/java/kfchess/net/server/ src/test/java/texttests/EloCalculatorTest.java src/test/java/texttests/GameIdResolverTest.java src/test/java/texttests/UsernameResolverTest.java src/test/java/texttests/HomeScreenMainTest.java src/test/java/texttests/SqliteAccountRepositoryTest.java PROGRESS.md
+git commit -m "Stage 4 Part B: wire logged-in username into the network protocol and auto-update ELO when a game ends"
 ```
 
 ## איך להריץ ולבדוק (IntelliJ)
@@ -276,19 +328,13 @@ git commit -m "Stage 4 Part A: local accounts (SQLite) + login/register screen; 
 
 ## הצעד הבא
 
-**שלב 4, Part B**: Part A (login/register מקומי מול SQLite, ר' למעלה)
-בוצע אבל **טרם אומת** ע"י רות (ר' "מה שנשאר לאמת"). אחרי האימות, Part B
-הוא לחבר את ה-`Account` המחובר בפועל לפרוטוקול הרשת ולעדכון ELO:
-
-- כרגע `GameServer`/`GameSession` לא יודעים בכלל מי "רות" ומי "דני" -
-  רק `ClientRole` (WHITE/BLACK/SPECTATOR) לפי סדר התחברות. צריך להחליט
-  איך ה-username "נוסע" מהלקוח לשרת (למשל: כחלק מה-URI של החיבור,
-  כמו ה-room היום; או כהודעה ראשונה אחרי `onOpen`, לפני ROLE_ASSIGNED).
-- עדכון ELO בפועל בסוף משחק - יש כבר את כל התשתית הדרושה
-  (`GameEngine.isGameOver()`/`winner()`, `GameLifecycleEvent(phase, winner)`
-  ב-bus) - "רק" צריך להחליט על נוסחת ELO (K-factor) ולכתוב את החיבור
-  בפועל בין קבלת האירוע לבין `AccountRepository`/`SqliteAccountRepository`
-  (יידרש להוסיף שם מתודה לעדכון elo, שעדיין לא קיימת).
+**שלב 4 שלם** (Part A + Part B, ר' למעלה) - **טרם אומת סופית** ע"י רות
+(ר' "מה שנשאר לאמת" - בעיקר: הרצה ידנית עם שני חשבונות אמיתיים ומשחק
+עד הסוף, לוודא שה-ELO באמת משתנה נכון). אחרי האימות, השלב הבא הוא
+**שלב 5**: Matchmaking (כפתור "Play" שמוצא יריבה אוטומטית, במקום להקליד
+שם room ידנית) + טיפול בניתוק (auto-resign) - כרגע אם צד מתנתק באמצע
+משחק, שום דבר לא קורה (המשחק פשוט קופא, אף אחד לא מפסיד, ה-ELO לא
+מתעדכן). אחריו שלב 6: חדרים אמיתיים (Create/Join/Cancel) + לוגים.
 
 ## סגנון עבודה מוסכם עם רות
 

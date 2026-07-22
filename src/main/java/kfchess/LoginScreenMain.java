@@ -20,10 +20,8 @@ import java.util.Optional;
  */
 public class LoginScreenMain {
 
-    private static final String DB_FILE = "kfchess.db";
-
     public static void main(String[] args) {
-        AccountRepository repository = new SqliteAccountRepository(DB_FILE);
+        AccountRepository repository = new SqliteAccountRepository(SqliteAccountRepository.DEFAULT_DB_FILE);
         SwingUtilities.invokeLater(() -> buildAndShow(repository));
     }
 

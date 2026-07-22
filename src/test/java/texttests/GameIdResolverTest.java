@@ -31,4 +31,16 @@ class GameIdResolverTest {
     void resolve_pathWithTrailingSlash_stripsIt() {
         assertEquals("room1", GameIdResolver.resolve("/room1/"));
     }
+
+    @Test
+    void resolve_pathWithQueryString_stripsQuery() {
+        // שלב 4 Part B: ?username= מגיע על אותו URI - בלי חיתוך query
+        // string זה היה הופך בטעות לחלק משם ה-room.
+        assertEquals("room1", GameIdResolver.resolve("/room1?username=ruth"));
+    }
+
+    @Test
+    void resolve_rootPathWithQueryString_returnsDefault() {
+        assertEquals("default", GameIdResolver.resolve("/?username=ruth"));
+    }
 }

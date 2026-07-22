@@ -7,6 +7,8 @@ import javax.swing.*;
 import java.awt.*;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 /**
  * מסך הבית (שלב 3, "v1") - חלון Swing פשוט שמאפשר להזין room ולהתחבר
@@ -14,10 +16,11 @@ import java.net.URISyntaxException;
  * <p>
  * מאז שלב 4 יש authentication אמיתי לפני המסך הזה (kfchess.LoginScreenMain,
  * המיין היחיד להרצת הלקוח) - הוא קורא ל-launch(Account) עם ה-Account
- * המחובר, ומוצג כאן רק כתווית "Logged in as" (עדיין **לא** משפיע על
- * WHITE/BLACK/SPECTATOR: זה עדיין נקבע בשרת לפי סדר ההתחברות בלבד, ר'
- * ClientRole - חיווט ה-username לפרוטוקול הרשת עצמו ולעדכון ELO הוא צעד
- * נפרד, עדיין לא בוצע). אין כאן main() עצמאי בכוונה - ר' LoginScreenMain.
+ * המחובר, ומוצג כאן כתווית "Logged in as". מאז שלב 4 Part B, ה-username
+ * גם נשלח בפועל לשרת (כ-query parameter על ה-URI, ר' buildUri) - כדי
+ * ש-GameSession ידע למי לעדכן ELO בסוף המשחק (עדיין **לא** משפיע על מי
+ * מקבל WHITE/BLACK/SPECTATOR - זה עדיין לפי סדר התחברות, ר' ClientRole).
+ * אין כאן main() עצמאי בכוונה - ר' LoginScreenMain.
  */
 public class HomeScreenMain {
 
@@ -30,14 +33,30 @@ public class HomeScreenMain {
         SwingUtilities.invokeLater(() -> buildAndShow(account));
     }
 
+    // חתימה ישנה, בלי username - נשארת כדי ש-HomeScreenMainTest הקיים
+    // ימשיך לעבוד בלי שינוי; שקולה ל-buildUri(room, null) (בלי query
+    // string בכלל - זה בדיוק מה שקורה כשמריצים HomeScreenMain בלי login,
+    // למשל NetworkGameWindowMain.main() לבדיקות ישירות).
+    public static String buildUri(String room) {
+        return buildUri(room, null);
+    }
+
     // בונה URI מלא לחיבור מתוך שם room גולמי שהמשתמשת הקלידה - room ריק
     // (או רק רווחים) נופל ל-DEFAULT_ROOM, כדי שברירת המחדל תישאר זהה למה
     // ש-NetworkGameWindowMain כבר עושה כשמריצים אותה בלי args בכלל. מופרדת
     // מבניית ה-UI כדי שתהיה ניתנת לבדיקה בלי להרים חלון Swing.
-    public static String buildUri(String room) {
+    // username (משלב 4 Part B): אם יש (לא null/ריק) מתווסף כ-query
+    // parameter מקודד-URL על אותו URI, כדי ש-GameServer/UsernameResolver
+    // ידעו לשייך את החיבור לחשבון - בלי username בכלל (login-פחות, למשל
+    // בדיקות ישירות) מתקבל בדיוק אותו URI כמו קודם, בלי שינוי.
+    public static String buildUri(String room, String username) {
         String trimmed = room == null ? "" : room.trim();
         String resolvedRoom = trimmed.isEmpty() ? DEFAULT_ROOM : trimmed;
-        return SERVER_HOST_AND_PORT + "/" + resolvedRoom;
+        String base = SERVER_HOST_AND_PORT + "/" + resolvedRoom;
+        if (username == null || username.isBlank()) {
+            return base;
+        }
+        return base + "?username=" + URLEncoder.encode(username, StandardCharsets.UTF_8);
     }
 
     // בונה את חלון הבית עצמו: שדה טקסט ל-room + כפתור Connect + label
@@ -66,8 +85,9 @@ public class HomeScreenMain {
         panel.add(Box.createVerticalStrut(8));
         panel.add(statusLabel);
 
+        String username = account == null ? null : account.username();
         connectButton.addActionListener(e ->
-                connect(frame, roomField.getText(), connectButton, statusLabel));
+                connect(frame, roomField.getText(), username, connectButton, statusLabel));
 
         frame.add(panel);
         frame.pack();
@@ -80,11 +100,12 @@ public class HomeScreenMain {
     // עד שההתחברות תצליח או תיכשל. תוצאת ההתחברות מדווחת בחזרה ל-EDT דרך
     // SwingUtilities.invokeLater, כי רק שם מותר לגעת ברכיבי Swing
     // (connectButton/statusLabel/homeFrame).
-    private static void connect(JFrame homeFrame, String room, JButton connectButton, JLabel statusLabel) {
+    private static void connect(JFrame homeFrame, String room, String username,
+                                 JButton connectButton, JLabel statusLabel) {
         connectButton.setEnabled(false);
         statusLabel.setForeground(Color.BLACK);
         statusLabel.setText("Connecting...");
-        String uriText = buildUri(room);
+        String uriText = buildUri(room, username);
 
         new Thread(() -> {
             GameClient client;

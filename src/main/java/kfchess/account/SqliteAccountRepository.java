@@ -18,6 +18,11 @@ public class SqliteAccountRepository implements AccountRepository {
 
     private static final int STARTING_ELO = 1200;
 
+    // קובץ ברירת המחדל - קבוע ציבורי אחד ולא שכפול של המחרוזת בכל מקום
+    // שיוצר repository (LoginScreenMain, GameServer): שני הצדדים צריכים
+    // להצביע על אותו קובץ DB בפועל.
+    public static final String DEFAULT_DB_FILE = "kfchess.db";
+
     private final String jdbcUrl;
 
     // dbFilePath, למשל "kfchess.db" - נוצר כקובץ יחסי לתיקיית ההרצה. יוצר
@@ -89,5 +94,35 @@ public class SqliteAccountRepository implements AccountRepository {
     // הודעת השגיאה (שיכול להשתנות בין גרסאות דרייבר).
     private boolean isUniqueConstraintViolation(SQLException ex) {
         return ex.getErrorCode() == 19;
+    }
+
+    @Override
+    public Optional<Integer> currentElo(String username) {
+        String sql = "SELECT elo FROM accounts WHERE username = ?";
+        try (Connection connection = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, username);
+            try (ResultSet result = statement.executeQuery()) {
+                if (!result.next()) {
+                    return Optional.empty();
+                }
+                return Optional.of(result.getInt("elo"));
+            }
+        } catch (SQLException queryFailed) {
+            throw new IllegalStateException("failed to query elo for " + username, queryFailed);
+        }
+    }
+
+    @Override
+    public void updateElo(String username, int newElo) {
+        String sql = "UPDATE accounts SET elo = ? WHERE username = ?";
+        try (Connection connection = DriverManager.getConnection(jdbcUrl);
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, newElo);
+            statement.setString(2, username);
+            statement.executeUpdate();
+        } catch (SQLException updateFailed) {
+            throw new IllegalStateException("failed to update elo for " + username, updateFailed);
+        }
     }
 }

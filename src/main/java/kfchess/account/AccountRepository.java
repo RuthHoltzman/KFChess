@@ -19,4 +19,13 @@ public interface AccountRepository {
     // חוץ - זה מונע "user enumeration": מישהי לא אמורה להיות מסוגלת
     // לגלות אילו usernames קיימים לפי הבדל בהודעת השגיאה).
     Optional<Account> login(String username, String rawPassword);
+
+    // ה-elo הנוכחי של username, או Optional.empty() אם אין חשבון כזה -
+    // שלב 4 Part B (GameSession) קורא לזה כדי לחשב את הדירוג החדש לפני updateElo.
+    Optional<Integer> currentElo(String username);
+
+    // מעדכן את ה-elo של username לערך חדש שכבר חושב (ר' EloCalculator) -
+    // הפרדה מכוונת בין "מה הדירוג החדש" (EloCalculator, טהור) ל-"לשמור
+    // אותו" (כאן) - כדי ש-EloCalculator יהיה נבדק בלי SQLite בכלל.
+    void updateElo(String username, int newElo);
 }
