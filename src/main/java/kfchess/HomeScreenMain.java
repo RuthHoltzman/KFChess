@@ -1,5 +1,6 @@
 package kfchess;
 
+import kfchess.account.Account;
 import kfchess.net.client.GameClient;
 
 import javax.swing.*;
@@ -9,10 +10,15 @@ import java.net.URISyntaxException;
 
 /**
  * מסך הבית (שלב 3, "v1") - חלון Swing פשוט שמאפשר להזין room ולהתחבר
- * אליו, לפני שנפתח חלון המשחק עצמו (NetworkGameWindowMain.launch). עדיין
- * אין כאן שום חשבון/authentication אמיתי (זה שלב 4) - "login" בשלב הזה
- * הוא רק בחירת room; מי מקבל WHITE/BLACK/SPECTATOR נקבע בשרת (ClientRole)
- * לפי סדר ההתחברות, לא כאן.
+ * אליו, לפני שנפתח חלון המשחק עצמו (NetworkGameWindowMain.launch).
+ * <p>
+ * החל משלב 4 יש authentication אמיתי לפני המסך הזה (LoginScreenMain),
+ * שמעביר לכאן את ה-Account המחובר דרך launch(Account) - מוצג רק כתווית
+ * "Logged in as" (עדיין **לא** משפיע על WHITE/BLACK/SPECTATOR: זה עדיין
+ * נקבע בשרת לפי סדר ההתחברות בלבד, ר' ClientRole - חיווט ה-username
+ * לפרוטוקול הרשת עצמו ולעדכון ELO הוא צעד נפרד, עדיין לא בוצע).
+ * main() ישיר (בלי login) עדיין עובד לבדיקות מהירות - עם account=null,
+ * ואז שורת "Logged in as" פשוט לא מוצגת.
  */
 public class HomeScreenMain {
 
@@ -20,7 +26,15 @@ public class HomeScreenMain {
     private static final String DEFAULT_ROOM = "default";
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(HomeScreenMain::buildAndShow);
+        SwingUtilities.invokeLater(() -> buildAndShow(null));
+    }
+
+    // נקודת הכניסה מ-LoginScreenMain אחרי login/register מוצלח - נפרדת מ-
+    // main() בדיוק כמו ש-NetworkGameWindowMain.launch(GameClient) נפרדת
+    // מ-main() שלה, כדי שהמסך הקודם (כאן: login) יוכל לפתוח את המסך הבא
+    // בלי לשכפל את כל חיווט ה-Swing.
+    public static void launch(Account account) {
+        SwingUtilities.invokeLater(() -> buildAndShow(account));
     }
 
     // בונה URI מלא לחיבור מתוך שם room גולמי שהמשתמשת הקלידה - room ריק
@@ -34,8 +48,10 @@ public class HomeScreenMain {
     }
 
     // בונה את חלון הבית עצמו: שדה טקסט ל-room + כפתור Connect + label
-    // לסטטוס/שגיאות. רץ על ה-EDT (נקראת רק מתוך main() דרך invokeLater).
-    private static void buildAndShow() {
+    // לסטטוס/שגיאות, ובנוסף שורת "Logged in as" אם הגיעה לכאן דרך
+    // launch(Account) אחרי login (account != null). רץ על ה-EDT (נקראת
+    // רק מתוך main()/launch() דרך invokeLater).
+    private static void buildAndShow(Account account) {
         JFrame frame = new JFrame("KFChess - Home");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
@@ -46,6 +62,10 @@ public class HomeScreenMain {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         panel.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
+        if (account != null) {
+            panel.add(new JLabel("Logged in as: " + account.username() + " (ELO " + account.elo() + ")"));
+            panel.add(Box.createVerticalStrut(8));
+        }
         panel.add(new JLabel("Room:"));
         panel.add(roomField);
         panel.add(Box.createVerticalStrut(8));

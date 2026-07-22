@@ -20,7 +20,9 @@
    למטה).
 3. Home screen v1 - login בשל (shell), 2 שחקנים בלבד - ✅ **הושלם ואומת ידנית**
    (ר' למטה). כרגע רק בחירת room (בלי חשבונות/סיסמה - זה שלב 4).
-4. חשבונות + ELO (SQLite) - ⬜ **הצעד הבא** (ר' למטה).
+4. חשבונות + ELO (SQLite) - 🟡 **Part A בוצע** (login/register מקומי,
+   ר' למטה), **טרם אומת** (`mvn test`/הרצה ידנית - ר' "מה שנשאר לאמת").
+   Part B (חיבור username לפרוטוקול הרשת + עדכון ELO בפועל) - ⬜ לא התחיל.
 5. Matchmaking (Play) + ניתוק/auto-resign - ⬜ לא התחיל.
 6. חדרים (Create/Join/Cancel) + לוגים - ⬜ לא התחיל.
 
@@ -119,13 +121,74 @@
 מי מקבל WHITE/BLACK/SPECTATOR עדיין נקבע בשרת לפי סדר התחברות
 (`ClientRole`, ר' למעלה), לא כאן.
 
+### `kfchess.account` (שלב 4, Part A) ו-`kfchess.LoginScreenMain`
+
+חשבונות מקומיים ב-SQLite (`kfchess.db`, נוצר אוטומטית) - **עדיין בלי
+חיבור לפרוטוקול הרשת/ELO בפועל**, ר' "הצעד הבא" למטה.
+
+- **`Account`** - record(username, elo) - כל מה שמותר לצאת מ-repository
+  החוצה (בלי password hash בכלל).
+- **`PasswordHasher`** - עטיפה דקה סביב **jBCrypt** (נבחר על פני PBKDF2
+  מובנה - salt מנוהל אוטומטית בתוך ה-hash, פחות קוד תשתית מסביב).
+- **`AccountRepository`** (ממשק) + **`SqliteAccountRepository`** (מימוש) -
+  `register`/`login`. `register` על username קיים זורק
+  **`UsernameTakenException`** (checked בכוונה - תרחיש עסקי צפוי, לא
+  שגיאת תכנות) - מזוהה לפי קוד השגיאה של SQLite (`SQLITE_CONSTRAINT`),
+  לא לפי SELECT-then-INSERT (חוסך race condition). `login` לא מבדיל
+  כלפי חוץ בין "username לא קיים" ל"סיסמה שגויה" (הגנה מפני user
+  enumeration) - שניהם `Optional.empty()`. elo התחלתי: **1200**.
+- **`LoginScreenMain`** - מסך Swing חדש, **לפני** `HomeScreenMain`:
+  username+password, כפתורי **Login** ו-**Register נפרדים** (לא
+  auto-register - החלטה מפורשת של רות). הצלחה → `HomeScreenMain.launch(account)`.
+- **`HomeScreenMain`** קיבל שינוי קטן: `launch(Account)` (במקום `buildAndShow()`
+  חסר-פרמטרים) - `account` מוצג רק כתווית "Logged in as" בראש המסך;
+  **עדיין לא** משפיע על WHITE/BLACK/SPECTATOR (זה עדיין לפי סדר התחברות
+  בשרת, `ClientRole`). `main()` ישיר של `HomeScreenMain` עדיין עובד
+  לבדיקות מהירות (`account=null`, השורה פשוט לא מוצגת).
+- טסטים: `PasswordHasherTest`, `SqliteAccountRepositoryTest` (על קובץ
+  DB זמני, `@TempDir`), `LoginScreenMainTest` (טסט ל-`validate()` הטהורה,
+  בלי להרים UI - נדרש להפוך אותה מ-package-private ל-`public` כדי
+  שתהיה נגישה מ-`texttests`).
+
+## מה שנשאר לאמת (רות - עדיין לא נעשה)
+
+הסביבה שלי (Claude) יש בה רק JRE, בלי `javac`/`mvn` בכלל - לא הצלחתי
+להתקין (אין הרשאות root, ואין גישת רשת להורדת JDK/Maven) - בדקתי רק
+איזון סוגריים + חיפוש הפניות שבורות (`buildAndShow`/`HomeScreenMain`) -
+תקין, אבל **זה לא תחליף ל-`mvn test` אמיתי**. צריך:
+
+1. `mvn clean test` - לוודא שהכל מתקמפל וש-43 הטסטים הישנים + 12
+   החדשים (`PasswordHasherTest`×3, `SqliteAccountRepositoryTest`×5,
+   `LoginScreenMainTest`×6 - למעשה 14) ירוקים.
+2. הרצה ידנית: Run על `kfchess.LoginScreenMain` → Register עם username
+   חדש → אמור לפתוח את `HomeScreenMain` עם "Logged in as: <שם> (ELO 1200)"
+   → לסגור ולהריץ שוב, הפעם Login עם אותו username/password → אמור
+   להצליח ולהראות שוב אותה שורה.
+3. **שימו לב**: `git status` הראה גם קבצים לא-קשורים לסשן הזה שכבר
+   השתנו (`README.md`, `.gitignore`, `.github/copilot-instructions.md`,
+   ועוד כמה קבצי view/engine/realtime - נראה כמו שינויי line-ending, לא
+   תוכן) - **לא נגעתי בהם ולא כללתי אותם בפקודת ה-commit המוצעת למטה**.
+   כדאי לבדוק אותם בנפרד. גם הופיעה תיקייה `src/main/java/kfchess/.claude/`
+   (עם `settings.local.json`) שלא יצרתי - כנראה שריד מסשן אחר; שווה
+   לבדוק אם היא אמורה להיות שם.
+
+## פקודת commit מוצעת (לא הרצתי - רק את שתי הפקודות `git status`/`git diff` לבדיקה)
+
+```
+git add pom.xml src/main/java/kfchess/HomeScreenMain.java src/main/java/kfchess/LoginScreenMain.java src/main/java/kfchess/account/ src/test/java/texttests/PasswordHasherTest.java src/test/java/texttests/SqliteAccountRepositoryTest.java src/test/java/texttests/LoginScreenMainTest.java
+git commit -m "Stage 4 Part A: local accounts (SQLite) + login/register screen"
+```
+
 ## איך להריץ ולבדוק (IntelliJ)
 
 1. Run על `kfchess.net.server.ServerMain` - אמורה להיכתב שורה
    `GameServer started on port 8887`.
-2. Run על `kfchess.HomeScreenMain` - נפתח מסך בית, מזינים room (או
-   משאירים `default`) ולוחצים Connect - נכנס כ-WHITE. (אפשר גם Run
-   ישירות על `kfchess.NetworkGameWindowMain`, בלי מסך בית, לבדיקות מהירות.)
+2. Run על `kfchess.LoginScreenMain` (נקודת הכניסה החדשה, שלב 4) -
+   Register עם username+password חדשים (או Login אם כבר יש חשבון) →
+   נפתח מסך הבית עם "Logged in as". שם מזינים room (או משאירים
+   `default`) ולוחצים Connect - נכנס כ-WHITE. (אפשר גם Run ישירות על
+   `kfchess.HomeScreenMain` בלי login בכלל - לבדיקות מהירות, `account=null`;
+   או ישירות על `kfchess.NetworkGameWindowMain`, בלי מסך בית בכלל.)
 3. **לשני שחקנים בו-זמנית**: בקונפיגורציית `HomeScreenMain` (או
    `NetworkGameWindowMain`) (Edit Configurations → Modify options →
    **Allow multiple instances**), ואז Run עליה **שוב** בלי לעצור את
@@ -151,12 +214,19 @@
 
 ## הצעד הבא
 
-**שלב 4**: חשבונות + ELO (SQLite) - כרגע אין שום authentication אמיתי;
-`HomeScreenMain` (שלב 3) רק בוחר room, ותפקיד WHITE/BLACK/SPECTATOR
-נקבע לפי סדר התחברות בלבד (`ClientRole`). הצעד הבא הוא הוספת חשבונות
-אמיתיים (username+password, ככל הנראה עם SQLite) ודירוג ELO לכל
-שחקן/ת - כולל החלטה איך זה משתלב עם מסך הבית הקיים (למשל: שדה
-username/password לפני שדה ה-room, או מסך login נפרד לפניו).
+**שלב 4, Part B**: Part A (login/register מקומי מול SQLite, ר' למעלה)
+בוצע אבל **טרם אומת** ע"י רות (ר' "מה שנשאר לאמת"). אחרי האימות, Part B
+הוא לחבר את ה-`Account` המחובר בפועל לפרוטוקול הרשת ולעדכון ELO:
+
+- כרגע `GameServer`/`GameSession` לא יודעים בכלל מי "רות" ומי "דני" -
+  רק `ClientRole` (WHITE/BLACK/SPECTATOR) לפי סדר התחברות. צריך להחליט
+  איך ה-username "נוסע" מהלקוח לשרת (למשל: כחלק מה-URI של החיבור,
+  כמו ה-room היום; או כהודעה ראשונה אחרי `onOpen`, לפני ROLE_ASSIGNED).
+- עדכון ELO בפועל בסוף משחק - יש כבר את כל התשתית הדרושה
+  (`GameEngine.isGameOver()`/`winner()`, `GameLifecycleEvent(phase, winner)`
+  ב-bus) - "רק" צריך להחליט על נוסחת ELO (K-factor) ולכתוב את החיבור
+  בפועל בין קבלת האירוע לבין `AccountRepository`/`SqliteAccountRepository`
+  (יידרש להוסיף שם מתודה לעדכון elo, שעדיין לא קיימת).
 
 ## סגנון עבודה מוסכם עם רות
 
