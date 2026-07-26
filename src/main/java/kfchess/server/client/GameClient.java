@@ -26,6 +26,11 @@ public class GameClient extends WebSocketClient {
     // אותו מראש בכלל, אז חייבים לחלץ אותו מהתשובה הראשונה כדי להציג
     // אותו בכותרת חלון המשחק (ר' NetworkGameWindowMain, Img.setTitle).
     private volatile String assignedGameId;
+    // תיקון "Play" לפי המפרט המדויק (ELO ±100 / timeout של דקה) - נחתך
+    // מתוך הודעת MATCHMAKING_TIMEOUT אם/כשמגיעה (ר' onMessage). null כל
+    // עוד לא הגיעה כזו הודעה - NetworkGameWindowMain בודק את זה בכל טיק
+    // (בדיוק כמו assignedGameId/latestMessage, אותו דפוס polling).
+    private volatile String matchmakingTimeoutMessage;
     // שלב 6 חלק 2 (בקשת המנחה): לוג טכני/תפעולי לקובץ טקסט - ר' תיעוד
     // FileLogger וגם GameServer.fileLogger (אותו רעיון, בצד הלקוח הפעם).
     // אחד לכל GameClient - כלומר אחד לכל ניסיון חיבור (ר' HomeScreenMain.connect,
@@ -55,6 +60,10 @@ public class GameClient extends WebSocketClient {
             JsonObject json = JsonParser.parseString(message).getAsJsonObject();
             assignedGameId = json.get("gameId").getAsString();
         }
+        if (IncomingMessageSummary.isMatchmakingTimeout(message)) {
+            JsonObject json = JsonParser.parseString(message).getAsJsonObject();
+            matchmakingTimeoutMessage = json.get("message").getAsString();
+        }
         if (!IncomingMessageSummary.isSnapshot(message)) {
             String summary = IncomingMessageSummary.describe(message);
             System.out.println(summary);
@@ -68,6 +77,14 @@ public class GameClient extends WebSocketClient {
     // לזה מ-thread רקע אחרי connectBlocking (ר' waitForAssignedGameId).
     public String assignedGameId() {
         return assignedGameId;
+    }
+
+    // הטקסט מתוך MATCHMAKING_TIMEOUT (ר' MatchmakingTimeoutMessage), או
+    // null אם עוד לא התקבלה כזו הודעה. NetworkGameWindowMain בודק את
+    // זה בכל טיק (בדיוק כמו assignedGameId למעלה) כדי להציג popup ולסגור
+    // את החלון ברגע שהיא מגיעה.
+    public String matchmakingTimeoutMessage() {
+        return matchmakingTimeoutMessage;
     }
 
     // JSON הגולמי של ההודעה האחרונה שהתקבלה (או null אם עוד לא התקבל כלום) -

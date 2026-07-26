@@ -9,6 +9,8 @@ import kfchess.server.ClientRole;
 import kfchess.server.server.GameSession;
 import org.junit.jupiter.api.Test;
 
+import java.util.Optional;
+
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -474,5 +476,41 @@ class GameSessionTest {
 
         JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
         assertFalse(snapshot.get("waitingForOpponent").getAsBoolean());
+    }
+
+    // --- תיקון "Play" לפי המפרט המדויק (ELO ±100 / timeout של דקה, הסבב
+    // הזה): waitingPlayerUsername() - נחוץ ל-GameServer.resolveMatchmakingGameId
+    // כדי לדעת של מי ה-ELO לבדוק מול המחפש/ת החדש/ה.
+
+    @Test
+    void waitingPlayerUsername_onlyOneSideConnectedWithUsername_returnsThatUsername() {
+        GameSession session = new GameSession();
+        session.assignRole(new FakeWebSocket(), "ruth"); // רק WHITE, אין BLACK
+
+        assertEquals(Optional.of("ruth"), session.waitingPlayerUsername());
+    }
+
+    @Test
+    void waitingPlayerUsername_bothSidesConnected_returnsEmpty() {
+        GameSession session = new GameSession();
+        session.assignRole(new FakeWebSocket(), "ruth");
+        session.assignRole(new FakeWebSocket(), "dani");
+
+        assertEquals(Optional.empty(), session.waitingPlayerUsername());
+    }
+
+    @Test
+    void waitingPlayerUsername_noOneConnectedYet_returnsEmpty() {
+        GameSession session = new GameSession();
+
+        assertEquals(Optional.empty(), session.waitingPlayerUsername());
+    }
+
+    @Test
+    void waitingPlayerUsername_waitingSideConnectedWithoutLogin_returnsEmpty() {
+        GameSession session = new GameSession();
+        session.assignRole(new FakeWebSocket()); // בלי username (חיבור אנונימי)
+
+        assertEquals(Optional.empty(), session.waitingPlayerUsername());
     }
 }

@@ -33,6 +33,14 @@ public final class IncomingMessageSummary {
         return "ROLE_ASSIGNED".equals(messageType(json));
     }
 
+    // true אם זו הודעת MATCHMAKING_TIMEOUT - תיקון "Play" לפי המפרט המדויק
+    // (ר' MatchmakingTimeoutMessage/GameServer.checkMatchmakingTimeout):
+    // נשלחת פעם אחת בלבד, כשעברה דקה בלי יריב/ה עם ELO תואם. GameClient
+    // שומר אותה כדי ש-NetworkGameWindowMain יציג popup ויסגור את החלון.
+    public static boolean isMatchmakingTimeout(String json) {
+        return "MATCHMAKING_TIMEOUT".equals(messageType(json));
+    }
+
     // קוראת רק את שדה "type" ומפיקה שורה מתאימה; הודעה לא מזוהה/פגומה מקבלת שורה גנרית ולא זורקת חריגה.
     public static String describe(String json) {
         JsonObject message = JsonParser.parseString(json).getAsJsonObject();
@@ -45,6 +53,7 @@ public final class IncomingMessageSummary {
                     + " gameOver=" + message.get("gameOver").getAsBoolean()
                     + " selected=" + describeSelected(message);
             case "ERROR" -> "[ERROR] " + message.get("message").getAsString();
+            case "MATCHMAKING_TIMEOUT" -> "[MATCHMAKING_TIMEOUT] " + message.get("message").getAsString();
             default -> "[UNKNOWN] " + json;
         };
     }

@@ -73,4 +73,25 @@ class IncomingMessageSummaryTest {
         assertFalse(IncomingMessageSummary.isRoleAssigned("{\"type\":\"SNAPSHOT\"}"));
         assertFalse(IncomingMessageSummary.isRoleAssigned("{\"type\":\"ERROR\"}"));
     }
+
+    // תיקון "Play" לפי המפרט המדויק (ELO ±100 / timeout של דקה) - ר'
+    // MatchmakingTimeoutMessage/GameServer.checkMatchmakingTimeout.
+
+    @Test
+    void isMatchmakingTimeout_matchmakingTimeoutMessage_returnsTrue() {
+        assertTrue(IncomingMessageSummary.isMatchmakingTimeout("{\"type\":\"MATCHMAKING_TIMEOUT\"}"));
+    }
+
+    @Test
+    void isMatchmakingTimeout_otherMessageTypes_returnFalse() {
+        assertFalse(IncomingMessageSummary.isMatchmakingTimeout("{\"type\":\"SNAPSHOT\"}"));
+        assertFalse(IncomingMessageSummary.isMatchmakingTimeout("{\"type\":\"ERROR\"}"));
+    }
+
+    @Test
+    void describe_matchmakingTimeout_includesMessage() {
+        String json = "{\"type\":\"MATCHMAKING_TIMEOUT\",\"message\":\"Could not find a match.\"}";
+
+        assertEquals("[MATCHMAKING_TIMEOUT] Could not find a match.", IncomingMessageSummary.describe(json));
+    }
 }

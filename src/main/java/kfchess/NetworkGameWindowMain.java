@@ -16,6 +16,7 @@ import kfchess.view.Img;
 import kfchess.view.layout.BoardLayoutCalculator;
 import kfchess.view.layout.BoardLayoutCalculator.BoardLayout;
 
+import javax.swing.JOptionPane;
 import javax.swing.Timer;
 import java.awt.Dimension;
 import java.util.List;
@@ -79,11 +80,32 @@ public class NetworkGameWindowMain {
                     handleClick(clickHandler, windowAnchor, latest, pixelX, pixelY, true));
         });
 
+        Timer[] timerRef = new Timer[1];
         Timer timer = new Timer(16, e -> {
+            if (client.matchmakingTimeoutMessage() != null) {
+                timerRef[0].stop();
+                handleMatchmakingTimeout(client.matchmakingTimeoutMessage());
+                return;
+            }
             pollAndDecode(client, gson, reconstructor, lastProcessedMessage, latest);
             renderFrame(snapshotFactory, sceneView, windowAnchor, latest);
         });
+        timerRef[0] = timer;
         timer.start();
+    }
+
+    // תיקון "Play" לפי המפרט המדויק - "pops up a message that can't find"
+    // (ר' MatchmakingTimeoutMessage/GameClient.matchmakingTimeoutMessage).
+    // אין כרגע מסלול "חזרה למסך הבית" בכלל (ברגע שנכנסים לחלון המשחק, אין
+    // back) - רות אישרה במפורש שסגירת התהליך היא ההתנהגות הרצויה כאן,
+    // בדיוק כמו סגירת החלון הרגילה (frame.setDefaultCloseOperation ב-Img
+    // כבר EXIT_ON_CLOSE ממילא). popup חוסם (showMessageDialog) לפני היציאה,
+    // כדי שהמשתמשת בהכרח תראה את ההודעה לפני שהחלון נעלם.
+    private static void handleMatchmakingTimeout(String message) {
+        javax.swing.SwingUtilities.invokeLater(() -> {
+            JOptionPane.showMessageDialog(null, message, "KFChess", JOptionPane.INFORMATION_MESSAGE);
+            System.exit(0);
+        });
     }
 
     // "מצב ריק" להצגה לפני שהתקבלה אפילו הודעה אחת מהשרת - כדי שהחלון

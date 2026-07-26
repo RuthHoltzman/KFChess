@@ -354,6 +354,21 @@ public class GameSession {
         return (whiteConnected && blackOpen) || (blackConnected && whiteOpen);
     }
 
+    // ה-username של הצד היחיד שכבר מחובר, כש-isWaitingForOpponent()=true
+    // (אחרת Optional.empty()) - נחוץ ל-GameServer.resolveMatchmakingGameId
+    // כדי לבדוק התאמת ELO מול מי שמחפש/ת משחק חדש/ה (תיקון "Play" לפי
+    // המפרט המדויק - "ELO in range of ±100"). Optional.empty() גם אם
+    // מי שממתין/ה בכלל לא התחבר/ה עם login (username=null) - GameServer
+    // מטפל בזה כ"אין מספיק מידע, לא חוסמים את ההתאמה" (fallback סובלני),
+    // לא כאן. synchronized: קוראת ל-isWaitingForOpponent() (נעילה חוזרת,
+    // לא deadlock) וגם ל-connections - אותו מנעול כמו כל שאר המתודות כאן.
+    public synchronized Optional<String> waitingPlayerUsername() {
+        if (!isWaitingForOpponent()) {
+            return Optional.empty();
+        }
+        return connections.values().stream().findFirst().map(ConnectedPlayer::username);
+    }
+
     // עותק הגנתי של כל החיבורים הפעילים - נחוץ ל-GameServer כדי לדעת למי לשדר snapshot.
     // מחזיר Map<WebSocket, ClientRole> (לא ConnectedPlayer) בכוונה - זה כל
     // מה ש-GameServer.broadcast/הטסטים הקיימים צריכים לדעת, ה-username הוא

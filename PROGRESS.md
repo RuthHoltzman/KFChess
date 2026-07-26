@@ -26,17 +26,16 @@
    בנוסף (מעבר לדרישות השלב): **פיצ'ר Restart הדדי** - ✅ הושלם ואומת
    ידנית (ר' סעיף ייעודי למטה).
 5. Matchmaking ("Play"/Skip) + ניתוק/auto-resign - 🟡 **auto-resign הושלם
-   ואומת לגמרי, committed.** כפתור "Skip" שונה שם ל-**"Play"** (שלב 6
-   חלק 1). **תוקן**: באג שרות מצאה - Play היה "גונב" חדר פרטי שנוצר דרך
-   Create (ר' "תיקון - Play לא אמור להצטרף לחדרים פרטיים" למטה), טרם
-   אומת ידנית. עדיין **לא לגמרי לפי המפרט המקורי** מעבר לזה - ר' "הערה
-   חשובה - פער ידוע משלב 5" למטה (סינון ELO ±100, timeout של דקה, הודעת
-   "לא נמצא" - **רות בחרה במפורש לדחות** ולהתקדם לשלב 6 קודם, עדיין פתוח).
-6. חדרים (Create/Join/Cancel) + לוגים - 🟡 **חלק 1 (Create/Join/Cancel)
-   ממומש בקוד, `mvn test` ירוק (רות הריצה, 141/141 אחרי תיקון רגרסיה -
-   ר' סעיף ייעודי למטה), טרם אומת ידנית עד הסוף.** חלק 2 (לוגים בצד
-   שרת+לקוח, לקובץ טקסט) - **ממומש בקוד הסבב הזה** (ר' "לוגים - שלב 6
-   חלק 2" למטה), טרם אומת.
+   ואומת לגמרי, committed.** כפתור "Skip" שונה שם ל-**"Play"**. **תוקן
+   ואומת**: באג שרות מצאה - Play היה "גונב" חדר פרטי שנוצר דרך Create
+   (ר' "תיקון - Play לא אמור להצטרף לחדרים פרטיים" למטה) - **רות אישרה
+   שעובד** ("הרצתי חלוניות הכל עובד"). **תיקון מלא לפי המפרט המקורי
+   ממומש בקוד הסבב הזה** (ELO ±100, timeout של דקה, הודעת "לא נמצא" -
+   ר' הסעיף הייעודי למטה) - **טרם אומת**, זה מה שנשאר לבדוק בכל הפרויקט.
+6. חדרים (Create/Join/Cancel) + לוגים - ✅ **שני החלקים ממומשים, `mvn test`
+   ירוק (141/141), ואומתו ידנית ע"י רות** ("הרצתי טסטים הרצתי חלוניות
+   הכל עובד"). Create/Join/Cancel, התיקון ל-Play/חדרים פרטיים, חסימת
+   מהלכים בזמן המתנה, הבאנר הכחול, והלוגים בצד שרת+לקוח - כולם עובדים.
 
 ## הערה חשובה - קובץ ההוראות המקורי (PDF) והפער הידוע משלב 5
 
@@ -764,6 +763,68 @@ all of the client/server activity". **חשוב להבחין**: זה **לא** א�
   ידנית** (לוודא שקבצי הלוג באמת נוצרים ומתמלאים כמצופה) - ר' "מה
   שנשאר לאמת" למטה.
 
+### תיקון "Play" לפי המפרט המדויק - ELO ±100 / timeout של דקה / הודעת "לא נמצא" (הסבב הזה)
+
+הפריט האחרון שנשאר פתוח מכל הפרויקט - הציטוט המדויק (כבר תועד למעלה,
+חוזר כאן לנוחות): "Finds the other player with ELO in range of ±100
+that also seeks for a game. If doesn't find - waits for 1 min, if
+can't find - pops up a message that can't find." רות אישרה לממש עכשיו.
+
+- **`GameSession.waitingPlayerUsername()`** (מתודה חדשה, `synchronized`) -
+  ה-username של הצד היחיד שכבר מחובר, כש-`isWaitingForOpponent()`=true
+  (אחרת `Optional.empty()` - גם אם אין בכלל מי שממתין, וגם אם מי
+  שממתין/ה לא התחבר/ה עם login). נחוצה כדי ש-`GameServer` ידע **של מי**
+  לבדוק ELO מול המחפש/ת החדש/ה - שימוש חוזר מלא ב-`isWaitingForOpponent()`
+  הקיימת, בלי כפילות לוגיקה.
+- **`GameServer.resolveMatchmakingGameId(String searcherUsername)`** -
+  שינתה חתימה (קיבלה פרמטר `searcherUsername` חדש - `onOpen` מזיז את
+  חילוץ ה-username *לפני* חישוב ה-gameId, כי הפונקציה הזו צריכה אותו
+  עכשיו). הסריקה על ה-sessions הממתינים (עדיין רק בתוך `matchmakingSessionIds`,
+  התיקון הקודם) מתאימה רק אם `isCompatibleElo(...)` - ר' למטה.
+- **`eloFor(String username)`** (חדשה, private) - `accountRepository.currentElo(username)`,
+  או `Optional.empty()` אם `username`=null.
+- **`isCompatibleElo(Integer searcherElo, Integer candidateElo)`** (חדשה,
+  private) - true אם ההפרש ≤100 (`ELO_MATCH_RANGE`), **או אם אחד
+  הצדדים (או שניהם) לא ידוע בכלל** (fallback סובלני - נבחר בכוונה: בלי
+  זה, כל חיבור אנונימי/בדיקה היה נתקע לגמרי בלי אף אחד להתאים אליו,
+  גרוע יותר מהתאמה בלי בדיקת ELO).
+- **`matchmakingDeadlines`** (שדה חדש, `Map<String, Long>`) - gameId ←
+  רגע (`System.currentTimeMillis()`) שבו פג ה-timeout שלו. נרשם רק
+  כש-`resolveMatchmakingGameId` **יוצרת** session חדש (לא כשמצאה match
+  קיים - אז נמחק במקום). **זמן-קיר אמיתי בכוונה**, לא שעון-המשחק המדומה
+  (`RaelTime`) של `GameSession` - `GameServer` ממילא לא נבדק ביחידה
+  (דורש שרת/רשת חיים), וכבר משתמש ב-`System.nanoTime()` ישירות
+  ב-`tickAllSessions` הקיימת.
+- **`checkMatchmakingTimeout(gameId, session)`** (חדשה, private, נקראת
+  מ-`tickAllSessions` על כל session) - אם אין דדליין רשום, יוצאת מיד
+  (דילוג זול). אם כבר לא ממתין/ה - רק מנקה את הרישום. אם עדיין ממתין/ה
+  וגם עבר הדדליין - שולחת `MatchmakingTimeoutMessage` ישירות לחיבור
+  היחיד (`session.connections()`, יש בדיוק אחד במצב הזה), ומנקה את
+  הרישום (כדי לא לשלוח שוב בכל טיק).
+- **`kfchess.server.MatchmakingTimeoutMessage`** (DTO חדש) - `type="MATCHMAKING_TIMEOUT"`
+  + `message` חופשי (מבנה זהה ל-`ErrorMessage`).
+- **צד לקוח**:
+  - `IncomingMessageSummary.isMatchmakingTimeout` + `describe` - מקביל
+    ל-`isRoleAssigned`/ה-case של ROLE_ASSIGNED.
+  - `GameClient` - שדה `matchmakingTimeoutMessage` (volatile, אותו דפוס
+    בדיוק כמו `assignedGameId`), נחתך ב-`onMessage`.
+  - **`NetworkGameWindowMain`** - ה-`Timer` הקיים (אותו Timer שכבר "סוקר"
+    הודעות SNAPSHOT) בודק בכל טיק גם את `client.matchmakingTimeoutMessage()`;
+    אם לא null - עוצר את עצמו, ומציג `JOptionPane` חוסם עם ההודעה, ואז
+    **סוגר את התהליך** (`System.exit(0)`) - **רות אישרה במפורש** את
+    ההתנהגות הזו: אין כרגע מסלול "חזרה למסך הבית" בכלל (ברגע שנכנסים
+    לחלון המשחק, אין back), וזה עקבי עם `Img`'s `EXIT_ON_CLOSE` הקיים
+    ממילא (סגירת החלון הרגילה כבר מסיימת את התהליך).
+- **טסטים חדשים**: `GameSessionTest` - 4 טסטים ל-`waitingPlayerUsername`
+  (יש username/שני הצדדים מחוברים/אף אחד לא מחובר/מחובר בלי login).
+  `IncomingMessageSummaryTest` - 3 טסטים ל-`isMatchmakingTimeout`/`describe`.
+  **`GameServer` עדיין בלי טסטים ייחודיים** (דורש שרת/רשת חיים - לא
+  השתנה, אותו מצב כמו כל שאר הלוגיקה שם).
+- **אימות שבוצע כאן**: איזון סוגריים על כל הקבצים שנגעתי בהם - תקין,
+  grep ל-`resolveMatchmakingGameId(` ודא שקריאה אחת בלבד עם החתימה
+  החדשה - נקי. **טרם `mvn test` וטרם הרצה ידנית** (כולל בדיקה אמיתית
+  של ה-timeout, שדורשת לחכות דקה שלמה) - ר' "מה שנשאר לאמת" למטה.
+
 ## מה שנשאר לאמת (רות - עדיין לא נעשה)
 
 שוב: אין לי `javac`/`mvn` בסביבה שלי (אין root, אין גישת רשת להוריד
@@ -771,13 +832,11 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
 שנגעתי בו/נמחק, ואת נוסחת ה-ELO אימתתי גם בחישוב Python נפרד (לא רק
 "נראה הגיוני") - אבל **זה לא תחליף ל-`mvn test` אמיתי**. צריך:
 
-1. ~~`mvn clean test`~~ - **בוצע לשלב 5 חלק 1, ירוק לגמרי - אושר ע"י רות.**
-   **בוצע גם על כל הצבירה עד כה (חדרים, תיקון Play, חסימת מהלכים, באנר
-   Waiting) - רות הריצה בפועל**: 141 טסטים, 2 נכשלו (`tick_clickThenLegalTarget_movesPieceIntoTransit`,
-   `tick_clickThenLegalTarget_snapshotIncludesMatchingMotion` - רגרסיה
-   מהפיצ'ר "לא ניתן להתחיל לשחק בזמן המתנה", ר' התיעוד למעלה) - **תוקן
-   כאן** (הוספת BLACK מחובר לשני הטסטים). **צריך להריץ `mvn test` שוב
-   כדי לוודא שכל ה-141 ירוקים עכשיו** - טרם אושר.
+1. ~~`mvn clean test`~~ - **ירוק לגמרי, אושר ע"י רות בכל השלבים** (כולל
+   הצבירה המלאה עד הלוגים - חדרים, תיקון Play, חסימת מהלכים, באנר
+   Waiting, וגם `FileLoggerTest` - "הרצתי טסטים הרצתי חלוניות הכל
+   עובד"). הרגרסיה שנמצאה באמצע (`tick_clickThenLegalTarget_movesPieceIntoTransit`/
+   `...snapshotIncludesMatchingMotion`) תוקנה ואומתה מחדש.
 2. **הרצה ידנית מקצה לקצה של ELO (עדיין לא בוצעה מאז שלב 4 Part B)**:
    - Run על `ServerMain`.
    - **Register שני חשבונות שונים** דרך `LoginScreenMain` (למשל
@@ -821,8 +880,7 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
      ומחכה/ת (בדיוק הבעיה שדיווחת - אמורה להיפתר).
    - לוודא ש-Connect (עם שם room ידני) עדיין עובד בדיוק כמו קודם, בלי
      שינוי - זה משהו ש-matchmaking לא אמור לגעת בו בכלל.
-6. **הרצה ידנית של חדרים (Create/Join/Cancel, חדש, טרם נבדק בפועל כלל -
-   הסבב הזה)**:
+6. ✅ **אושר ע"י רות** - הרצה ידנית של חדרים (Create/Join/Cancel):
    - Run על `ServerMain`, `LoginScreenMain` (Allow multiple instances).
    - חלון ראשון: **Room...** → **Create** - לוודא: מסך המשחק נפתח מיד
      (כ-WHITE), וכותרת החלון מציגה `KFChess - Room: XXXXXX` (קוד בן 6
@@ -836,30 +894,28 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
      ("Enter a room ID to join") ולא מתחבר בכלל.
    - לוודא ש-**Play** (השם החדש לכפתור "Skip" לשעבר - הלוגיקה לא שונתה)
      ו-Join-לפי-קוד לא "מתנגשים" - עדיין ניתן להשתמש בשניהם לסירוגין.
-7. **הרצה ידנית של התיקון ל-Play/חדרים פרטיים (חדש, טרם נבדק בפועל -
-   הסבב הזה, זה בדיוק התרחיש שרות דיווחה)**:
+7. ✅ **אושר ע"י רות** - הרצה ידנית של התיקון ל-Play/חדרים פרטיים (זה
+   בדיוק התרחיש שרות דיווחה):
    - חלון ראשון: Room... → Create (חדר פרטי, ממתין).
    - חלון שני: **Play** (לא Join) - לוודא ש-**לא** מצטרף/ת לחדר הפרטי -
      אמור/ה לפתוח matchmaking session חדש ולחכות שם.
    - לוודא ש-Play עדיין עובד רגיל בין שני לקוחות ששניהם לחצו Play
      (התרחיש שכבר אומת בעבר - בלי רגרסיה).
-8. **הרצה ידנית של "לא ניתן להתחיל לשחק בזמן המתנה" (חדש, טרם נבדק
-   בפועל - הסבב הזה)**:
+8. ✅ **אושר ע"י רות** - הרצה ידנית של "לא ניתן להתחיל לשחק בזמן המתנה":
    - חלון ראשון: Room... → Create, נכנס/ת כ-WHITE, לבד/ה בחדר.
    - לנסות ללחוץ/לבחור כלי - לוודא ש**שום דבר לא קורה** (אין הדגשה
      ויזואלית של הכלי, אין תזוזה).
    - חלון שני: Room... → Join עם אותו קוד - נכנס/ת כ-BLACK.
    - עכשיו לנסות שוב ללחוץ על כלי בחלון הראשון - לוודא שהפעם **כן
      עובד** רגיל (בחירה + תזוזה).
-9. **הרצה ידנית של הבאנר "Waiting for an opponent..." (חדש, טרם נבדק
-   בפועל - הסבב הזה)**:
+9. ✅ **אושר ע"י רות** - הרצה ידנית של הבאנר "Waiting for an opponent...":
    - חלון ראשון: Room... → Create - לוודא שמופיע **מיד** פס כחול בראש
      הלוח עם הטקסט "Waiting for an opponent to join...".
    - חלון שני: Room... → Join עם אותו קוד - לוודא שהפס **נעלם** משני
      החלונות ברגע שה-BLACK מצטרף/ת בפועל.
    - לוודא שהפס הכחול **לא** מופיע יחד עם פס הניתוק הכתום (הם לא אמורים
      להופיע בו-זמנית לעולם - ר' התיעוד למעלה).
-10. **הרצה ידנית של הלוגים (חדש, טרם נבדק בפועל - הסבב הזה)**:
+10. ✅ **אושר ע"י רות** - הרצה ידנית של הלוגים:
     - Run על `ServerMain` - לוודא שנוצרה תיקייה `logs/` ובתוכה קובץ
       `server_<תאריך-שעה>.log` עם שורת "GameServer started on port...".
     - Login + Room→Create בחלון אחד - לוודא שנוצר גם `client_<...>.log`
@@ -871,7 +927,20 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
       (רק ROLE_ASSIGNED/שגיאות בצד הלקוח - זה מכוון).
     - לסגור את חלון הלקוח - לוודא שב-server log נוספה שורה "Connection
       closed...".
-11. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
+11. **הרצה ידנית של תיקון Play - ELO ±100 / timeout / הודעה (חדש, טרם
+    נבדק בפועל - הסבב הזה)**:
+    - **התאמת ELO**: Register/Login עם שני חשבונות עם ELO רחוק מדי
+      (למשל אחד שיחק כמה משחקים והתרחק מ-1200, השני נשאר קרוב ל-1200 -
+      הפרש >100) - שני החלונות לוחצים Play - לוודא ש**לא** מתאימים זה
+      לזה (כל אחד/ת נשאר/ת לבד, "Waiting for an opponent..."). אחר כך
+      לנסות עם שני חשבונות עם ELO קרוב (הפרש ≤100) - לוודא **כן**
+      מתאימים.
+    - **timeout של דקה**: לחלון בודד ללחוץ Play (בלי חלון שני בכלל) -
+      לחכות דקה שלמה - לוודא שמופיע popup עם הודעה על "לא נמצא", ושאחרי
+      אישור ה-popup **החלון נסגר** (התהליך מסתיים).
+    - לוודא ש-Create/Join עדיין לא מושפעים בכלל מהתיקון הזה (רק Play
+      עצמו).
+12. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
    מופיעים כ-modified ב-`git status` (line-ending, לא תוכן - לא נגעתי
    בהם), ותיקיית `src/main/java/kfchess/.claude/` וקובץ `kfchess.db`
    שלא יצרתי (untracked, לא ב-git add המוצע).
@@ -951,6 +1020,12 @@ git add src/main/java/kfchess/logging/FileLogger.java src/main/java/kfchess/serv
 git commit -m "Log server and client activity to a fresh timestamped text file per run under logs/, covering connections, disconnects, errors and commands sent, separate from the existing in-game move log"
 ```
 
+תיקון Play - ELO ±100 / timeout של דקה / הודעת "לא נמצא" (הסבב הזה, **טרם אומת ידנית - ר' "מה שנשאר לאמת" סעיף 11**):
+```
+git add src/main/java/kfchess/server/server/GameSession.java src/main/java/kfchess/server/server/GameServer.java src/main/java/kfchess/server/MatchmakingTimeoutMessage.java src/main/java/kfchess/server/client/IncomingMessageSummary.java src/main/java/kfchess/server/client/GameClient.java src/main/java/kfchess/NetworkGameWindowMain.java src/test/java/texttests/GameSessionTest.java src/test/java/texttests/IncomingMessageSummaryTest.java PROGRESS.md
+git commit -m "Restrict Play matchmaking to opponents within 100 ELO of the searcher, falling back to matching regardless when either side's ELO is unknown, and time out a lone waiting player after one minute with a popup telling them no match was found before closing the window"
+```
+
 ## איך להריץ ולבדוק (IntelliJ)
 
 1. Run על `kfchess.server.server.ServerMain` - אמורה להיכתב שורה
@@ -1017,19 +1092,21 @@ git commit -m "Log server and client activity to a fresh timestamped text file p
 החסד, ו"לא נגנב") - ר' "מה שנשאר לאמת" סעיף 4 למעלה - לא חוסמים באופן
 מהותי את המשך העבודה, אבל כדאי לוודא לפני commit סופי.
 
-**שלב 5, חלק 2 (Matchmaking, כפתור "Skip"/"Play") ממומש בקוד** - ר'
-הסעיף הייעודי למעלה. **טרם אומת** (לא `mvn test` ולא ידנית) - ר' "מה
-שנשאר לאמת" סעיף 5 למעלה. **בנוסף - סטייה ידועה מהמפרט המקורי (התגלתה
-רק אחרי שרות סיפקה את ה-PDF)**: אין סינון ELO ±100, אין timeout של דקה,
-אין הודעת "לא נמצא" - ר' "הערה חשובה - קובץ ההוראות המקורי" למעלה.
-**רות בחרה במפורש לדחות את התיקון הזה** ולהתקדם לשלב 6 קודם - עדיין
-פתוח, צריך לחזור אליו.
+**שלב 5, חלק 2 (Matchmaking, כפתור "Skip"/"Play") ממומש בקוד, `mvn test`
+ירוק, אומת ידנית - אושר ע"י רות.**
 
-**שלב 6, חלק 1 (חדרים - Create/Join/Cancel) ממומש בקוד בסבב הזה** - ר'
-הסעיף הייעודי למעלה. **טרם אומת** (לא `mvn test` ולא ידנית) - ר' "מה
-שנשאר לאמת" סעיף 6 למעלה. אחרי שיאומת ויעשה commit - **שלב 6, חלק 2
-(לוגים בצד שרת+לקוח, לקובץ טקסט - בחירת רות)** הוא הצעד הבא, וגם
-(בנפרד) לחזור לתיקון ה-matchmaking שנדחה משלב 5.
+**שלב 6 (חדרים + לוגים) - שני החלקים הושלמו ואומתו במלואם - אושר ע"י
+רות** ("הרצתי טסטים הרצתי חלוניות הכל עובד"). Create/Join/Cancel,
+התיקון ל-Play/חדרים פרטיים, חסימת מהלכים בזמן המתנה, הבאנר הכחול,
+והלוגים בצד שרת+לקוח - כולם ממומשים, נבדקו ב-`mvn test` (141/141) וגם
+ידנית. **שלב 6 סגור.**
+
+**התיקון המלא ל-"Play" לפי המפרט המקורי (ELO ±100 / timeout של דקה /
+הודעת "לא נמצא") ממומש בקוד בסבב הזה** - ר' הסעיף הייעודי למעלה. **טרם
+אומת** (לא `mvn test` ולא ידנית - הבדיקה הידנית של ה-timeout דורשת
+לחכות דקה שלמה בפועל) - ר' "מה שנשאר לאמת" סעיף 11 למעלה. **זה הפריט
+האחרון שנשאר בכל הפרויקט** - אחרי שיאומת, כל 6 השלבים + המפרט המדויק
+שלהם יהיו סגורים לגמרי.
 
 **מגבלה מודעת שנשארה פתוחה משלב 5 חלק 1** (לא נפתרה, לא הוחלט אם/מתי
 לטפל בה): אם משחק מסתיים ע"י auto-resign (ניתוק), הצד שהתנתק **לא
@@ -1039,8 +1116,9 @@ git commit -m "Log server and client activity to a fresh timestamped text file p
 רות תרצה, אפשר בעתיד לתת לצד היחיד שנשאר לפתוח לבד משחק חדש (בלי
 לחכות ל-restart ההדדי) כשה-gameOver נגרם ע"י ניתוק ולא ע"י לכידת מלך.
 
-אחרי שלב 5: **שלב 6** - חדרים אמיתיים (Create/Join/Cancel כמסכים נפרדים)
-+ לוגים.
+**כל 6 השלבים ממומשים בקוד.** מה שנשאר: לאמת (mvn test + ידנית) את
+תיקון ה-Play האחרון (ר' למעלה) - ברגע שיאומת, כל הפרויקט (כולל המפרט
+המדויק, לא רק "משהו שעובד") סגור לגמרי.
 
 **מחוץ לשלבים, אם רות תרצה** (עלה בשיחה, לא הוחלט): הוספת plugin של
 **JaCoCo** ל-`pom.xml` כדי למדוד אחוז כיסוי טסטים בפועל (המנחה ביקש 80%+).
