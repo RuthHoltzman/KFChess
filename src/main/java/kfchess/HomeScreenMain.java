@@ -1,7 +1,7 @@
 package kfchess;
 
 import kfchess.account.Account;
-import kfchess.net.client.GameClient;
+import kfchess.server.client.GameClient;
 
 import javax.swing.*;
 import java.awt.*;
@@ -26,6 +26,11 @@ public class HomeScreenMain {
 
     private static final String SERVER_HOST_AND_PORT = "ws://localhost:8887";
     private static final String DEFAULT_ROOM = "default";
+    // חייב להיות זהה בדיוק לטוקן שקבוע ב-MatchmakingResolver בצד השרת
+    // (kfchess.server.server) - שני הקצוות מגדירים אותו בנפרד, אותו עיקרון
+    // בדיוק כמו ש-DEFAULT_ROOM כאן ו-DEFAULT_GAME_ID ב-GameIdResolver כבר
+    // מוגדרים בנפרד היום, לא משותפים ע"י מחלקת קבועים אחת.
+    private static final String MATCHMAKING_PATH = "_play";
 
     // נקודת הכניסה היחידה למסך הזה - נקראת מ-LoginScreenMain אחרי
     // login/register מוצלח, עם ה-Account שהתקבל.
@@ -59,16 +64,29 @@ public class HomeScreenMain {
         return base + "?username=" + URLEncoder.encode(username, StandardCharsets.UTF_8);
     }
 
-    // בונה את חלון הבית עצמו: שדה טקסט ל-room + כפתור Connect + label
-    // לסטטוס/שגיאות, ובנוסף שורת "Logged in as" אם הגיעה לכאן דרך
-    // launch(Account) אחרי login (account != null). רץ על ה-EDT (נקראת
-    // רק מתוך main()/launch() דרך invokeLater).
+    // בונה URI לבקשת matchmaking (כפתור "Skip", שלב 5 חלק 2) - נתיב שמור
+    // (MATCHMAKING_PATH) במקום שם room שהמשתמשת הקלידה; אותה שיטת קידוד
+    // username בדיוק כמו buildUri, בכוונה בלי לשכפל את לוגיקת ה-URLEncoder.
+    public static String buildMatchmakingUri(String username) {
+        String base = SERVER_HOST_AND_PORT + "/" + MATCHMAKING_PATH;
+        if (username == null || username.isBlank()) {
+            return base;
+        }
+        return base + "?username=" + URLEncoder.encode(username, StandardCharsets.UTF_8);
+    }
+
+    // בונה את חלון הבית עצמו: שדה טקסט ל-room + כפתור Connect (חדר ספציפי,
+    // ר' buildUri) + כפתור Skip חדש (matchmaking אקראי, ר' buildMatchmakingUri,
+    // מתעלם משדה ה-room לגמרי) + label לסטטוס/שגיאות, ובנוסף שורת "Logged in
+    // as" אם הגיעה לכאן דרך launch(Account) אחרי login (account != null).
+    // רץ על ה-EDT (נקראת רק מתוך main()/launch() דרך invokeLater).
     private static void buildAndShow(Account account) {
         JFrame frame = new JFrame("KFChess - Home");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         JTextField roomField = new JTextField(DEFAULT_ROOM, 15);
         JButton connectButton = new JButton("Connect");
+        JButton skipButton = new JButton("Skip");
         JLabel statusLabel = new JLabel(" ");
 
         JPanel panel = new JPanel();
@@ -83,11 +101,15 @@ public class HomeScreenMain {
         panel.add(Box.createVerticalStrut(8));
         panel.add(connectButton);
         panel.add(Box.createVerticalStrut(8));
+        panel.add(skipButton);
+        panel.add(Box.createVerticalStrut(8));
         panel.add(statusLabel);
 
         String username = account == null ? null : account.username();
         connectButton.addActionListener(e ->
-                connect(frame, roomField.getText(), username, connectButton, statusLabel));
+                connect(frame, buildUri(roomField.getText(), username), connectButton, skipButton, statusLabel));
+        skipButton.addActionListener(e ->
+                connect(frame, buildMatchmakingUri(username), connectButton, skipButton, statusLabel));
 
         frame.add(panel);
         frame.pack();
@@ -95,17 +117,20 @@ public class HomeScreenMain {
         frame.setVisible(true);
     }
 
-    // מטפל בלחיצה על Connect: מתחבר ב-thread נפרד, כי connectBlocking()
+    // מטפל בלחיצה על Connect *או* Skip: מתחבר ב-thread נפרד, כי connectBlocking()
     // חוסם - קריאה לו ישירות מה-EDT הייתה מקפיאה את החלון (ואת כל Swing)
-    // עד שההתחברות תצליח או תיכשל. תוצאת ההתחברות מדווחת בחזרה ל-EDT דרך
-    // SwingUtilities.invokeLater, כי רק שם מותר לגעת ברכיבי Swing
-    // (connectButton/statusLabel/homeFrame).
-    private static void connect(JFrame homeFrame, String room, String username,
-                                 JButton connectButton, JLabel statusLabel) {
+    // עד שההתחברות תצליח או תיכשל. מקבלת uriText **מוכן** במקום לבנות אותו
+    // כאן - כך ששני הכפתורים קוראים לאותה מתודה בדיוק, רק עם URI שונה
+    // (buildUri/buildMatchmakingUri) שנבנה לפני הקריאה; ומשביתה את *שני*
+    // הכפתורים (לא רק זה שנלחץ) כדי שלא אפשר ללחוץ על השני תוך כדי חיבור
+    // ולפתוח בטעות שני חיבורים. תוצאת ההתחברות מדווחת בחזרה ל-EDT דרך
+    // SwingUtilities.invokeLater, כי רק שם מותר לגעת ברכיבי Swing.
+    private static void connect(JFrame homeFrame, String uriText,
+                                 JButton connectButton, JButton skipButton, JLabel statusLabel) {
         connectButton.setEnabled(false);
+        skipButton.setEnabled(false);
         statusLabel.setForeground(Color.BLACK);
         statusLabel.setText("Connecting...");
-        String uriText = buildUri(room, username);
 
         new Thread(() -> {
             GameClient client;
@@ -114,7 +139,7 @@ public class HomeScreenMain {
                 client = new GameClient(new URI(uriText));
                 connected = client.connectBlocking();
             } catch (URISyntaxException | InterruptedException ex) {
-                SwingUtilities.invokeLater(() -> showFailure(connectButton, statusLabel, ex.getMessage()));
+                SwingUtilities.invokeLater(() -> showFailure(connectButton, skipButton, statusLabel, ex.getMessage()));
                 return;
             }
 
@@ -125,17 +150,19 @@ public class HomeScreenMain {
                     homeFrame.dispose();
                     NetworkGameWindowMain.launch(finalClient);
                 } else {
-                    showFailure(connectButton, statusLabel, "failed to connect to " + uriText);
+                    showFailure(connectButton, skipButton, statusLabel, "failed to connect to " + uriText);
                 }
             });
         }, "home-screen-connect").start();
     }
 
     // מציגה הודעת כישלון בחלון הבית עצמו (label קיים, בלי popup) ומחזירה
-    // את כפתור Connect למצב פעיל - כדי שאפשר יהיה לתקן את שם ה-room ולנסות שוב.
-    private static void showFailure(JButton connectButton, JLabel statusLabel, String message) {
+    // את שני הכפתורים למצב פעיל - כדי שאפשר יהיה לתקן את שם ה-room/ללחוץ
+    // Skip ולנסות שוב.
+    private static void showFailure(JButton connectButton, JButton skipButton, JLabel statusLabel, String message) {
         statusLabel.setForeground(Color.RED);
         statusLabel.setText(message);
         connectButton.setEnabled(true);
+        skipButton.setEnabled(true);
     }
 }

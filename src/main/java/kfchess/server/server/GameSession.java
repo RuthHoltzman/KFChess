@@ -1,4 +1,4 @@
-package kfchess.net.server;
+package kfchess.server.server;
 
 import kfchess.account.AccountRepository;
 import kfchess.account.EloCalculator;
@@ -13,12 +13,12 @@ import kfchess.model.Game;
 import kfchess.model.Piece;
 import kfchess.model.PieceColor;
 import kfchess.model.Position;
-import kfchess.net.ClientCommand;
-import kfchess.net.ClientCommandType;
-import kfchess.net.ClientRole;
-import kfchess.net.JumpDto;
-import kfchess.net.PieceDto;
-import kfchess.net.SnapshotMessage;
+import kfchess.server.ClientCommand;
+import kfchess.server.ClientCommandType;
+import kfchess.server.ClientRole;
+import kfchess.server.JumpDto;
+import kfchess.server.PieceDto;
+import kfchess.server.SnapshotMessage;
 import kfchess.realtime.RaelTime;
 import kfchess.rules.RuleEngine;
 import org.java_websocket.WebSocket;
@@ -321,6 +321,25 @@ public class GameSession {
         if (restartVotes.contains(ClientRole.WHITE) && restartVotes.contains(ClientRole.BLACK)) {
             resetGame();
         }
+    }
+
+    // "ממתין/ה ליריב" - נחוץ ל-matchmaking (שלב 5 חלק 2, כפתור "Skip" ב-
+    // HomeScreenMain/GameServer.resolveMatchmakingGameId): true רק אם יש
+    // *בדיוק* צד אחד (WHITE או BLACK) מחובר בפועל, והצד השני **לא** מחובר
+    // *וגם* לא שמור לו חלון-חסד (ר' pendingDisconnects, שלב 5 חלק 1) - כדי
+    // שמי שממתין/ה לחיבור-מחדש של היריב המקורי (אחרי ניתוק) לא "תיחטף"
+    // בטעות ע"י שחקן/ית אקראי/ת מה-matchmaking. synchronized כי היא נקראת
+    // מ-thread הרשת (בזמן שסורקים sessions קיימים) וקוראת מ-pendingDisconnects,
+    // בדיוק כמו tick()/snapshotFor - אותו מנעול.
+    public synchronized boolean isWaitingForOpponent() {
+        if (engine.isGameOver()) {
+            return false;
+        }
+        boolean whiteConnected = connections.values().stream().anyMatch(p -> p.role() == ClientRole.WHITE);
+        boolean blackConnected = connections.values().stream().anyMatch(p -> p.role() == ClientRole.BLACK);
+        boolean whiteOpen = !whiteConnected && !pendingDisconnects.containsKey(ClientRole.WHITE);
+        boolean blackOpen = !blackConnected && !pendingDisconnects.containsKey(ClientRole.BLACK);
+        return (whiteConnected && blackOpen) || (blackConnected && whiteOpen);
     }
 
     // עותק הגנתי של כל החיבורים הפעילים - נחוץ ל-GameServer כדי לדעת למי לשדר snapshot.

@@ -1,19 +1,20 @@
-package kfchess.net.server;
+package kfchess.server.server;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import kfchess.account.AccountRepository;
 import kfchess.account.SqliteAccountRepository;
-import kfchess.net.ClientCommand;
-import kfchess.net.ClientRole;
-import kfchess.net.ErrorMessage;
-import kfchess.net.RoleAssignedMessage;
+import kfchess.server.ClientCommand;
+import kfchess.server.ClientRole;
+import kfchess.server.ErrorMessage;
+import kfchess.server.RoleAssignedMessage;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
 
 import java.net.InetSocketAddress;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -38,6 +39,10 @@ public class GameServer extends WebSocketServer {
     private final Map<String, GameSession> sessions = new ConcurrentHashMap<>();
     private final Map<WebSocket, String> gameIdByConnection = new ConcurrentHashMap<>();
     private final ScheduledExecutorService tickExecutor = Executors.newSingleThreadScheduledExecutor();
+    // נעילה ייעודית ל"מצא-או-צור" של matchmaking (ר' resolveMatchmakingGameId) -
+    // נפרדת מהנעילות הפנימיות של GameSession עצמה (assignRole וכו') כי כאן
+    // הבעיה היא ברמת GameServer: איזה session בכלל נבחר, לא מה קורה בתוכו.
+    private final Object matchmakingLock = new Object();
     private long lastTickNanos = System.nanoTime();
 
     public GameServer(int port) {
@@ -55,14 +60,44 @@ public class GameServer extends WebSocketServer {
     // חיבור חדש: קובע/יוצר את המשחק לפי הנתיב, קובע תפקיד (לבן/שחור/צופה)
     // + משייך את ה-username אם הגיע אחד (ר' UsernameResolver - שלב 4 Part B,
     // דרוש לעדכון ELO בסוף המשחק), ומודיע ללקוח מיד.
+    // שלב 5 חלק 2 (matchmaking, כפתור "Skip"): אם הנתיב הוא בקשת matchmaking
+    // (ר' MatchmakingResolver) - ה-gameId לא נקבע מהנתיב עצמו אלא נמצא/נוצר
+    // דינמית (ר' resolveMatchmakingGameId); אחרת בדיוק ההתנהגות הקיימת
+    // (חדר-בשם-ספציפי, GameIdResolver). שום דבר אחר כאן לא משתנה - גם
+    // matchmaking בסוף עובר דרך אותו computeIfAbsent (בטוח לקרוא לו שוב
+    // גם אם resolveMatchmakingGameId כבר יצרה את ה-session - no-op).
     @Override
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
-        String gameId = GameIdResolver.resolve(handshake.getResourceDescriptor());
-        String username = UsernameResolver.resolve(handshake.getResourceDescriptor()).orElse(null);
+        String path = handshake.getResourceDescriptor();
+        String gameId = MatchmakingResolver.isMatchmakingRequest(path)
+                ? resolveMatchmakingGameId()
+                : GameIdResolver.resolve(path);
+        String username = UsernameResolver.resolve(path).orElse(null);
         GameSession session = sessions.computeIfAbsent(gameId, id -> new GameSession(accountRepository));
         gameIdByConnection.put(conn, gameId);
         ClientRole role = session.assignRole(conn, username);
         conn.send(gson.toJson(new RoleAssignedMessage(role.name(), gameId)));
+    }
+
+    // מוצאת session קיים שממתין ליריב (ר' GameSession.isWaitingForOpponent) ומצטרפת
+    // אליו; אם אין כזה - יוצרת session חדש עם gameId ייחודי ("match-<uuid>", לא
+    // ניתן להקליד ידנית בשדה room - אין סיכוי התנגשות עם חדר-בשם שמישהי הקלידה).
+    // synchronized(matchmakingLock) חובה: בלי זה, שני חיבורים שמגיעים כמעט
+    // בו-זמנית עלולים *שניהם* לסרוק ולא למצוא אף session ממתין (כי אף אחד
+    // מהם עדיין לא נוצר), ואז *שניהם* ייצרו לעצמם session נפרד - ולעולם לא
+    // ייפגשו. הבחירה כאן היא "הראשון שנמצא בסריקה" - לא תור FIFO אמיתי לפי
+    // כמה זמן מישהו/י ממתין/ה; מספיק טוב לשלב הזה.
+    private String resolveMatchmakingGameId() {
+        synchronized (matchmakingLock) {
+            for (Map.Entry<String, GameSession> entry : sessions.entrySet()) {
+                if (entry.getValue().isWaitingForOpponent()) {
+                    return entry.getKey();
+                }
+            }
+            String newGameId = "match-" + UUID.randomUUID();
+            sessions.computeIfAbsent(newGameId, id -> new GameSession(accountRepository));
+            return newGameId;
+        }
     }
 
     // ניתוק: מעביר ל-GameSession.handleDisconnect (במקום removeConnection הישנה)

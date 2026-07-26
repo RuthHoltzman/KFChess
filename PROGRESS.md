@@ -25,9 +25,25 @@
    על ה-URI) ו-ELO מתעדכן אוטומטית בסוף כל משחק (`EloCalculator`, K=32).
    בנוסף (מעבר לדרישות השלב): **פיצ'ר Restart הדדי** - ✅ הושלם ואומת
    ידנית (ר' סעיף ייעודי למטה).
-5. Matchmaking (Play) + ניתוק/auto-resign - 🟡 **חלק 1 (ניתוק/auto-resign) ממומש, טרם אומת** (ר' סעיף ייעודי
-   למטה - "מה שנשאר לאמת"). חלק 2 (Matchmaking) עדיין לא התחיל.
+5. Matchmaking (Play) + ניתוק/auto-resign - 🟡 **שני החלקים ממומשים בקוד.**
+   חלק 1 (ניתוק/auto-resign) - **אומת ידנית ברובו** (ר' "אימות ידני שבוצע
+   בפועל"). חלק 2 (Matchmaking, כפתור "Skip") - **הסבב הזה, טרם אומת כלל**
+   (לא `mvn test` ולא ידנית) - ר' "מה שנשאר לאמת".
 6. חדרים (Create/Join/Cancel) + לוגים - ⬜ לא התחיל.
+
+## הערה טכנית חשובה - שינוי שם חבילה (לא נעשה על ידי Claude)
+
+בין סבב "שלב 5 חלק 1" לסבב "שלב 5 חלק 2" רות שינתה (כנראה refactor
+דרך IntelliJ, "Rename Package") את שם החבילה `kfchess.net` ל-`kfchess.server`
+בכל הפרויקט - `kfchess.net.server`→`kfchess.server.server`,
+`kfchess.net.client`→`kfchess.server.client`, ו-`kfchess.net.*` (ה-DTOs
+עצמם - `ClientCommand`/`SnapshotMessage`/`ClientRole`/וכו') →`kfchess.server.*`
+ישירות. **חשוב לכל שיחת AI עתידית**: כל התיעוד למעלה בקובץ הזה (מלפני
+הסבב הזה) עדיין מזכיר `kfchess.net.*` בטקסט - זה נכון *היסטורית* (זה
+היה שם החבילה כשזה נכתב), אבל **הנתיבים בפועל בקוד היום הם `kfchess.server.*`**.
+נכון לרגע כתיבת ההערה הזו, השינוי הזה **עדיין לא committed** (רק
+`git add`-ed/staged חלקית) - ר' "פקודת commit מוצעת" למטה להערה על מה
+זה אומר לגבי ה-commit הבא.
 
 ## החלטות ארכיטקטורה שנסגרו - כולן ממומשות בפועל
 
@@ -62,12 +78,12 @@
 - **מינימום DTOs**: `Position`/`Motion`/`CaptureEffect` נשלחים ישירות
   ל-Gson בלי עטיפה. רק `PieceDto`/`JumpDto` נשארו (כי `Piece`/`JumpVisual`
   בכוונה לא יודעים את מיקומם על הלוח).
-- **מבנה חבילות (kfchess.net)** - פוצל ל-3:
-  - `kfchess.net` - פרוטוקול משותף בלבד (`ClientCommand`, `ClientCommandType`,
+- **מבנה חבילות (kfchess.server)** - פוצל ל-3:
+  - `kfchess.server` - פרוטוקול משותף בלבד (`ClientCommand`, `ClientCommandType`,
     `SnapshotMessage`, `PieceDto`, `JumpDto`, `ClientRole`, `RoleAssignedMessage`,
     `ErrorMessage`).
-  - `kfchess.net.server` - `GameServer`, `GameSession`, `ServerMain`, `GameIdResolver`.
-  - `kfchess.net.client` - `GameClient`, `IncomingMessageSummary`,
+  - `kfchess.server.server` - `GameServer`, `GameSession`, `ServerMain`, `GameIdResolver`.
+  - `kfchess.server.client` - `GameClient`, `IncomingMessageSummary`,
     `IncomingSnapshot`, `ClientSnapshotReconstructor` (`ClientMain` היה כאן
     גם הוא - **הוסר** בניקוי המיינים, ר' למטה).
 - **`ClientSnapshotReconstructor`** (בצד הלקוח) - הופך `IncomingSnapshot`
@@ -96,7 +112,7 @@
 `GameEngine`, `PieceTimers`, `MoveHistory`, `NetworkActions`, `snapshot/`
 (`SnapshotFactory` ועוד - משותף לחלוטין בין משחק מקומי לרשת).
 
-### `kfchess.net` + `kfchess.net.server` + `kfchess.net.client`
+### `kfchess.server` + `kfchess.server.server` + `kfchess.server.client`
 ר' "מבנה חבילות" למעלה לרשימת הקבצים המלאה. כל הקבצים מכוסים בטסטים
 ב-`src/test/java/texttests/` (טסט לכל DTO/מחלקת לוגיקה - כולל
 `ClientSnapshotReconstructorTest` שבודק שימור זהות בין הודעות במפורש).
@@ -116,7 +132,7 @@
 מחשב את ה-`BoardLayout` הנוכחי (תלוי בגודל חלון + מידות לוח חיים, לא
 ניתן להוציא) ומעביר אותו הלאה.
 
-### `kfchess.net.client.NetworkClickHandler` (הוצא מ-NetworkGameWindowMain)
+### `kfchess.server.client.NetworkClickHandler` (הוצא מ-NetworkGameWindowMain)
 רות שאלה "האם הדרך הנוכחית הגיונית" אחרי שהתברר ש-`kfchess.input.GameController`
 הישן (טיפול קליק במשחק המקומי, שהוסר) הפך לקוד מת - כי הלוגיקה שם
 קראה ישירות ל-`GameEngine`, וזה לא מתאים למצב רשת (צריך *לשלוח* לשרת,
@@ -183,7 +199,7 @@
 לפני זה היו יותר מדי נקודות `main()` בפרויקט ("למה יש כל כך הרבה
 main??"). המצב הסופי שסוכם ובוצע:
 
-- **`kfchess.net.server.ServerMain`** - השרת, תהליך נפרד (תמיד היה ככה -
+- **`kfchess.server.server.ServerMain`** - השרת, תהליך נפרד (תמיד היה ככה -
   זו המהות של client-server, לא "בלגן").
 - **`kfchess.LoginScreenMain`** - **המיין היחיד ללקוח/למשחק בפועל**.
   Login/Register → `HomeScreenMain` (room) → `NetworkGameWindowMain`
@@ -191,7 +207,7 @@ main??"). המצב הסופי שסוכם ובוצע:
 - **`kfchess.Main`** - **לא נגעתי בו בכלל** (המשחק קונסולה מקורי, לפני
   הרשת) - רות ציינה שהוא צריך להישאר בשביל טסטים/מטלה קודמת.
 - **הוסרו לגמרי**: `kfchess.GameWindowMain` (משחק Swing מקומי, בלי שרת)
-  ו-`kfchess.net.client.ClientMain` (לקוח קונסולה גולמי לבדיקת פרוטוקול) -
+  ו-`kfchess.server.client.ClientMain` (לקוח קונסולה גולמי לבדיקת פרוטוקול) -
   שום קוד אחר לא היה תלוי בהם בפועל (רק הערות תיעוד, שעודכנו).
 - **הוסר `main()` העצמאי** מ-`NetworkGameWindowMain` ומ-`HomeScreenMain`
   (המחלקות עצמן ומתודות ה-`launch()`/`launch(Account)` נשארו - הן חלק
@@ -225,7 +241,7 @@ main??"). המצב הסופי שסוכם ובוצע:
 - **באג סמוי שנמצא ותוקן**: `GameIdResolver` לא חתך query string בכלל -
   לפני שהוספתי `?username=`, זה לא שם לב כי לא היה אף פעם query string
   על ה-URI. תוקן (חותך הכל אחרי `?` לפני חישוב ה-gameId) + טסטים חדשים.
-- **`kfchess.net.server.UsernameResolver`** (חדש, מקביל ל-`GameIdResolver`
+- **`kfchess.server.server.UsernameResolver`** (חדש, מקביל ל-`GameIdResolver`
   אבל מחלקה נפרדת - זה query parameter נפרד לגמרי מנתיב ה-room) - מחלץ
   את ה-username מה-query string, `Optional.empty()` אם אין (חיבור בלי
   login בכלל, למשל בדיקת פרוטוקול גולמי - עדיין נתמך, בלי שיוך חשבון).
@@ -418,6 +434,64 @@ Code Java world...") - בלי שום קשר לפרויקט. נכתב מחדש ל
   הרצה ידנית מקצה לקצה** (אין לי javac/mvn, ר' מגבלה קבועה למטה) - ר'
   "מה שנשאר לאמת" למטה לפירוט המדויק.
 
+### שלב 5, חלק 2 - Matchmaking (כפתור "Skip") (הסבב הזה)
+
+רות דיווחה בעיה בפועל אחרי שהתחילה לבדוק ידנית את שלב 5 חלק 1: כשיש
+כבר 2 שחקנים ב-room ברירת המחדל ("default") ומתחבר/ת שלישי/ת בלי
+להקליד room אחר בעצמה/ו, אין דרך לפתוח משחק חדש - היא/הוא פשוט נכנס/ת
+כ-SPECTATOR. זו בדיוק הבעיה ששלב 5 חלק 2 אמור לפתור. הסיכום שאושר:
+מסך הבית מקבל **כפתור "Skip" נוסף**, בנוסף (לא במקום) לשדה ה-room +
+כפתור Connect הקיימים - Connect ממשיך להתנהג בדיוק כמו היום (חדר לפי
+שם), Skip מתעלם משם ה-room לגמרי ומבקש מהשרת "תמצא/י לי משחק".
+
+- **`GameSession.isWaitingForOpponent()`** (חדשה, public, `synchronized`
+  - קוראת מ-`pendingDisconnects` בדיוק כמו `tick()`/`snapshotFor()`, אותו
+  מנעול) - `true` רק אם יש **בדיוק** צד אחד (WHITE או BLACK) מחובר בפועל,
+  הצד השני **גם לא מחובר וגם לא שמור לו חלון-חסד** (`pendingDisconnects`,
+  שלב 5 חלק 1), והמשחק לא נגמר. הבדיקה נגד `pendingDisconnects` קריטית:
+  בלעדיה, מישהו/י שממתין/ה לחיבור-מחדש של היריב/ה המקורי/ת (אחרי ניתוק
+  זמני) היה/הייתה "נחטף/ת" בטעות ע"י שחקן/ית אקראי/ת מה-matchmaking.
+- **`kfchess.server.server.MatchmakingResolver`** (מחלקה חדשה, מקבילה
+  ל-`GameIdResolver`) - `isMatchmakingRequest(resourceDescriptor)`: בודקת
+  אם הנתיב (אחרי חיתוך query string, אותה שיטה בדיוק כמו `GameIdResolver`)
+  שווה לטוקן שמור `"_play"`. מחלקה טהורה נפרדת - נבדקת ביחידה בלי
+  handshake מזויף, כמו `GameIdResolver`.
+- **`GameServer`**:
+  - שדה חדש `matchmakingLock` (אובייקט נעילה **נפרד** מהנעילות הפנימיות
+    של `GameSession` עצמה - כאן הבעיה היא ברמת "איזה session בכלל
+    נבחר", לא מה קורה בתוכו).
+  - **`resolveMatchmakingGameId()`** (חדשה, private, `synchronized(matchmakingLock)`)
+    - עוברת על כל ה-sessions, מחפשת אחד עם `isWaitingForOpponent()==true`
+    ומחזירה את ה-id שלו; אם לא מצאה - יוצרת id חדש וייחודי (`"match-"+UUID`,
+    לא ניתן להקליד בטעות בשדה room ידני) ופותחת session חדש. **חייבת**
+    להיות מסונכרנת: בלי זה, שני אנשים שלוחצים "Skip" כמעט בו-זמנית
+    עלולים שניהם *לא* לראות אחד את השני (כי אף session עדיין לא נוצר)
+    ולפתוח כל אחד/ת session נפרד - ולעולם לא להיפגש.
+  - **`onOpen`** משתנה קלות: קודם בודקת `MatchmakingResolver.isMatchmakingRequest(...)`
+    - אם כן, `gameId=resolveMatchmakingGameId()`; אחרת בדיוק ההתנהגות
+    הקיימת (`GameIdResolver.resolve(...)`, חדר-בשם-ספציפי, לא השתנה).
+  - **מגבלה ידועה, לא טופלה**: הבחירה בין כמה sessions ממתינים היא "הראשון
+    שנמצא בסריקה" - לא תור FIFO אמיתי לפי כמה זמן מישהו/י ממתין/ה.
+- **`HomeScreenMain`**:
+  - כפתור "Skip" חדש ליד "Connect" הקיים.
+  - **`buildMatchmakingUri(username)`** (חדשה, public, טהורה - נבדקת בלי
+    UI) - בונה `ws://.../_play` + `?username=...` אם יש, אותה שיטת קידוד
+    בדיוק כמו `buildUri`. הטוקן `"_play"` מוגדר כאן **בנפרד** מ-`MatchmakingResolver`
+    (לא משותף ע"י מחלקת קבועים אחת) - אותו עיקרון בדיוק כמו ש-`DEFAULT_ROOM`
+    כאן ו-`DEFAULT_GAME_ID` ב-`GameIdResolver` כבר מוגדרים בנפרד היום.
+  - **`connect(...)`** שונתה: במקום לקבל `room` ולבנות URI בפנים, מקבלת
+    `uriText` **מוכן** - כך ש-Connect (`buildUri`) ו-Skip (`buildMatchmakingUri`)
+    קוראים לאותה מתודה בדיוק, בלי כפילות קוד. גם משביתה עכשיו את **שני**
+    הכפתורים (לא רק זה שנלחץ) בזמן חיבור - כדי שלא אפשר ללחוץ בטעות על
+    השני ולפתוח שני חיבורים.
+- **טסטים חדשים**: `GameSessionTest` (5 טסטים ל-`isWaitingForOpponent` -
+  צד אחד מחובר, אף אחד לא מחובר, שני הצדדים מחוברים, צד שני שמור בחלון-חסד,
+  משחק כבר נגמר), `MatchmakingResolverTest` חדש (6 טסטים, מקביל ל-`GameIdResolverTest`),
+  `HomeScreenMainTest` (3 טסטים ל-`buildMatchmakingUri`).
+- **אימות שבוצע כאן**: איזון סוגריים + grep להפניות ישנות שנשברו על כל
+  הקבצים שנגעו בפיצ'ר הזה - כולם תקינים. **טרם `mvn test` וטרם הרצה
+  ידנית מקצה לקצה** (אין לי javac/mvn) - ר' "מה שנשאר לאמת" למטה.
+
 ## מה שנשאר לאמת (רות - עדיין לא נעשה)
 
 שוב: אין לי `javac`/`mvn` בסביבה שלי (אין root, אין גישת רשת להוריד
@@ -425,14 +499,10 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
 שנגעתי בו/נמחק, ואת נוסחת ה-ELO אימתתי גם בחישוב Python נפרד (לא רק
 "נראה הגיוני") - אבל **זה לא תחליף ל-`mvn test` אמיתי**. צריך:
 
-1. `mvn clean test` - לוודא שהכל מתקמפל וש**כל** הטסטים ירוקים, כולל
-   סבב Part B (`EloCalculatorTest`×3, `UsernameResolverTest`×7,
-   `GameIdResolverTest`, `SqliteAccountRepositoryTest`, `HomeScreenMainTest`)
-   **וגם** סבב Restart (`ClientCommandTest`, `GameSessionTest`,
-   `NetworkClickHandlerTest`) - כבר ירוק, אושר ע"י רות - **וגם** סבב
-   ניתוק/auto-resign החדש (הסבב הזה): `GameSessionTest` (6 טסטים
-   חדשים), `MessageDtoTest` (2 טסטים חדשים), `ClientSnapshotReconstructorTest`
-   (טסט חדש אחד) - **עדיין לא הורץ בפועל, ר' סעיף 4 למטה**.
+1. ~~`mvn clean test`~~ - **בוצע לשלב 5 חלק 1, ירוק לגמרי - אושר ע"י רות.**
+   **טרם בוצע לשלב 5 חלק 2 (matchmaking, הסבב הזה)** - כולל הטסטים
+   החדשים: `GameSessionTest` (5 חדשים), `MatchmakingResolverTest` (חדש
+   לגמרי), `HomeScreenMainTest` (3 חדשים).
 2. **הרצה ידנית מקצה לקצה של ELO (עדיין לא בוצעה מאז שלב 4 Part B)**:
    - Run על `ServerMain`.
    - **Register שני חשבונות שונים** דרך `LoginScreenMain` (למשל
@@ -454,30 +524,43 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
      הצדדים (לא רק אצל מי שלחץ), אבל הלוח **לא** מתאפס.
    - ללחוץ Restart גם בצד השני - לוודא שהלוח **כן** מתאפס (חוזר למצב
      פתיחה) אצל שניהם, וה"Waiting" נעלם.
-4. **הרצה ידנית של ניתוק/auto-resign (חדש, טרם נבדק בפועל כלל - הסבב הזה)**:
-   - Run על `ServerMain`, שני חלונות `LoginScreenMain` (WHITE+BLACK,
-     חשבונות שונים), לשחק כמה מהלכים (משחק עדיין פעיל, לא game over).
-   - **לסגור** את חלון ה-WHITE (או ה-BLACK) לגמרי - לוודא: אצל הצד
-     שנשאר מופיע באנר "Opponent disconnected - Xs to reconnect" למעלה
-     על הלוח, המספר יורד, והלוח "קפוא" (אין תנועה חדשה) אבל **לא**
-     נעלם/משתנה.
-   - **לפני שעברו 20 שניות**: לפתוח מחדש `LoginScreenMain`, **Login עם
-     אותו username בדיוק** שהתנתק, ולהתחבר לאותו room - לוודא: חוזר
-     בתור **אותו צבע** (WHITE/BLACK) שהיה לו/ה קודם, הבאנר נעלם אצל
-     שני הצדדים, והמשחק ממשיך רגיל (אפשר להזיז כלים משני הצדדים).
-   - **תרחיש שני, בלי לחבר מחדש**: לחזור על הניתוק, אבל הפעם **לחכות
-     20+ שניות בלי לחבר מחדש** - לוודא שהצד שנשאר מוכרז כמנצח אוטומטית
-     (מסך "X Wins!" מופיע), וה-ELO שלו/ה עולה (של הצד שהתנתק יורד) -
-     בדיוק כמו ניצחון רגיל.
-   - **בדיקת "לא נגנב"**: תוך כדי חלון החסד (אחרי ניתוק, לפני reconnect/timeout),
-     לנסות לפתוח `LoginScreenMain` **שלישי** עם username **אחר** ולהתחבר
-     לאותו room - לוודא שנכנס/ת כ-SPECTATOR (לא "תופס/ת" את הצבע השמור).
-5. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
+4. **הרצה ידנית של ניתוק/auto-resign** - **תרחיש ה-timeout (המתנה 20
+   שניות בלי חיבור מחדש, היריב מוכרז כמנצח) כבר אומת ועובד, אושר ע"י
+   רות.** עדיין לא אומתו ידנית שני תרחישים נוספים:
+   - **reconnect בתוך חלון החסד**: לנתק צד (סגירת חלון), **לפני** שעברו
+     20 שניות לפתוח `LoginScreenMain` חדש, Login עם **אותו username
+     בדיוק**, להתחבר לאותו room - לוודא: חוזר/ת בתור **אותו צבע** בדיוק
+     שהיה לו/ה קודם, הבאנר נעלם אצל שני הצדדים, והמשחק ממשיך רגיל.
+   - **"לא נגנב"**: תוך כדי חלון החסד, לנסות לפתוח `LoginScreenMain`
+     **שלישי** עם username **אחר** ולהתחבר לאותו room - לוודא שנכנס/ת
+     כ-SPECTATOR (לא "תופס/ת" את הצבע השמור).
+5. **הרצה ידנית של matchmaking (חדש, טרם נבדק בפועל כלל - הסבב הזה)**:
+   - Run על `ServerMain`, שני חלונות `LoginScreenMain` (חשבונות שונים).
+   - **בשני החלונות**: להשאיר את שדה ה-room ריק/כברירת מחדל, וללחוץ
+     **Skip** (לא Connect) בשניהם - לוודא: שני החלונות מתחברים **לאותו
+     משחק בדיוק** (אחד/ת WHITE, השני/ה BLACK), הלוחות מסונכרים.
+   - **תרחיש "3 שחקנים"** (זה בדיוק מה שדיווחת): לחלון ראשון ללחוץ Skip
+     (נפתח משחק חדש, ממתין/ה). לחלון שני **גם** ללחוץ Skip - אמור להצטרף
+     לאותו משחק (BLACK). לחלון **שלישי** ללחוץ Skip שוב - לוודא שהוא/היא
+     **לא** נכנס/ת כ-SPECTATOR למשחק הראשון, אלא פותח/ת משחק **חדש**
+     ומחכה/ת (בדיוק הבעיה שדיווחת - אמורה להיפתר).
+   - לוודא ש-Connect (עם שם room ידני) עדיין עובד בדיוק כמו קודם, בלי
+     שינוי - זה משהו ש-matchmaking לא אמור לגעת בו בכלל.
+6. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
    מופיעים כ-modified ב-`git status` (line-ending, לא תוכן - לא נגעתי
    בהם), ותיקיית `src/main/java/kfchess/.claude/` וקובץ `kfchess.db`
    שלא יצרתי (untracked, לא ב-git add המוצע).
 
 ## פקודת commit מוצעת (לא הרצתי - רק `git status`/`git diff` לבדיקה)
+
+**הערה חשובה על ה-commit הבא**: כמה מהקבצים שנוגעים בשלב 5 חלק 2
+(`GameSession.java`, `GameServer.java`) כבר `git add`-ed חלקית (staged)
+בגלל שינוי שם החבילה שרות עשתה (ר' "הערה טכנית חשובה" למעלה) - עוד
+לפני שאני נגעתי בהם הסבב הזה. **פקודת ה-`git add` למטה, כשתרוצי אותה,
+תכלול אוטומטית גם את שינוי שם החבילה** לאותם קבצים (אי אפשר להפריד
+"רק את השורות שלי" מ-"רק את שינוי השם" באותו קובץ) - כנראה בסדר (השם
+החדש צריך להיכנס למשהו בסוף בכל מקרה), רק מציינת כדי שלא תופתעי מגודל
+ה-diff בקומיט.
 
 Part B (אם עדיין לא בוצע commit נפרד לו):
 ```
@@ -491,15 +574,21 @@ git add src/main/java/kfchess/net/ClientCommandType.java src/main/java/kfchess/n
 git commit -m "Add mutual Restart voting (both sides must click) with a Waiting for opponent visual cue"
 ```
 
-שלב 5, חלק 1 - ניתוק/auto-resign (הסבב הזה, **טרם אומת ידנית/mvn test - ר' "מה שנשאר לאמת"**):
+שלב 5, חלק 1 - ניתוק/auto-resign - **בוצע commit בפועל ע"י רות (f43e467)**:
 ```
 git add src/main/java/kfchess/engine/GameEngine.java src/main/java/kfchess/net/server/GameSession.java src/main/java/kfchess/net/server/GameServer.java src/main/java/kfchess/net/SnapshotMessage.java src/main/java/kfchess/net/client/IncomingSnapshot.java src/main/java/kfchess/net/client/ClientSnapshotReconstructor.java src/main/java/kfchess/engine/snapshot/SnapshotFactory.java src/main/java/kfchess/engine/snapshot/GameSnapshot.java src/main/java/kfchess/view/GameSceneView.java src/main/java/kfchess/NetworkGameWindowMain.java src/test/java/texttests/GameSessionTest.java src/test/java/texttests/MessageDtoTest.java src/test/java/texttests/ClientSnapshotReconstructorTest.java PROGRESS.md
 git commit -m "Stage 5 part 1: auto-resign on disconnect with a 20s reconnect grace window"
 ```
 
+שלב 5, חלק 2 - Matchmaking (הסבב הזה, **טרם אומת ידנית/mvn test - ר' "מה שנשאר לאמת"**, ור' ההערה למעלה על שינוי שם החבילה שיכנס יחד עם זה):
+```
+git add src/main/java/kfchess/HomeScreenMain.java src/main/java/kfchess/server/server/GameSession.java src/main/java/kfchess/server/server/GameServer.java src/main/java/kfchess/server/server/MatchmakingResolver.java src/test/java/texttests/GameSessionTest.java src/test/java/texttests/HomeScreenMainTest.java src/test/java/texttests/MatchmakingResolverTest.java PROGRESS.md
+git commit -m "Stage 5 part 2: random matchmaking via a Skip button (find-or-create a waiting game)"
+```
+
 ## איך להריץ ולבדוק (IntelliJ)
 
-1. Run על `kfchess.net.server.ServerMain` - אמורה להיכתב שורה
+1. Run על `kfchess.server.server.ServerMain` - אמורה להיכתב שורה
    `GameServer started on port 8887`.
 2. Run על **`kfchess.LoginScreenMain`** - **זו הפעם היחידה שמריצים בתור
    לקוח/שחקנית** (אין יותר `main()` נפרד ב-`HomeScreenMain`/
@@ -513,7 +602,7 @@ git commit -m "Stage 5 part 1: auto-resign on disconnect with a 20s reconnect gr
    username שני (או אותו אחד - עדיין לא קשור לתפקיד, ר' `ClientRole`),
    ואז Connect לאותו room (`default` אם לא שינו) - נכנס כ-BLACK.
 4. בדיקת פרוטוקול גולמי: מקונסולת דפדפן (F12) עם `WebSocket` ישיר
-   (`kfchess.net.client.ClientMain`, לקוח הקונסולה, הוסר - ר' "ניקוי המיינים").
+   (`kfchess.server.client.ClientMain`, לקוח הקונסולה, הוסר - ר' "ניקוי המיינים").
 
 ## אימות ידני שבוצע בפועל
 
@@ -532,26 +621,38 @@ git commit -m "Stage 5 part 1: auto-resign on disconnect with a 20s reconnect gr
   יכול לבחור/להזיז רק את הכלים שלו (השרת דוחה קליק על כלי לא-שלו בשקט -
   זו התנהגות נכונה, לא באג), שני הלוחות מסונכרים בזמן אמת.
 - סגירת חלון לקוח ופתיחת חדש: מצטרף מחדש לאותה `GameSession` שכבר
-  קיימת (המצב חי על השרת, לא בלקוח) - **בכוונה**, לא באג. **שימו לב**:
-  עדיין **אין** טיפול בניתוק (auto-resign/timeout, שלב 5) - אם צד מתנתק,
-  המשחק פשוט ממתין, אף אחד לא מפסיד.
+  קיימת (המצב חי על השרת, לא בלקוח) - **בכוונה**, לא באג. (הערה
+  היסטורית - נכון לשלבים 1-4: באותו שלב עדיין לא היה טיפול בניתוק
+  באמצע משחק פעיל בכלל. **מאז שלב 5 חלק 1 (ר' למטה) כן יש טיפול** -
+  ניתוק WHITE/BLACK באמצע משחק פותח חלון חסד של 20 שניות, ואם לא
+  מתחברים מחדש עם אותו username, היריב מוכרז כמנצח אוטומטית.)
 - `HomeScreenMain` **אומת ידנית ע"י רות ועובד** - הזנת room, Connect,
   ומעבר לחלון המשחק (`NetworkGameWindowMain.launch`).
+- **[שלב 5 חלק 1] `mvn clean test` ירוק לגמרי**, כולל כל הטסטים החדשים
+  (`GameSessionTest` - 6 טסטים חדשים, `MessageDtoTest` - 2, `ClientSnapshotReconstructorTest` - 1) -
+  אושר ע"י רות.
+- **[שלב 5 חלק 1] תרחיש ה-timeout אומת ידנית ועובד**: ניתוק WHITE/BLACK
+  באמצע משחק פעיל, המתנה 20 שניות בלי חיבור מחדש - היריב מוכרז כמנצח
+  אוטומטית. אושר ע"י רות ("רץ מעולה עם ההמתנה של 20 שניות"). **עדיין
+  לא אומתו ידנית** תרחיש ה-reconnect בתוך חלון החסד (חיבור מחדש עם אותו
+  username מחזיר את אותו תפקיד) ותרחיש "לא נגנב" (חיבור שלישי לא תופס
+  את הצבע השמור) - ר' "מה שנשאר לאמת".
 
 ## הצעד הבא
 
 שלבים 1-4 **הושלמו ואומתו ידנית**, וכן פיצ'ר ה-Restart ההדדי (מעבר
 לדרישות). ה-README נכתב מחדש (ר' סעיף למטה).
 
-**שלב 5, חלק 1 (ניתוק/auto-resign) ממומש בקוד בסבב הזה** - ר' הסעיף
-הייעודי למעלה לפירוט מלא של כל שינוי/פונקציה. **טרם אומת** (לא `mvn test`
-ולא ידנית) - ר' "מה שנשאר לאמת" למעלה, סעיפים 1+4, לפני שממשיכים הלאה.
+**שלב 5, חלק 1 (ניתוק/auto-resign) ממומש בקוד, `mvn test` ירוק, ותרחיש
+ה-timeout אומת ידנית ועובד** (אושר ע"י רות - ר' "אימות ידני שבוצע
+בפועל" למעלה). **נשארו לאמת רק שני תרחישי-קצה** (reconnect בתוך חלון
+החסד, ו"לא נגנב") - ר' "מה שנשאר לאמת" סעיף 4 למעלה - לא חוסמים באופן
+מהותי את המשך העבודה, אבל כדאי לוודא לפני commit סופי.
 
-**אחרי שהחלק הזה יאומת, הצעד הבא הוא שלב 5 חלק 2:**
-
-**Matchmaking** - כפתור "Play" ב-`HomeScreenMain` שמשייך אוטומטית שני
-שחקנים לחדר משותף, במקום להקליד שם room ידנית. דורש צד-שרת חדש (תור
-המתנה) ולא רק שינוי UI.
+**שלב 5, חלק 2 (Matchmaking, כפתור "Skip") ממומש בקוד בסבב הזה** - ר'
+הסעיף הייעודי למעלה. **טרם אומת** (לא `mvn test` ולא ידנית) - ר' "מה
+שנשאר לאמת" סעיף 5 למעלה. אחרי שיאומת - **שלב 5 שלם**, והצעד הבא הוא
+שלב 6 (חדרים אמיתיים + לוגים).
 
 **מגבלה מודעת שנשארה פתוחה משלב 5 חלק 1** (לא נפתרה, לא הוחלט אם/מתי
 לטפל בה): אם משחק מסתיים ע"י auto-resign (ניתוק), הצד שהתנתק **לא

@@ -4,9 +4,9 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import kfchess.net.ClientCommand;
-import kfchess.net.ClientRole;
-import kfchess.net.server.GameSession;
+import kfchess.server.ClientCommand;
+import kfchess.server.ClientRole;
+import kfchess.server.server.GameSession;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -360,5 +360,58 @@ class GameSessionTest {
         JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
         assertTrue(snapshot.get("gameOver").getAsBoolean());
         assertEquals("WHITE", snapshot.get("winner").getAsString()); // עדיין המנצח המקורי, לא שונה בגלל הניתוק
+    }
+
+    // --- שלב 5, חלק 2: matchmaking (ר' GameSession.isWaitingForOpponent, נקראת
+    // מ-GameServer.resolveMatchmakingGameId כדי לדעת אם לצרף שחקן/ית חדש/ה לכאן).
+
+    @Test
+    void isWaitingForOpponent_onlyWhiteConnected_returnsTrue() {
+        GameSession session = new GameSession();
+        session.assignRole(new FakeWebSocket()); // WHITE, אף אחד עדיין לא BLACK
+
+        assertTrue(session.isWaitingForOpponent());
+    }
+
+    @Test
+    void isWaitingForOpponent_noOneConnectedYet_returnsFalse() {
+        GameSession session = new GameSession();
+
+        assertFalse(session.isWaitingForOpponent()); // אין אף אחד לצרף אליו - לא "ממתין", פשוט ריק
+    }
+
+    @Test
+    void isWaitingForOpponent_bothSidesConnected_returnsFalse() {
+        GameSession session = new GameSession();
+        session.assignRole(new FakeWebSocket()); // WHITE
+        session.assignRole(new FakeWebSocket()); // BLACK
+
+        assertFalse(session.isWaitingForOpponent());
+    }
+
+    @Test
+    void isWaitingForOpponent_otherSideReservedByDisconnectGrace_returnsFalse() {
+        GameSession session = new GameSession();
+        FakeWebSocket white = new FakeWebSocket();
+        FakeWebSocket black = new FakeWebSocket();
+        session.assignRole(white, "ruth");
+        session.assignRole(black, "dani");
+
+        session.handleDisconnect(black); // שחור מתנתק באמצע משחק פעיל - נכנס לחלון חסד
+        session.tick(0);
+
+        // WHITE לבד מחובר עכשיו, אבל BLACK "שמור" ל-dani (לא באמת פנוי) -
+        // matchmaking אסור לצרף כאן מישהו/י אקראי/ת במקום dani.
+        assertFalse(session.isWaitingForOpponent());
+    }
+
+    @Test
+    void isWaitingForOpponent_gameAlreadyOver_returnsFalse() {
+        FakeWebSocket white = new FakeWebSocket();
+        FakeWebSocket black = new FakeWebSocket();
+        GameSession session = sessionAfterKingCapture(white, black);
+        session.removeConnection(black); // רק לבן (המנצח) עדיין מחובר
+
+        assertFalse(session.isWaitingForOpponent()); // המשחק נגמר - אין טעם לצרף אליו יריב/ה חדש/ה
     }
 }

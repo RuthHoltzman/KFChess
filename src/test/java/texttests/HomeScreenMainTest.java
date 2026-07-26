@@ -51,4 +51,22 @@ class HomeScreenMainTest {
     void buildUri_withUsernameContainingSpecialCharacters_urlEncodesIt() {
         assertEquals("ws://localhost:8887/room1?username=ruth+h", HomeScreenMain.buildUri("room1", "ruth h"));
     }
+
+    // שלב 5, חלק 2: buildMatchmakingUri (כפתור "Skip") - מתעלמת לגמרי משם ה-room,
+    // מתחברת תמיד לנתיב השמור שגם MatchmakingResolver בצד השרת מזהה.
+
+    @Test
+    void buildMatchmakingUri_withoutUsername_pointsToMatchmakingPath() {
+        assertEquals("ws://localhost:8887/_play", HomeScreenMain.buildMatchmakingUri(null));
+    }
+
+    @Test
+    void buildMatchmakingUri_withUsername_appendsAsQueryParameter() {
+        assertEquals("ws://localhost:8887/_play?username=ruth", HomeScreenMain.buildMatchmakingUri("ruth"));
+    }
+
+    @Test
+    void buildMatchmakingUri_withBlankUsername_sameAsWithoutUsername() {
+        assertEquals("ws://localhost:8887/_play", HomeScreenMain.buildMatchmakingUri("   "));
+    }
 }
