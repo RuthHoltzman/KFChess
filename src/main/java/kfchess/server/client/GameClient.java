@@ -6,6 +6,7 @@ import com.google.gson.JsonParser;
 import kfchess.logging.FileLogger;
 import kfchess.server.ClientCommand;
 import kfchess.server.ClientCommandType;
+import kfchess.server.ClientRole;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
@@ -26,6 +27,12 @@ public class GameClient extends WebSocketClient {
     // אותו מראש בכלל, אז חייבים לחלץ אותו מהתשובה הראשונה כדי להציג
     // אותו בכותרת חלון המשחק (ר' NetworkGameWindowMain, Img.setTitle).
     private volatile String assignedGameId;
+    // נחתך מאותה הודעת ROLE_ASSIGNED בדיוק כמו assignedGameId למעלה (ר'
+    // onMessage) - בקשת רות: להציג בחלון המשחק "את/ה: WHITE" וכו'. עד
+    // עכשיו השרת כן שלח את זה אבל אף אחד לא קרא את השדה בצד הלקוח.
+    // ClientRole.valueOf(...) בטוח כאן: השרת תמיד שולח role.name() של
+    // אותו enum בדיוק (ר' GameServer.onOpen) - אין תרגום/מחרוזת חופשית.
+    private volatile ClientRole assignedRole;
     // תיקון "Play" לפי המפרט המדויק (ELO ±100 / timeout של דקה) - נחתך
     // מתוך הודעת MATCHMAKING_TIMEOUT אם/כשמגיעה (ר' onMessage). null כל
     // עוד לא הגיעה כזו הודעה - NetworkGameWindowMain בודק את זה בכל טיק
@@ -59,6 +66,7 @@ public class GameClient extends WebSocketClient {
         if (IncomingMessageSummary.isRoleAssigned(message)) {
             JsonObject json = JsonParser.parseString(message).getAsJsonObject();
             assignedGameId = json.get("gameId").getAsString();
+            assignedRole = ClientRole.valueOf(json.get("role").getAsString());
         }
         if (IncomingMessageSummary.isMatchmakingTimeout(message)) {
             JsonObject json = JsonParser.parseString(message).getAsJsonObject();
@@ -77,6 +85,13 @@ public class GameClient extends WebSocketClient {
     // לזה מ-thread רקע אחרי connectBlocking (ר' waitForAssignedGameId).
     public String assignedGameId() {
         return assignedGameId;
+    }
+
+    // התפקיד בפועל שהשרת הקצה לחיבור הזה (ר' RoleAssignedMessage), או
+    // null אם ROLE_ASSIGNED עוד לא הגיעה - אותו דפוס polling בדיוק כמו
+    // assignedGameId ממש למעלה (volatile, בלי סנכרון נוסף).
+    public ClientRole assignedRole() {
+        return assignedRole;
     }
 
     // הטקסט מתוך MATCHMAKING_TIMEOUT (ר' MatchmakingTimeoutMessage), או

@@ -25,13 +25,13 @@
    על ה-URI) ו-ELO מתעדכן אוטומטית בסוף כל משחק (`EloCalculator`, K=32).
    בנוסף (מעבר לדרישות השלב): **פיצ'ר Restart הדדי** - ✅ הושלם ואומת
    ידנית (ר' סעיף ייעודי למטה).
-5. Matchmaking ("Play"/Skip) + ניתוק/auto-resign - 🟡 **auto-resign הושלם
+5. Matchmaking ("Play"/Skip) + ניתוק/auto-resign - ✅ **auto-resign הושלם
    ואומת לגמרי, committed.** כפתור "Skip" שונה שם ל-**"Play"**. **תוקן
-   ואומת**: באג שרות מצאה - Play היה "גונב" חדר פרטי שנוצר דרך Create
-   (ר' "תיקון - Play לא אמור להצטרף לחדרים פרטיים" למטה) - **רות אישרה
-   שעובד** ("הרצתי חלוניות הכל עובד"). **תיקון מלא לפי המפרט המקורי
-   ממומש בקוד הסבב הזה** (ELO ±100, timeout של דקה, הודעת "לא נמצא" -
-   ר' הסעיף הייעודי למטה) - **טרם אומת**, זה מה שנשאר לבדוק בכל הפרויקט.
+   ואומת**: באג שרות מצאה - Play היה "גונב" חדר פרטי שנוצר דרך Create -
+   **אושר ע"י רות**. **תיקון מלא לפי המפרט המקורי** (ELO ±100, timeout
+   של דקה, הודעת "לא נמצא") - **ה-timeout אומת ועובד** (רות הריצה,
+   popup נפתח אחרי דקה והחלון נסגר). התאמת ה-ELO עצמה עדיין לא אומתה
+   במפורש (דורש שני חשבונות עם ELO מכוון) - לא חוסם.
 6. חדרים (Create/Join/Cancel) + לוגים - ✅ **שני החלקים ממומשים, `mvn test`
    ירוק (141/141), ואומתו ידנית ע"י רות** ("הרצתי טסטים הרצתי חלוניות
    הכל עובד"). Create/Join/Cancel, התיקון ל-Play/חדרים פרטיים, חסימת
@@ -825,6 +825,77 @@ can't find - pops up a message that can't find." רות אישרה לממש עכ
   החדשה - נקי. **טרם `mvn test` וטרם הרצה ידנית** (כולל בדיקה אמיתית
   של ה-timeout, שדורשת לחכות דקה שלמה) - ר' "מה שנשאר לאמת" למטה.
 
+### תצוגת מידע על המסך - שם חדר / תפקיד / שם משתמש (הסבב הזה)
+
+רות הריצה `mvn test` בהצלחה (141/141) ודיווחה שתי בקשות המשך: (1) חשד
+לבאג ניקוד - קפיצה-תפיסה לא נספרת; (2) להוסיף לתצוגת המשחק שם חדר,
+תפקיד/צופה, ושם שחקן. לגבי (1): נבדק בקוד לעומק, **לא נמצא נתיב-קוד
+תואם** - ב-JUMP בפרויקט הזה כלל אין תפיסה (ר' פירוט בסוף הסעיף) - מחכה
+לתיאור-חזרה מדויק מרות לפני שממשיכים בזה. לגבי (2) - הוחלט (2 שאלות
+ל-רות): שם החדר בפס עליון **קבוע** לרוחב כל הסצנה (מידע כללי, לא
+תלוי-מצב כמו הבאנרים הקיימים); תפקיד+שם משתמש - **רק המידע של הלקוח
+עצמו** (לא של היריב/ה) - בפאנל הצד המתאים לשחקן/ית, ובפס העליון לצופה/ה
+(אין לצופה/ה "פאנל משלו/ה").
+
+- **`GameClient`** - עד עכשיו פרסרה מהודעת `ROLE_ASSIGNED` רק את ה-gameId
+  והתעלמה מ-`role` (שהשרת כן שלח). שדה חדש `assignedRole` (`ClientRole`,
+  `volatile`) + פרסור ב-`onMessage` + getter `assignedRole()` - אותו
+  דפוס בדיוק כמו `assignedGameId()` הקיים. `ClientRole.valueOf(...)`
+  בטוח כי השרת שולח `role.name()` של אותו enum בדיוק (`GameServer.onOpen`).
+- **`HomeScreenMain`** - `username` (כבר ידוע כאן מה-`Account`) הועבר
+  סוף-סוף גם ל-`NetworkGameWindowMain.launch(...)` - לא הועבר קודם, שימש
+  רק לבניית ה-URI. `connect(...)` קיבלה פרמטר `username` חדש (כל שלושת
+  נתיבי החיבור - Play/Create/Join - מעבירים אותו).
+- **`NetworkGameWindowMain.launch(...)`** - פרמטר שלישי `username`. קוראת
+  ל-`client.assignedRole()` (מוכן עד כאן - מגיע באותה הודעה בדיוק כמו
+  gameId, ש-`waitForAssignedGameId` כבר ממתינה לה) ומעבירה gameId+role+username
+  ל-`GameSceneView` **בבנאי**, לא ב-render() - הם קבועים לכל אורך חיי
+  החלון, לא משתנים כמו שאר תוכן ה-snapshot.
+- **`GameSceneView`** - בנאי חדש עם roomId/role/username (הישן, בלי
+  הפרמטרים האלה, נשאר כ-overload - `NetworkClickHandlerTest` הקיים לא
+  נוגע כלל ב-render() אז לא הושפע). `drawRoomHeader(...)` חדשה - פס
+  עליון **קבוע** (בניגוד לבאנרים התלויים-מצב הקיימים - ניתוק/המתנה)
+  לרוחב **כל** הסצנה (כולל שני הפאנלים, לא רק הלוח) - "Room: XXXXXX",
+  ועבור SPECTATOR גם "Spectator: <username>" (ל-WHITE/BLACK המידע הזה
+  מוצג בפאנל הצד במקום, לא כאן). קבוע חדש `roomHeaderHeight()` (public
+  static) - `NetworkGameWindowMain` *חייב* להשתמש באותו מספר כשהוא
+  מקטין את השטח הפנוי ללוח/פאנלים, בדיוק העיקרון שכבר קיים
+  ב-`BoardLayoutCalculator` ("חישוב במקום אחד").
+- **`SidePanelView.draw(...)`** - שני פרמטרים חדשים: `startY` (כדי
+  שהפאנל יתחיל מתחת לפס שם-החדר, לא מ-0) ו-`isLocalPlayer`+`username`
+  (מוסיפים "(You: ruth)" לתוך שורת הכותרת הקיימת - לא שורה נפרדת, כדי
+  לא לשנות שום מיקום/גובה אחר בפאנל). קריאה אחת בלבד מכל הפרויקט
+  (מ-`GameSceneView.render`) - אין overload ישן, בניגוד ל-DTOs שנשלחים
+  ברשת.
+- **`NetworkGameWindowMain`** - פונקציה חדשה `computeBoardLayout(...)`
+  מרכזת את חישוב ה-`BoardLayout` (נקראת גם מ-`renderFrame` וגם
+  מ-`handleClick`, בדיוק העיקרון של `BoardLayoutCalculator`): מחסירה את
+  `roomHeaderHeight()` מהגובה הפנוי *לפני* `BoardLayoutCalculator.computeLayout`
+  (כדי שהלוח לא ייחשב גדול מדי ו"יגלוש" מתחת לפס - זה גם היה גורם
+  ל-`Img.drawOn` לזרוק `IllegalArgumentException` בפועל), ומוסיפה את
+  אותו גובה בחזרה ל-`offsetY` המתקבל (כדי שהלוח יתחיל בפועל מתחת לפס).
+  לא נגעתי ב-`BoardLayoutCalculator` עצמה (מחלקה טהורה, נבדקת) - כל
+  ה"תוספת" נשארת ב-`NetworkGameWindowMain`.
+- **טסטים חדשים**: `GameClientTest` (חדש - `GameClient` לא היה לו
+  טסטים ייחודיים קודם; מתמקד ב-`assignedRole()`, נבנה עם URI דמה בלי
+  `connectBlocking()`, בדיוק כמו `RecordingGameClient` הקיים - `onMessage()`
+  לא נוגעת ברשת בכלל). `GameSceneView`/`SidePanelView`/`NetworkGameWindowMain`
+  נשארים בלי טסטים ייחודיים (ציור/Swing, כמו קודם).
+- **אימות שבוצע כאן**: איזון סוגריים על כל הקבצים שנגעתי בהם - תקין.
+  grep להפניות ישנות לחתימות שהשתנו (`new GameSceneView(`,
+  `NetworkGameWindowMain.launch(`, `sidePanelView.draw(`, `connect(`) -
+  כולן עודכנו, רק ה-overload המכוון ב-`NetworkClickHandlerTest` נשאר על
+  הישן בכוונה. חישבתי ידנית (בלי `mvn`) את הגיאומטריה במקרה הרגיל -
+  תקין, הלוח לא גולש. **טרם `mvn test` וטרם הרצה ידנית** - ר' "מה שנשאר
+  לאמת" למטה.
+- **בעיית הניקוד (קפיצה-תפיסה) - עדיין פתוחה**: לא נמצא נתיב-קוד תואם
+  לתיאור ("JUMP לא נספר בניקוד") - כל תפיסה אמיתית עוברת דרך
+  `GameEngine.completeMotion()` → `MoveHistory.recordMove()` (מקום יחיד
+  שמעדכן ניקוד), ו-JUMP (`GameEngine.handleJump`/`NetworkActions.handleJump`)
+  לא נוגע בלוח בכלל - רק מסמן `PieceState.JUMPING` זמני (הגנה, לא
+  תפיסה). מחכה לתיאור-חזרה מדויק מרות (איזה כפתור/קליק בדיוק, מה קרה
+  בפועל) לפני שממשיכים.
+
 ## מה שנשאר לאמת (רות - עדיין לא נעשה)
 
 שוב: אין לי `javac`/`mvn` בסביבה שלי (אין root, אין גישת רשת להוריד
@@ -927,23 +998,37 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
       (רק ROLE_ASSIGNED/שגיאות בצד הלקוח - זה מכוון).
     - לסגור את חלון הלקוח - לוודא שב-server log נוספה שורה "Connection
       closed...".
-11. **הרצה ידנית של תיקון Play - ELO ±100 / timeout / הודעה (חדש, טרם
-    נבדק בפועל - הסבב הזה)**:
-    - **התאמת ELO**: Register/Login עם שני חשבונות עם ELO רחוק מדי
-      (למשל אחד שיחק כמה משחקים והתרחק מ-1200, השני נשאר קרוב ל-1200 -
-      הפרש >100) - שני החלונות לוחצים Play - לוודא ש**לא** מתאימים זה
-      לזה (כל אחד/ת נשאר/ת לבד, "Waiting for an opponent..."). אחר כך
-      לנסות עם שני חשבונות עם ELO קרוב (הפרש ≤100) - לוודא **כן**
-      מתאימים.
-    - **timeout של דקה**: לחלון בודד ללחוץ Play (בלי חלון שני בכלל) -
-      לחכות דקה שלמה - לוודא שמופיע popup עם הודעה על "לא נמצא", ושאחרי
-      אישור ה-popup **החלון נסגר** (התהליך מסתיים).
-    - לוודא ש-Create/Join עדיין לא מושפעים בכלל מהתיקון הזה (רק Play
-      עצמו).
+11. ✅ **אושר ע"י רות (חלקית)** - הרצה ידנית של תיקון Play:
+    - **timeout של דקה**: **אומת ועובד** - רות הריצה חלון בודד, לחצה
+      Play, אחרי 60 שניות נפתח popup והחלון נסגר. בדיוק לפי הדרישה.
+    - **התאמת ELO** ו**Create/Join שלא מושפעים** - **עדיין לא אומתו
+      במפורש** (דורש שני חשבונות עם ELO רחוק/קרוב בכוונה) - לא חוסם,
+      אבל כדאי לוודא בהזדמנות.
 12. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
    מופיעים כ-modified ב-`git status` (line-ending, לא תוכן - לא נגעתי
    בהם), ותיקיית `src/main/java/kfchess/.claude/` וקובץ `kfchess.db`
    שלא יצרתי (untracked, לא ב-git add המוצע).
+13. **הרצה ידנית של תצוגת המידע (שם חדר/תפקיד/שם משתמש, הסבב הזה, טרם
+    נבדק בפועל כלל)**:
+    - Run על `ServerMain`, `LoginScreenMain` (Allow multiple instances).
+    - חלון ראשון: Room... → Create - לוודא שמופיע פס אפור-כחלחל **קבוע**
+      לרוחב כל החלון (כולל שני הפאנלים) עם "Room: XXXXXX" - **תמיד**
+      גלוי, לא רק בכותרת החלון כמו קודם. לוודא שהלוח עצמו לא "חתוך"/גולש
+      מתחת לפס (רק קטן קצת יותר משהיה, כדי לפנות לו מקום).
+    - לוודא שבפאנל הצד השמאלי (White) מופיע "White (You: <username שלי>)"
+      (החלון הראשון הוא WHITE).
+    - חלון שני: Room... → Join עם אותו קוד - לוודא שבפאנל הימני (Black)
+      מופיע "Black (You: <username של החלון השני>)", ושבחלון **הראשון**
+      הפאנל השמאלי עדיין מציג "(You: ...)" (לא "התחלף" בטעות ליריב).
+    - חלון שלישי: Join עם אותו קוד (SPECTATOR) - לוודא שהפס העליון מציג
+      גם "Spectator: <username שלו/ה>" (בנוסף ל-Room), ושאף אחד משני
+      הפאנלים **לא** מציג "(You: ...)" עבורו/ה (אין "פאנל שלו/ה").
+    - לוודא שקליקים/Restart/הבאנרים הקיימים (ניתוק/המתנה) עדיין עובדים
+      בדיוק כמו קודם - השינוי הזה לא אמור לשבור אף אחד מהם.
+14. **בעיית הניקוד בקפיצה-תפיסה - עדיין ממתינה לתיאור-חזרה מדויק
+    מרות** (ר' הסעיף הייעודי למעלה) - לא נמצא נתיב-קוד תואם בבדיקת
+    הקוד, צריך רות שתתאר בדיוק מה עשתה ומה ציפתה לראות לעומת מה שראתה
+    בפועל, לפני שממשיכים.
 
 ## פקודת commit מוצעת (לא הרצתי - רק `git status`/`git diff` לבדיקה)
 
@@ -1026,6 +1111,12 @@ git add src/main/java/kfchess/server/server/GameSession.java src/main/java/kfche
 git commit -m "Restrict Play matchmaking to opponents within 100 ELO of the searcher, falling back to matching regardless when either side's ELO is unknown, and time out a lone waiting player after one minute with a popup telling them no match was found before closing the window"
 ```
 
+תצוגת מידע על המסך - שם חדר / תפקיד / שם משתמש (הסבב הזה, **טרם אומת ידנית - ר' "מה שנשאר לאמת" סעיף 13**):
+```
+git add src/main/java/kfchess/server/client/GameClient.java src/main/java/kfchess/HomeScreenMain.java src/main/java/kfchess/NetworkGameWindowMain.java src/main/java/kfchess/view/GameSceneView.java src/main/java/kfchess/view/SidePanelView.java src/test/java/texttests/GameClientTest.java PROGRESS.md
+git commit -m "Show the room id in a permanent header strip and the local player's own role/username in their side panel (or in the header for spectators), by finally reading the role that ROLE_ASSIGNED already sent and threading the logged-in username through to the game window"
+```
+
 ## איך להריץ ולבדוק (IntelliJ)
 
 1. Run על `kfchess.server.server.ServerMain` - אמורה להיכתב שורה
@@ -1102,11 +1193,12 @@ git commit -m "Restrict Play matchmaking to opponents within 100 ELO of the sear
 ידנית. **שלב 6 סגור.**
 
 **התיקון המלא ל-"Play" לפי המפרט המקורי (ELO ±100 / timeout של דקה /
-הודעת "לא נמצא") ממומש בקוד בסבב הזה** - ר' הסעיף הייעודי למעלה. **טרם
-אומת** (לא `mvn test` ולא ידנית - הבדיקה הידנית של ה-timeout דורשת
-לחכות דקה שלמה בפועל) - ר' "מה שנשאר לאמת" סעיף 11 למעלה. **זה הפריט
-האחרון שנשאר בכל הפרויקט** - אחרי שיאומת, כל 6 השלבים + המפרט המדויק
-שלהם יהיו סגורים לגמרי.
+הודעת "לא נמצא") ממומש בקוד** - ר' הסעיף הייעודי למעלה. **ה-timeout
+אומת ועובד בפועל - אושר ע"י רות** (חלון בודד, Play, אחרי 60 שניות
+popup + סגירת החלון). **התאמת ה-ELO עצמה עדיין לא אומתה במפורש** (דורש
+שני חשבונות עם דירוג מכוון רחוק/קרוב) - לא חוסם, `mvn test` עדיין לא
+הורץ מאז השינוי הזה. **כל 6 השלבים ממומשים ואומתו ברמה המעשית** - מה
+שנשאר הוא רק ליטוש/אימות סופי, לא פיצ'רים חסרים.
 
 **מגבלה מודעת שנשארה פתוחה משלב 5 חלק 1** (לא נפתרה, לא הוחלט אם/מתי
 לטפל בה): אם משחק מסתיים ע"י auto-resign (ניתוק), הצד שהתנתק **לא

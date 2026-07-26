@@ -127,7 +127,7 @@ public class HomeScreenMain {
 
         String username = account == null ? null : account.username();
         playButton.addActionListener(e ->
-                connect(frame, buildMatchmakingUri(username), statusLabel, playButton, roomButton));
+                connect(frame, buildMatchmakingUri(username), username, statusLabel, playButton, roomButton));
         roomButton.addActionListener(e -> showRoomDialog(frame, username, statusLabel, playButton, roomButton));
 
         frame.add(panel);
@@ -167,7 +167,7 @@ public class HomeScreenMain {
 
         createButton.addActionListener(e -> {
             dialog.dispose();
-            connect(homeFrame, buildCreateRoomUri(username), homeStatusLabel, playButton, roomButton);
+            connect(homeFrame, buildCreateRoomUri(username), username, homeStatusLabel, playButton, roomButton);
         });
         joinButton.addActionListener(e -> {
             // Join בלי ID מוקלד לא הגיוני (Join אמורה תמיד להתייחס לקוד
@@ -180,7 +180,7 @@ public class HomeScreenMain {
                 return;
             }
             dialog.dispose();
-            connect(homeFrame, buildUri(roomIdField.getText(), username), homeStatusLabel, playButton, roomButton);
+            connect(homeFrame, buildUri(roomIdField.getText(), username), username, homeStatusLabel, playButton, roomButton);
         });
         cancelButton.addActionListener(e -> dialog.dispose());
 
@@ -197,8 +197,11 @@ public class HomeScreenMain {
     // לאותה מתודה בדיוק, רק עם URI שונה (buildUri/buildMatchmakingUri/
     // buildCreateRoomUri) שנבנה לפני הקריאה. buttonsToToggle (varargs) -
     // כל כפתורי מסך הבית מושבתים יחד בזמן חיבור (לא רק זה שנלחץ), כדי
-    // שלא אפשר לפתוח בטעות שני חיבורים במקביל.
-    private static void connect(JFrame homeFrame, String uriText, JLabel statusLabel, JButton... buttonsToToggle) {
+    // שלא אפשר לפתוח בטעות שני חיבורים במקביל. username מועבר בנפרד
+    // (לא נחלץ מ-uriText בחזרה) כדי ש-NetworkGameWindowMain יוכל להציג
+    // אותו על המסך - הוא כבר "ידוע" כאן לפני שנבנה ה-uri עצמו.
+    private static void connect(JFrame homeFrame, String uriText, String username, JLabel statusLabel,
+                                 JButton... buttonsToToggle) {
         setButtonsEnabled(buttonsToToggle, false);
         statusLabel.setForeground(Color.BLACK);
         statusLabel.setText("Connecting...");
@@ -222,7 +225,7 @@ public class HomeScreenMain {
                 String gameId = waitForAssignedGameId(finalClient);
                 SwingUtilities.invokeLater(() -> {
                     homeFrame.dispose();
-                    NetworkGameWindowMain.launch(finalClient, gameId);
+                    NetworkGameWindowMain.launch(finalClient, gameId, username);
                 });
             } else {
                 SwingUtilities.invokeLater(() -> showFailure(statusLabel, "failed to connect to " + uriText, buttonsToToggle));

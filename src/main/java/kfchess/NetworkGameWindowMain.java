@@ -5,6 +5,7 @@ import kfchess.engine.snapshot.GameSnapshot;
 import kfchess.engine.snapshot.SnapshotFactory;
 import kfchess.input.BoardMapper;
 import kfchess.model.Board;
+import kfchess.server.ClientRole;
 import kfchess.server.client.ClientSnapshotReconstructor;
 import kfchess.server.client.GameClient;
 import kfchess.server.client.IncomingMessageSummary;
@@ -50,14 +51,20 @@ public class NetworkGameWindowMain {
     // gameId (שלב 6): נכתב "בראש המסך" (כותרת החלון, ר' Img.setTitle) -
     // חשוב במיוחד ל"Create room", שם ה-HomeScreenMain לא ידע את ה-ID
     // מראש בכלל (השרת המציא אותו) - ר' HomeScreenMain.waitForAssignedGameId.
-    public static void launch(GameClient client, String gameId) {
+    // username (בקשת רות - להציג "שם שחקן" על המסך): מגיע כאן עכשיו גם
+    // הוא, מ-HomeScreenMain (שכבר ידעה אותו מה-Account, רק לא העבירה
+    // קודם). role - client.assignedRole() אמור להיות כבר מוכן בשלב הזה
+    // (מגיעה באותה הודעת ROLE_ASSIGNED בדיוק כמו gameId - ר' GameClient.onMessage,
+    // ו-HomeScreenMain.waitForAssignedGameId שכבר מחכה לה).
+    public static void launch(GameClient client, String gameId, String username) {
         Img.setTitle("KFChess - Room: " + gameId);
         Gson gson = new Gson();
         ClientSnapshotReconstructor reconstructor = new ClientSnapshotReconstructor();
         SnapshotFactory snapshotFactory = new SnapshotFactory();
 
+        ClientRole role = client.assignedRole();
         BoardView boardView = new BoardView("src/main/resources/board.png");
-        GameSceneView sceneView = new GameSceneView(boardView, SIDE_PANEL_WIDTH);
+        GameSceneView sceneView = new GameSceneView(boardView, SIDE_PANEL_WIDTH, gameId, role, username);
         // sceneView צריך להיבנות לפני clickHandler - הוא נחוץ ל-NetworkClickHandler
         // כדי לשאול restartButtonBounds() (ר' תיעוד שם) כשהמשחק נגמר.
         NetworkClickHandler clickHandler = new NetworkClickHandler(client, new BoardMapper(), sceneView);
@@ -145,10 +152,28 @@ public class NetworkGameWindowMain {
                                      ClientSnapshotReconstructor.Reconstructed[] latest,
                                      int pixelX, int pixelY, boolean isJump) {
         Board board = latest[0].board();
-        BoardLayout layout = BoardLayoutCalculator.computeLayout(
-                BoardLayoutCalculator.currentContentSize(windowAnchor, SIDE_PANEL_WIDTH, INITIAL_CELL_SIZE),
-                board.width(), board.height(), SIDE_PANEL_WIDTH);
+        BoardLayout layout = computeBoardLayout(windowAnchor, board);
         clickHandler.handle(pixelX, pixelY, layout, latest[0].gameOver(), isJump);
+    }
+
+    // מרכזת את חישוב ה-BoardLayout במקום אחד, נקראת גם מ-handleClick וגם
+    // מ-renderFrame - בדיוק העיקרון שכתוב ב-BoardLayoutCalculator עצמה
+    // ("שני מקומות שמחשבים דבר דומה בנפרד מתבדרים זה מזה"). בקשת רות (פס
+    // שם-חדר קבוע, ר' GameSceneView.roomHeaderHeight): הלוח/פאנלים כבר לא
+    // מקבלים את כל שטח החלון - יש להחסיר מהשטח הפנוי-לחישוב את גובה הפס
+    // *לפני* קריאה ל-BoardLayoutCalculator.computeLayout (כדי שהלוח לא
+    // ייחשב גדול מדי ו"יגלוש" מתחת לפס, מה שהיה גם גורם ל-drawOn לזרוק
+    // IllegalArgumentException בתוך GameSceneView.render בפועל) - ואז
+    // להוסיף את אותו גובה בחזרה ל-offsetY המתקבל, כדי שהלוח יתחיל בפועל
+    // *מתחת* לפס, לא מוסתר תחתיו.
+    private static BoardLayout computeBoardLayout(Img windowAnchor, Board board) {
+        Dimension fullContent = BoardLayoutCalculator.currentContentSize(windowAnchor, SIDE_PANEL_WIDTH, INITIAL_CELL_SIZE);
+        int headerHeight = GameSceneView.roomHeaderHeight();
+        Dimension contentBelowHeader = new Dimension(fullContent.width, Math.max(1, fullContent.height - headerHeight));
+        BoardLayout layout = BoardLayoutCalculator.computeLayout(
+                contentBelowHeader, board.width(), board.height(), SIDE_PANEL_WIDTH);
+        return new BoardLayout(layout.cellSize(), layout.boardPixelSize(), layout.offsetX(),
+                layout.offsetY() + headerHeight);
     }
 
     // מרכיב GameSnapshot מהמצב האחרון הידוע (latest[0]) ומצייר אותו - נקרא
@@ -161,7 +186,7 @@ public class NetworkGameWindowMain {
         ClientSnapshotReconstructor.Reconstructed state = latest[0];
         Board board = state.board();
         Dimension content = BoardLayoutCalculator.currentContentSize(windowAnchor, SIDE_PANEL_WIDTH, INITIAL_CELL_SIZE);
-        BoardLayout layout = BoardLayoutCalculator.computeLayout(content, board.width(), board.height(), SIDE_PANEL_WIDTH);
+        BoardLayout layout = computeBoardLayout(windowAnchor, board);
 
         GameSnapshot snapshot = snapshotFactory.createSnapshot(
                 board, layout.cellSize(), layout.cellSize(), state.now(),

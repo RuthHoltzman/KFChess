@@ -40,22 +40,37 @@ public class SidePanelView {
         return panelWidth;
     }
 
-    public void draw(Img canvas, int offsetX, int panelHeight,
-                      PieceColor color, int score, List<String> moves) {
-        canvas.fillRect(offsetX, 0, panelWidth, panelHeight, BACKGROUND);
-        canvas.drawRect(offsetX, 0, panelWidth, panelHeight, BORDER, 2);
+    // startY נוסף (בקשת רות - שם חדר בפס עליון קבוע, ר' GameSceneView):
+    // כל הפאנל צריך לזוז למטה באותו גובה בדיוק כשיש פס כזה, כדי לא להצטייר
+    // מתחת לו - startY=0 שקול בדיוק להתנהגות הישנה (בלי פס עליון בכלל).
+    // כל הקבועים (HEADER_Y/SCORE_Y/וכו') הם היסטים *יחסיים* ל-startY, לא
+    // ערכים מוחלטים - כדי שהפאנל עצמו יישאר "טיפש" וזז שלם ביחד. isLocalPlayer
+    // + username (בקשת רות - להציג תפקיד+שם המשתמש) מתווספים לתוך שורת
+    // הכותרת הקיימת ("White (You: ruth)") במקום שורה נפרדת - כך שאין שום
+    // שינוי בגובה/מיקום שאר האלמנטים (ניקוד/מהלכים) בין הפאנל "שלי" לפאנל
+    // של היריב/ה, אין סיכון לחוסר-התאמה חזותית בין השניים. אין overload
+    // ישן שנשאר: ל-SidePanelView יש קריאה אחת בלבד (GameSceneView.render),
+    // בניגוד ל-DTOs שנשלחים ברשת שחייבים תאימות לאחור.
+    public void draw(Img canvas, int offsetX, int startY, int panelHeight,
+                      PieceColor color, int score, List<String> moves,
+                      boolean isLocalPlayer, String username) {
+        canvas.fillRect(offsetX, startY, panelWidth, panelHeight, BACKGROUND);
+        canvas.drawRect(offsetX, startY, panelWidth, panelHeight, BORDER, 2);
 
         String title = displayName(color);
-        canvas.drawText(title, offsetX + PADDING, HEADER_Y, HEADER_FONT_SIZE, HEADER_TEXT, true);
-        canvas.drawText("Score: " + score, offsetX + PADDING, SCORE_Y, SCORE_FONT_SIZE, HEADER_TEXT, false);
-        canvas.drawText("Moves:", offsetX + PADDING, MOVES_TITLE_Y, SCORE_FONT_SIZE, HEADER_TEXT, true);
+        if (isLocalPlayer) {
+            title += username != null ? " (You: " + username + ")" : " (You)";
+        }
+        canvas.drawText(title, offsetX + PADDING, startY + HEADER_Y, HEADER_FONT_SIZE, HEADER_TEXT, true);
+        canvas.drawText("Score: " + score, offsetX + PADDING, startY + SCORE_Y, SCORE_FONT_SIZE, HEADER_TEXT, false);
+        canvas.drawText("Moves:", offsetX + PADDING, startY + MOVES_TITLE_Y, SCORE_FONT_SIZE, HEADER_TEXT, true);
 
         int maxVisibleRows = Math.max(0, (panelHeight - MOVES_START_Y - PADDING) / MOVE_LINE_HEIGHT);
         List<String> recentMoves = lastN(moves, maxVisibleRows);
 
         // המהלך האחרון מוצג ראשון (למעלה) - זה מה שהכי מעניין את השחקן
         // ברגע נתון, ואין צורך בגלילה כי הפאנל ממילא מוגבל בגובה קבוע.
-        int y = MOVES_START_Y;
+        int y = startY + MOVES_START_Y;
         for (int i = recentMoves.size() - 1; i >= 0; i--) {
             canvas.drawText(recentMoves.get(i), offsetX + PADDING, y, MOVE_FONT_SIZE, MOVE_TEXT, false);
             y += MOVE_LINE_HEIGHT;

@@ -2,6 +2,7 @@ package kfchess.view;
 
 import kfchess.engine.snapshot.GameSnapshot;
 import kfchess.model.PieceColor;
+import kfchess.server.ClientRole;
 
 import java.awt.Color;
 import java.awt.Rectangle;
@@ -40,6 +41,10 @@ public class GameSceneView {
     // אחד לא עשה משהו רע), רק מידע נייטרלי "עוד לא התחלנו". ר' תיעוד
     // drawWaitingForOpponentBanner.
     private static final Color WAITING_BANNER_BACKGROUND = new Color(20, 60, 110, 210);
+    // אפור-כחלחל נייטרלי לפס שם-החדר - שונה מכל שאר הבאנרים (לא אזהרה,
+    // לא "עוד לא התחלנו") כי הוא לא תלוי-מצב בכלל, תמיד מוצג בדיוק אותו
+    // דבר (בקשת רות - שם החדר "בפס עליון קבוע").
+    private static final Color ROOM_HEADER_BACKGROUND = new Color(45, 45, 55);
 
     private static final int TITLE_FONT_SIZE = 42;
     private static final int SUBTITLE_FONT_SIZE = 20;
@@ -47,21 +52,62 @@ public class GameSceneView {
     private static final int BUTTON_HEIGHT = 56;
     private static final int BUTTON_FONT_SIZE = 22;
     // גובה/גודל-פונט משותפים לשני סוגי הבאנר העליון (ניתוק/המתנה ליריב) -
-    // אותה גיאומטריה בדיוק, רק צבע/טקסט שונים לפי המצב.
+    // אותה גיאומטריה בדיוק, רק צבע/טקסט שונים לפי המצב. אלה מצוירים *על
+    // הלוח עצמו* (boardCanvas) ותלויים-מצב - בניגוד ל-ROOM_HEADER_HEIGHT
+    // למטה, שהוא פס *קבוע* לרוחב כל הסצנה (כולל שני הפאנלים), לא רק הלוח.
     private static final int TOP_BANNER_HEIGHT = 40;
     private static final int TOP_BANNER_FONT_SIZE = 20;
+    // גובה פס שם-החדר הקבוע - נפרד בכוונה מ-TOP_BANNER_HEIGHT (אלה שני
+    // סוגי-פס שונים לגמרי: זה קבוע ולרוחב מלא, האחרים תלויי-מצב ולרוחב
+    // הלוח בלבד). NetworkGameWindowMain *חייב* להשתמש באותו מספר בדיוק
+    // (ר' roomHeaderHeight() למטה) כשהוא מקטין את השטח הפנוי ללוח/פאנלים -
+    // בדיוק העיקרון שכבר קיים ב-BoardLayoutCalculator ("חישוב במקום אחד,
+    // לא בשני מקומות שיתבדרו זה מזה").
+    private static final int ROOM_HEADER_HEIGHT = 34;
+    private static final int ROOM_HEADER_FONT_SIZE = 18;
 
     private final BoardView boardView;
     private final SidePanelView sidePanelView;
+    // שלושת השדות הבאים (roomId/role/username) קבועים לכל אורך חיי החלון -
+    // בניגוד לכל שאר המידע שמגיע ל-render() (GameSnapshot), הם *לא*
+    // משתנים תוך כדי משחק (שם החדר/התפקיד/שם המשתמש נקבעים פעם אחת ברגע
+    // החיבור, ר' NetworkGameWindowMain.launch) - אז הם שדות של הבנאי, לא
+    // פרמטרים חדשים ב-render() (שהיה משנה את החתימה שלה בלי צורך אמיתי).
+    private final String roomId;
+    private final ClientRole role;
+    private final String username;
 
     // "הגודל האחרון שידוע" - מתעדכן בתחילת כל render(). לא זיכרון-מצב
     // אמיתי, רק נוחות כדי ש-restartButtonBounds() (בלי פרמטרים, נקראת
     // גם מחוץ ל-render כדי לבדוק קליק) תדע למה להתייחס.
     private int lastBoardPixelSize;
 
+    // חתימה ישנה (בלי roomId/role/username) - נשארת כדי ש-NetworkClickHandlerTest
+    // הקיים ימשיך לעבוד בלי שינוי (הוא בונה GameSceneView רק כדי לשאול
+    // restartButtonBounds(), לא קורא ל-render() בכלל - ר' תיעוד הטסט).
+    // שקולה ל-roomId=null/role=null/username=null, כמו שדפוס התאימות-
+    // לאחור הזה כבר עובד בכל הפרויקט (ר' SnapshotMessage/GameSession וכו').
     public GameSceneView(BoardView boardView, int panelWidth) {
+        this(boardView, panelWidth, null, null, null);
+    }
+
+    public GameSceneView(BoardView boardView, int panelWidth, String roomId, ClientRole role, String username) {
         this.boardView = boardView;
         this.sidePanelView = new SidePanelView(panelWidth);
+        this.roomId = roomId;
+        this.role = role;
+        this.username = username;
+    }
+
+    // כמה מקום (בפיקסלים) צריך לשמור *מלכתחילה* בשביל פס שם-החדר, לפני
+    // שמחשבים איפה הלוח/פאנלים בכלל נכנסים - NetworkGameWindowMain קורא
+    // לזה לפני BoardLayoutCalculator.computeLayout (ר' תיעוד שם) כדי
+    // שהלוח לא "יגלוש" מתחת לפס הזה. public+static בכוונה (בניגוד לשאר
+    // הקבועים הפרטיים כאן) - זה המספר היחיד מהמחלקה הזו שגם קוד מבחוץ
+    // חייב לדעת, כדי לא לשכפל אותו כקבוע נפרד שם (בדיוק הבאג ששני באגי-
+    // "קליק לא במקום" הקודמים נבעו ממנו).
+    public static int roomHeaderHeight() {
+        return ROOM_HEADER_HEIGHT;
     }
 
     /**
@@ -95,6 +141,12 @@ public class GameSceneView {
                 boardPixelSize, boardPixelSize, snapshot.boardHeightCells(), snapshot.boardWidthCells());
 
         Img scene = new Img().newCanvas(sceneWidthPx, sceneHeightPx, OUTER_BACKGROUND);
+        // תמיד מצויר, ראשון (בקשת רות - שם החדר "בפס עליון קבוע", לא תלוי-
+        // מצב כמו הבאנרים למטה) - לרוחב *כל* הסצנה (כולל שני הפאנלים),
+        // כי זה מידע כללי על המשחק, לא ספציפי ללוח. boardOffsetY שמתקבל
+        // כפרמטר כבר "יודע" להזיז את הלוח למטה בגובה הזה בדיוק - ר' תיעוד
+        // roomHeaderHeight()/NetworkGameWindowMain.computeBoardLayout.
+        drawRoomHeader(scene, sceneWidthPx);
 
         Img boardCanvas = boardView.render(snapshot, geometry);
         if (snapshot.gameOver()) {
@@ -116,16 +168,26 @@ public class GameSceneView {
         }
         boardCanvas.drawOn(scene, boardOffsetX, boardOffsetY);
 
+        // שני הפאנלים מתחילים מתחת לפס שם-החדר (startY=ROOM_HEADER_HEIGHT)
+        // ולא מ-0 כמו קודם - כדי שלא "יצטיירו" מתחת לפס ההוא (ר' תיעוד
+        // SidePanelView.draw). isLocalPlayer - true בדיוק לפאנל שמתאים
+        // ל-role של הלקוח הזה עצמו (WHITE→פאנל שמאל, BLACK→פאנל ימין) -
+        // לצופה/ה (role==SPECTATOR, או role==null בחתימת-התאימות הישנה)
+        // אף אחד מהשניים לא "שלי", אז אף פאנל לא מקבל את התג "(You: ...)".
         int panelWidth = sidePanelView.panelWidth();
-        sidePanelView.draw(scene, 0, sceneHeightPx,
+        int panelStartY = ROOM_HEADER_HEIGHT;
+        int panelHeight = sceneHeightPx - ROOM_HEADER_HEIGHT;
+        sidePanelView.draw(scene, 0, panelStartY, panelHeight,
                 PieceColor.WHITE,
                 snapshot.scores().getOrDefault(PieceColor.WHITE, 0),
-                snapshot.moveLog().getOrDefault(PieceColor.WHITE, List.of()));
+                snapshot.moveLog().getOrDefault(PieceColor.WHITE, List.of()),
+                role == ClientRole.WHITE, username);
 
-        sidePanelView.draw(scene, sceneWidthPx - panelWidth, sceneHeightPx,
+        sidePanelView.draw(scene, sceneWidthPx - panelWidth, panelStartY, panelHeight,
                 PieceColor.BLACK,
                 snapshot.scores().getOrDefault(PieceColor.BLACK, 0),
-                snapshot.moveLog().getOrDefault(PieceColor.BLACK, List.of()));
+                snapshot.moveLog().getOrDefault(PieceColor.BLACK, List.of()),
+                role == ClientRole.BLACK, username);
 
         scene.show();
     }
@@ -197,5 +259,31 @@ public class GameSceneView {
         int textX = (lastBoardPixelSize - textWidth) / 2;
         int textY = TOP_BANNER_HEIGHT / 2 + TOP_BANNER_FONT_SIZE / 3;
         boardCanvas.drawText(text, textX, textY, TOP_BANNER_FONT_SIZE, TITLE_COLOR, true);
+    }
+
+    /**
+     * מציירת פס עליון *קבוע* לרוחב כל הסצנה (בניגוד לשני הבאנרים למעלה,
+     * שמצוירים רק על הלוח ורק בתנאים מסוימים) - בקשת רות: "שם חדר" תמיד
+     * גלוי על המסך, לא רק בכותרת החלון (Img.setTitle, שנשארת גם היא ללא
+     * שינוי - זה תוסף, לא תחליף). roomId==null (מקרה-קצה: ROLE_ASSIGNED
+     * לא הגיעה בזמן, ר' HomeScreenMain.waitForAssignedGameId) מוצג כ-"?"
+     * במקום לזרוק/להציג "null" מילולית.
+     * <p>
+     * תפקיד/שם המשתמש *לא* מוצגים כאן עבור WHITE/BLACK - אלה מופיעים
+     * בפאנל הצד המתאים (ר' SidePanelView.draw, isLocalPlayer) לפי בקשת
+     * רות ("גם וגם"). עבור SPECTATOR דווקא כן מוצגים כאן - אין לצופה/ה
+     * "פאנל שלו/ה" ששני הצדדים הקיימים (WHITE/BLACK) לא שייכים לו בכלל.
+     */
+    private void drawRoomHeader(Img scene, int sceneWidthPx) {
+        scene.fillRect(0, 0, sceneWidthPx, ROOM_HEADER_HEIGHT, ROOM_HEADER_BACKGROUND);
+
+        String text = "Room: " + (roomId == null ? "?" : roomId);
+        if (role == ClientRole.SPECTATOR) {
+            text += "   |   Spectator" + (username != null ? ": " + username : "");
+        }
+        int textWidth = scene.textWidth(text, ROOM_HEADER_FONT_SIZE, true);
+        int textX = (sceneWidthPx - textWidth) / 2;
+        int textY = ROOM_HEADER_HEIGHT / 2 + ROOM_HEADER_FONT_SIZE / 3;
+        scene.drawText(text, textX, textY, ROOM_HEADER_FONT_SIZE, TITLE_COLOR, true);
     }
 }
