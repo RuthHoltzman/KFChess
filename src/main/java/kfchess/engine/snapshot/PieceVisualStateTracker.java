@@ -1,5 +1,6 @@
-package kfchess.engine;
+package kfchess.engine.snapshot;
 
+import kfchess.engine.PieceTimers;
 import kfchess.model.Piece;
 import kfchess.model.PieceState;
 import java.util.HashMap;
@@ -8,11 +9,11 @@ import java.util.Map;
 public class PieceVisualStateTracker {
 
     // משכי המנוחה עצמם (כמה זמן שעון החול נמשך) הם עכשיו מוגדרים במקום
-    // אחד בלבד - GameEngine - כי הם גם קובעים בפועל כמה זמן הכלי חסום
+    // אחד בלבד - PieceTimers - כי הם גם קובעים בפועל כמה זמן הכלי חסום
     // מפעולה (לא רק כמה זמן מציירים עליו אנימציה). כך אי אפשר להגיע
     // למצב שבו הוויזואל והלוגיקה "מתפצלים" ומראים משכי זמן שונים.
-    private static final long SHORT_REST_MS = GameEngine.SHORT_REST_DURATION_MS;
-    private static final long LONG_REST_MS = GameEngine.LONG_REST_DURATION_MS;
+    private static final long SHORT_REST_MS = PieceTimers.SHORT_REST_DURATION_MS;
+    private static final long LONG_REST_MS = PieceTimers.LONG_REST_DURATION_MS;
 
     private static class Entry {
         PieceState lastKnownLogicalState;

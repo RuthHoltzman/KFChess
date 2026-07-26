@@ -1,9 +1,9 @@
 package kfchess.view;
 
-import kfchess.engine.CaptureEffectSnapshot;
-import kfchess.engine.GameSnapshot;
-import kfchess.engine.PieceSnapshot;
-import kfchess.engine.PieceVisualState;
+import kfchess.engine.snapshot.CaptureEffectSnapshot;
+import kfchess.engine.snapshot.GameSnapshot;
+import kfchess.engine.snapshot.PieceSnapshot;
+import kfchess.engine.snapshot.PieceVisualState;
 import kfchess.model.Position;
 import java.awt.*;
 
@@ -15,11 +15,13 @@ public class BoardView {
     private static final Color CAPTURE_EFFECT_COLOR = new Color(220, 30, 30); // אדום - "X" דוהה במקום שכלי נלכד
 
     private final String boardImagePath;
-    private final BoardGeometry geometry;
 
-    public BoardView(String boardImagePath, BoardGeometry geometry) {
+    // geometry היה שדה קבוע בקונסטרוקטור - עכשיו הוא פרמטר בכל render(),
+    // כי גודל הלוח יכול להשתנות מפריים לפריים (שינוי גודל חלון), ו-BoardView
+    // עצמו לא מחזיק שום זיכרון-מצב (בניגוד ל-SnapshotFactory) - אז אין
+    // סיבה לקבע אותו בקונסטרוקטור בכלל.
+    public BoardView(String boardImagePath) {
         this.boardImagePath = boardImagePath;
-        this.geometry = geometry;
     }
 
     /**
@@ -28,26 +30,29 @@ public class BoardView {
      * (GameSceneView) - כי אנחנו רוצים לצייר קודם את פאנלי הניקוד/המהלכים
      * לצידי הלוח, ורק אז להציג את התמונה השלמה פעם אחת.
      */
-    public Img render(GameSnapshot snapshot) {
-        // קנבס טרי בכל render - אבל דרך readAsFreshCanvas, שמביא את
-        // התמונה מקאש בזיכרון (ולא מהדיסק מחדש בכל פריים) ומחזיר לנו
-        // עותק פרטי שמותר לצייר עליו בלי להשפיע על הפריים הבא.
-        Img canvas = new Img().readAsFreshCanvas(boardImagePath);
+    public Img render(GameSnapshot snapshot, BoardGeometry geometry) {
+        int boardWidthPx = geometry.getCellWidth() * geometry.getCols();
+        int boardHeightPx = geometry.getCellHeight() * geometry.getRows();
 
-        drawLegalMoveMarkers(canvas, snapshot);
+        // רקע הלוח נטען עכשיו בגודל היעד הנוכחי (לא בגודל המקורי של
+        // הקובץ) - בדיוק כמו שספרייטי הכלים כבר עושים - כדי שהוא יתאים
+        // את עצמו לגודל החלון הנוכחי בכל render.
+        Img canvas = new Img().readAsFreshCanvas(boardImagePath, boardWidthPx, boardHeightPx);
+
+        drawLegalMoveMarkers(canvas, snapshot, geometry);
 
         for (PieceSnapshot piece : snapshot.pieces()) {
-            drawPiece(canvas, piece);
-            drawRestOverlayIfResting(canvas, piece);
+            drawPiece(canvas, piece, geometry);
+            drawRestOverlayIfResting(canvas, piece, geometry);
         }
 
         // מצוירים אחרי הכלים (מעל), כדי שה"X" הדוהה יהיה גלוי בבירור גם
         // אם כלי אחר כבר עומד/עובר על אותה משבצת ברגע זה.
         for (CaptureEffectSnapshot effect : snapshot.captureEffects()) {
-            drawCaptureEffect(canvas, effect);
+            drawCaptureEffect(canvas, effect, geometry);
         }
 
-        drawSelectionHighlight(canvas, snapshot);
+        drawSelectionHighlight(canvas, snapshot, geometry);
 
         return canvas;
     }
@@ -59,7 +64,7 @@ public class BoardView {
      * לפריים. progress=0 זה הרגע שנתפס (הכי בולט), progress=1 זה הרגע
      * שבו האפקט אמור להיעלם לגמרי (הכי דהוי ומורחב).
      */
-    private void drawCaptureEffect(Img canvas, CaptureEffectSnapshot effect) {
+    private void drawCaptureEffect(Img canvas, CaptureEffectSnapshot effect, BoardGeometry geometry) {
         double fadeOut = 1.0 - effect.progress();
         int alpha = (int) Math.round(220 * fadeOut);
         if (alpha <= 0) {
@@ -82,7 +87,7 @@ public class BoardView {
         canvas.drawText(mark, cx - markWidth / 2, cy + markFontSize / 3, markFontSize, ringColor, true);
     }
 
-    private void drawPiece(Img canvas, PieceSnapshot piece) {
+    private void drawPiece(Img canvas, PieceSnapshot piece, BoardGeometry geometry) {
         String framePath = currentFramePathFor(piece);
         Img pieceImg = new Img().read(
                 framePath,
@@ -108,7 +113,7 @@ public class BoardView {
      * מציירים על המשבצת שלו מלבן צהוב חצי-שקוף שמתחיל מלא וגובהו הולך
      * ומצטמצם ככל שהמנוחה מתקדמת - עד שהוא נעלם לגמרי כשהמנוחה מסתיימת.
      */
-    private void drawRestOverlayIfResting(Img canvas, PieceSnapshot piece) {
+    private void drawRestOverlayIfResting(Img canvas, PieceSnapshot piece, BoardGeometry geometry) {
         boolean resting = piece.state() == PieceVisualState.SHORT_REST
                 || piece.state() == PieceVisualState.LONG_REST;
         if (!resting) {
@@ -124,7 +129,7 @@ public class BoardView {
         canvas.fillRect(x, y, geometry.getCellWidth(), overlayHeight, REST_SAND_COLOR);
     }
 
-    private void drawSelectionHighlight(Img canvas, GameSnapshot snapshot) {
+    private void drawSelectionHighlight(Img canvas, GameSnapshot snapshot, BoardGeometry geometry) {
         if (snapshot.selectedPosition() == null) {
             return;
         }
@@ -132,7 +137,7 @@ public class BoardView {
         canvas.drawRect(topLeft.x, topLeft.y, geometry.getCellWidth(), geometry.getCellHeight(), SELECTION_COLOR, 4);
     }
 
-    private void drawLegalMoveMarkers(Img canvas, GameSnapshot snapshot) {
+    private void drawLegalMoveMarkers(Img canvas, GameSnapshot snapshot, BoardGeometry geometry) {
         for (Position target : snapshot.legalMoves()) {
             Point topLeft = geometry.cellToPixel(target);
             int markerSize = Math.min(geometry.getCellWidth(), geometry.getCellHeight()) / 3;

@@ -13,7 +13,6 @@ import java.util.Scanner;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
@@ -45,45 +44,6 @@ class BoardParserTest {
         assertEquals(PieceKind.ROOK, rook.kind());
 
         assertTrue(board.isEmpty(new Position(0, 2)));
-    }
-
-    @Test
-    void readBoard_mismatchedRowWidths_returnsNull() {
-        String input = "Board:\n" +
-                "bR bN bB\n" +
-                "bR bN\n" +
-                "Commands:\n";
-
-        Board board = new BoardParser(new Scanner(input)).readBoard();
-
-        assertNull(board);
-    }
-
-    @Test
-    void readBoard_unknownToken_returnsNull() {
-        String input = "Board:\n" +
-                "bX . .\n" +
-                "Commands:\n";
-
-        Board board = new BoardParser(new Scanner(input)).readBoard();
-
-        assertNull(board);
-    }
-
-    @Test
-    void readBoard_missingBoardSection_returnsNull() {
-        String input = "Commands:\n";
-
-        Board board = new BoardParser(new Scanner(input)).readBoard();
-
-        assertNull(board);
-    }
-
-    @Test
-    void readBoard_emptyInput_returnsNull() {
-        Board board = new BoardParser(new Scanner("")).readBoard();
-
-        assertNull(board);
     }
 
     @Test

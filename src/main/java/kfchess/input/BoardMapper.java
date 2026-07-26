@@ -4,24 +4,19 @@ import kfchess.model.Position;
 
 /**
  * ממפה קואורדינטות פיקסלים (כפי שמגיעות מפקודות click/jump) למיקום
- * לוגי על הלוח. גודל המשבצת בפיקסלים הוא קונפיגורציה (קבוע בבנאי),
- * לא hard-coded בתוך לוגיקת הטיפול בקליק כמו בקוד המקורי.
+ * לוגי על הלוח. גודל המשבצת בפיקסלים עכשיו *לא* קבוע בבנאי - הוא
+ * פרמטר של pixelToPosition בכל קריאה, כי גודל התא יכול להשתנות בין
+ * קריאה לקריאה (שינוי גודל חלון) - ל-BoardMapper עצמו אין שום זיכרון-
+ * מצב, אז אין סיבה לקבע מספר בקונסטרוקטור שעלול "להתיישן".
+ * <p>
+ * cellWidth ו-cellHeight מתקבלים כאן *בנפרד* בכוונה (לא cellSize יחיד) -
+ * כי כשהחלון לא ריבועי בדיוק, רוחב התא וגובה התא הם שני מספרים שונים.
+ * שימוש במספר אחד לשניהם היה גורם לשגיאת מיפוי בציר Y שמצטברת ככל
+ * שיורדים בלוח (בדיוק התסמין של "שורות תחתונות נקלטות שורה אחת מעל").
  */
 public class BoardMapper {
 
-    private static final int DEFAULT_CELL_SIZE_PIXELS = 100;
-
-    private final int cellSizeInPixels;
-
-    public BoardMapper(int cellSizeInPixels) {
-        this.cellSizeInPixels = cellSizeInPixels;
-    }
-
-    public static BoardMapper withDefaultCellSize() {
-        return new BoardMapper(DEFAULT_CELL_SIZE_PIXELS);
-    }
-
-    public Position pixelToPosition(int x, int y) {
-        return new Position(y / cellSizeInPixels, x / cellSizeInPixels);
+    public Position pixelToPosition(int x, int y, int cellWidth, int cellHeight) {
+        return new Position(y / cellHeight, x / cellWidth);
     }
 }

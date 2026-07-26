@@ -1,4 +1,4 @@
-package kfchess.engine;
+package kfchess.engine.snapshot;
 
 public enum PieceVisualState {
     IDLE,

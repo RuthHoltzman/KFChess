@@ -11,6 +11,16 @@ package kfchess.model;
  */
 public class Piece {
 
+    // מונה גלובלי - כל כלי מקבל מזהה עולה, פעם אחת, בבנאי. נחוץ כדי
+    // שהלקוח (ר' kfchess.net.client.ClientSnapshotReconstructor) יוכל לזהות
+    // "זה אותו כלי שהיה קודם" בין הודעות JSON נפרדות (שבהן זהות אובייקט
+    // Java רגילה הולכת לאיבוד בכל פענוח) - בלי מזהה יציב כזה, אין דרך
+    // אמינה להבחין בין "כלי המשיך לזוז" ל"כלי חדש נוצר באותו מיקום".
+    // לא משפיע על שום לוגיקת משחק מקומית - רק שדה מזהה נוסף.
+    private static final java.util.concurrent.atomic.AtomicLong NEXT_ID =
+            new java.util.concurrent.atomic.AtomicLong(1);
+
+    private final long id = NEXT_ID.getAndIncrement();
     private final PieceColor color;
     private final PieceKind kind;
     private PieceState state = PieceState.IDLE;
@@ -18,6 +28,10 @@ public class Piece {
     public Piece(PieceColor color, PieceKind kind) {
         this.color = color;
         this.kind = kind;
+    }
+
+    public long id() {
+        return id;
     }
 
     public PieceColor color() {

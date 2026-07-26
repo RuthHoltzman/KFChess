@@ -1,4 +1,4 @@
-package kfchess.engine;
+package kfchess.engine.snapshot;
 
 import kfchess.model.PieceColor;
 import kfchess.model.PieceKind;

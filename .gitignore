@@ -22,4 +22,8 @@ ENV/
 Thumbs.db
 .fake
 
+# הגדרות סביבת העבודה של IntelliJ IDEA
+.idea/
+*.iml
+
 src/main/resources/
