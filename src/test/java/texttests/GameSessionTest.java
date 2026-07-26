@@ -106,6 +106,7 @@ class GameSessionTest {
         GameSession session = new GameSession();
         FakeWebSocket white = new FakeWebSocket();
         session.assignRole(white);
+        session.assignRole(new FakeWebSocket()); // BLACK - בלי זה הקליק היה נחסם (ר' isWaitingForOpponent, בקשת רות)
 
         session.enqueueCommand(white, click(6, 4)); // בחירה
         session.enqueueCommand(white, click(5, 4)); // צעד אחד קדימה - חוקי
@@ -131,6 +132,7 @@ class GameSessionTest {
         GameSession session = new GameSession();
         FakeWebSocket white = new FakeWebSocket();
         session.assignRole(white);
+        session.assignRole(new FakeWebSocket()); // BLACK - בלי זה הקליק היה נחסם (ר' isWaitingForOpponent, בקשת רות)
 
         session.enqueueCommand(white, click(6, 4));
         session.enqueueCommand(white, click(5, 4));

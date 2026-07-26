@@ -641,6 +641,18 @@ Code Java world...") - בלי שום קשר לפרויקט. נכתב מחדש ל
 - **אימות שבוצע כאן**: איזון סוגריים - תקין. **טרם `mvn test`** - ר' "מה
   שנשאר לאמת" למטה.
 
+**עדכון - רות הריצה `mvn test` בפועל ומצאה רגרסיה**: שני טסטים ישנים
+נכשלו - `tick_clickThenLegalTarget_movesPieceIntoTransit` ו-
+`tick_clickThenLegalTarget_snapshotIncludesMatchingMotion`. הסיבה: שני
+הטסטים האלה (שנכתבו הרבה לפני הפיצ'ר הזה) רשמו רק חיבור WHITE יחיד
+בכוונה (כדי לבדוק קליק/תזוזה בפשטות, בלי צורך אמיתי בשני צדדים ללוגיקה
+שהם בודקים) - אבל עכשיו `isWaitingForOpponent()` חוסמת בדיוק את זה,
+כי אין BLACK מחובר. **תוקן**: הוספתי `session.assignRole(new FakeWebSocket())`
+(BLACK) לשני הטסטים, בדיוק כמו שכל שאר הטסטים ב-`GameSessionTest`
+שבודקים קליקים/מהלכים כבר עושים. זו לא "עקיפה" של הפיצ'ר - זה בדיוק
+התיקון הנכון: הטסטים בודקים לוגיקת מהלכים, לא לוגיקת המתנה, אז הם
+צריכים לדמות משחק "שהתחיל" (שני צדדים מחוברים), בדיוק כמו שקורה בפועל.
+
 ### אינדיקציה ויזואלית - "Waiting for an opponent..." (בקשת המשך, הסבב הזה)
 
 רות ביקשה שגם יהיה רואים ויזואלית שממתינים ליריב (בנוסף לחסימת הקליקים
@@ -705,9 +717,12 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
 "נראה הגיוני") - אבל **זה לא תחליף ל-`mvn test` אמיתי**. צריך:
 
 1. ~~`mvn clean test`~~ - **בוצע לשלב 5 חלק 1, ירוק לגמרי - אושר ע"י רות.**
-   **טרם בוצע לשלב 5 חלק 2 (matchmaking, הסבב הזה)** - כולל הטסטים
-   החדשים: `GameSessionTest` (5 חדשים), `MatchmakingResolverTest` (חדש
-   לגמרי), `HomeScreenMainTest` (3 חדשים).
+   **בוצע גם על כל הצבירה עד כה (חדרים, תיקון Play, חסימת מהלכים, באנר
+   Waiting) - רות הריצה בפועל**: 141 טסטים, 2 נכשלו (`tick_clickThenLegalTarget_movesPieceIntoTransit`,
+   `tick_clickThenLegalTarget_snapshotIncludesMatchingMotion` - רגרסיה
+   מהפיצ'ר "לא ניתן להתחיל לשחק בזמן המתנה", ר' התיעוד למעלה) - **תוקן
+   כאן** (הוספת BLACK מחובר לשני הטסטים). **צריך להריץ `mvn test` שוב
+   כדי לוודא שכל ה-141 ירוקים עכשיו** - טרם אושר.
 2. **הרצה ידנית מקצה לקצה של ELO (עדיין לא בוצעה מאז שלב 4 Part B)**:
    - Run על `ServerMain`.
    - **Register שני חשבונות שונים** דרך `LoginScreenMain` (למשל
@@ -855,6 +870,12 @@ git commit -m "Ignore CLICK/JUMP commands from a lone connected player until an 
 ```
 git add src/main/java/kfchess/server/SnapshotMessage.java src/main/java/kfchess/server/client/IncomingSnapshot.java src/main/java/kfchess/server/client/ClientSnapshotReconstructor.java src/main/java/kfchess/engine/snapshot/GameSnapshot.java src/main/java/kfchess/engine/snapshot/SnapshotFactory.java src/main/java/kfchess/server/server/GameSession.java src/main/java/kfchess/NetworkGameWindowMain.java src/main/java/kfchess/view/GameSceneView.java src/test/java/texttests/GameSessionTest.java src/test/java/texttests/MessageDtoTest.java src/test/java/texttests/ClientSnapshotReconstructorTest.java PROGRESS.md
 git commit -m "Show a blue banner reading Waiting for an opponent to join... on the board while a lone player waits, by threading a new waitingForOpponent flag through the whole snapshot pipeline from GameSession down to GameSceneView, the same way disconnectSecondsRemaining already travels"
+```
+
+תיקון רגרסיה שרות מצאה ע"י `mvn test` (הסבב הזה):
+```
+git add src/test/java/texttests/GameSessionTest.java PROGRESS.md
+git commit -m "Fix two pre-existing move tests that only connected a lone WHITE player and broke once solo moves got blocked while waiting for an opponent, by also connecting a BLACK player so the game counts as started"
 ```
 
 ## איך להריץ ולבדוק (IntelliJ)
