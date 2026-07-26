@@ -33,8 +33,10 @@
    חשובה - פער ידוע משלב 5" למטה (סינון ELO ±100, timeout של דקה, הודעת
    "לא נמצא" - **רות בחרה במפורש לדחות** ולהתקדם לשלב 6 קודם, עדיין פתוח).
 6. חדרים (Create/Join/Cancel) + לוגים - 🟡 **חלק 1 (Create/Join/Cancel)
-   ממומש בקוד הסבב הזה, טרם אומת.** חלק 2 (לוגים בצד שרת+לקוח) - עדיין
-   לא התחיל, סבב נפרד מתוכנן.
+   ממומש בקוד, `mvn test` ירוק (רות הריצה, 141/141 אחרי תיקון רגרסיה -
+   ר' סעיף ייעודי למטה), טרם אומת ידנית עד הסוף.** חלק 2 (לוגים בצד
+   שרת+לקוח, לקובץ טקסט) - **ממומש בקוד הסבב הזה** (ר' "לוגים - שלב 6
+   חלק 2" למטה), טרם אומת.
 
 ## הערה חשובה - קובץ ההוראות המקורי (PDF) והפער הידוע משלב 5
 
@@ -709,6 +711,59 @@ Code Java world...") - בלי שום קשר לפרויקט. נכתב מחדש ל
   (ודא ששום מקום לא נשאר תלוי בשם הישן) - נקי. **טרם `mvn test` וטרם
   הרצה ידנית** - ר' "מה שנשאר לאמת" למטה.
 
+### לוגים - שלב 6, חלק 2 (הסבב הזה)
+
+הציטוט המדויק מהמנחה: "Store logs on both server and client side, for
+all of the client/server activity". **חשוב להבחין**: זה **לא** אותו
+דבר כמו `moveLog` (רישום מהלכי השחמט, שכבר קיים משלבים מוקדמים ומוצג
+בפאנל הצדדי) - זה לוג טכני/תפעולי נפרד לגמרי (מי התחבר/התנתק, שגיאות,
+איך משחק נוצר) - הובהר בצ'אט עם רות באריכות לפני המימוש.
+
+**החלטות עיצוב שרות בחרה במפורש**: פורמט **קובץ טקסט** (לא DB/JSON),
+ו-**קובץ חדש בכל הרצה** (לא קובץ אחד שמצטבר) - כדי שכל תהליך (כל חלון
+לקוח, וגם השרת) יכתוב לקובץ ייחודי משלו, בלי סיכון "להתערבב" עם תהליכים
+אחרים שרצים בו-זמנית.
+
+- **`kfchess.logging.FileLogger`** (מחלקה חדשה, משותפת לשרת וללקוח) -
+  `new FileLogger(prefix)` יוצרת תיקייה `logs/` (אם אין) ופותחת קובץ
+  `logs/<prefix>_<yyyy-MM-dd_HH-mm-ss>.log` (חותמת זמן בשם הקובץ - קובץ
+  ייחודי לכל הרצה, בדיוק כמו שרות ביקשה). `log(String)` - `synchronized`,
+  מוסיפה שורה עם חותמת זמן (שעה:דקה:שנייה.מילישנייה) בתחילתה, `autoFlush=true`
+  (נכתב לדיסק מיד, לא ממתין לסגירה - חשוב אם התהליך קורס). אם אי-אפשר
+  לפתוח את הקובץ בכלל (בעיית הרשאות למשל) - לא מפילה את השרת/לקוח,
+  רק מדפיסה אזהרה ל-`System.err` וממשיכה בלי כתיבה לקובץ (`log()` בודקת
+  null בשקט). `close()` קיימת לניקיון עתידי אבל לא נקראת כרגע בפועל
+  (autoFlush כבר מבטיח שהתוכן על הדיסק בלי צורך ב-close מפורש).
+- **`GameServer`** - שדה `FileLogger fileLogger = new FileLogger("server")`
+  אחד לכל תהליך שרת (לא לכל session - "פעילות שרת" היא ברמת GameServer).
+  נקודות לוג: `onStart` (השרת עלה, איזה פורט), `onOpen` (gameId, תפקיד
+  שהוקצה, username אם יש, ו**איך** התחבר/ה - Create/Play/Join, נגזר
+  מאותה בדיקה שכבר קובעת את ה-gameId), `onClose` (gameId, קוד, סיבה),
+  `onError`. אלה בדיוק אותן נקודות שכבר היה בהן `System.out.println`/
+  `System.err.println` - רק נוספה גם כתיבה לקובץ, בלי לגעת בהתנהגות הקיימת.
+- **`GameClient`** - שדה `FileLogger fileLogger = new FileLogger("client")`
+  אחד לכל **מופע** `GameClient` - כלומר אחד לכל ניסיון חיבור (`HomeScreenMain.connect`
+  יוצרת `GameClient` חדש בכל לחיצת Play/Room), מתאים בדיוק ל"קובץ בכל
+  הרצה". נקודות לוג: `onOpen` (התחברות הצליחה), `onMessage` (רק הודעות
+  שאינן SNAPSHOT - אותו כלל שכבר חל על הדפסה לקונסולה, אחרת 30 שורות
+  בשנייה בלי תועלת; משתמש ב-`IncomingMessageSummary.describe` הקיים),
+  `onClose`, `onError`, `sendClick`/`sendJump`/`sendRestart` (מה שנשלח,
+  לפני השליחה בפועל).
+- **טסטים חדשים**: `FileLoggerTest` - שתי בדיקות (`log_writesTimestampedLineToFileUnderLogsDirectory`,
+  `log_multipleCalls_appendsEachAsSeparateLine`) שכותבות בפועל ל-`logs/`
+  (כמו בייצור) עם קידומת ייחודית לכל טסט כדי לא להתנגש. **`GameServer`/
+  `GameClient` עדיין בלי טסטים ייחודיים** (דורשים שרת/רשת חיים - לא
+  השתנה בסבב הזה, אותו מצב כמו קודם).
+- **הערה על `.gitignore`**: כבר יש שם `*.log` (שורה קיימת, לא הוספתי) -
+  אז כל קבצי הלוג (גם מהרצה אמיתית, גם מהטסטים) כבר מוחרגים אוטומטית
+  מה-git, אין צורך בשינוי. תיקיית `logs/` עצמה לא תופיע ב-`git status`
+  כי היא (אחרי שהיא ריקה מקבצים לא-מוחרגים) - git ממילא לא עוקב אחרי
+  תיקיות ריקות.
+- **אימות שבוצע כאן**: איזון סוגריים על `FileLogger.java`/`FileLoggerTest.java`/
+  `GameServer.java`/`GameClient.java` - תקין. **טרם `mvn test` וטרם הרצה
+  ידנית** (לוודא שקבצי הלוג באמת נוצרים ומתמלאים כמצופה) - ר' "מה
+  שנשאר לאמת" למטה.
+
 ## מה שנשאר לאמת (רות - עדיין לא נעשה)
 
 שוב: אין לי `javac`/`mvn` בסביבה שלי (אין root, אין גישת רשת להוריד
@@ -804,7 +859,19 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
      החלונות ברגע שה-BLACK מצטרף/ת בפועל.
    - לוודא שהפס הכחול **לא** מופיע יחד עם פס הניתוק הכתום (הם לא אמורים
      להופיע בו-זמנית לעולם - ר' התיעוד למעלה).
-10. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
+10. **הרצה ידנית של הלוגים (חדש, טרם נבדק בפועל - הסבב הזה)**:
+    - Run על `ServerMain` - לוודא שנוצרה תיקייה `logs/` ובתוכה קובץ
+      `server_<תאריך-שעה>.log` עם שורת "GameServer started on port...".
+    - Login + Room→Create בחלון אחד - לוודא שנוצר גם `client_<...>.log`
+      (בתיקיית העבודה שממנה IntelliJ מריצה את הלקוח - יכולה להיות
+      תיקייה אחרת מזו של השרת, תלוי בקונפיגורציה), ושבקובץ ה-server
+      נוספה שורה "Connection opened via Create...".
+    - לשחק כמה מהלכים - לוודא שב-client log נוספות שורות "Sending
+      CLICK/JUMP...", וב-server log **לא** מצטברות אלפי שורות SNAPSHOT
+      (רק ROLE_ASSIGNED/שגיאות בצד הלקוח - זה מכוון).
+    - לסגור את חלון הלקוח - לוודא שב-server log נוספה שורה "Connection
+      closed...".
+11. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
    מופיעים כ-modified ב-`git status` (line-ending, לא תוכן - לא נגעתי
    בהם), ותיקיית `src/main/java/kfchess/.claude/` וקובץ `kfchess.db`
    שלא יצרתי (untracked, לא ב-git add המוצע).
@@ -876,6 +943,12 @@ git commit -m "Show a blue banner reading Waiting for an opponent to join... on 
 ```
 git add src/test/java/texttests/GameSessionTest.java PROGRESS.md
 git commit -m "Fix two pre-existing move tests that only connected a lone WHITE player and broke once solo moves got blocked while waiting for an opponent, by also connecting a BLACK player so the game counts as started"
+```
+
+לוגים - שלב 6 חלק 2 (הסבב הזה, **טרם אומת ידנית/mvn test - ר' "מה שנשאר לאמת" סעיף 10**):
+```
+git add src/main/java/kfchess/logging/FileLogger.java src/main/java/kfchess/server/server/GameServer.java src/main/java/kfchess/server/client/GameClient.java src/test/java/texttests/FileLoggerTest.java PROGRESS.md
+git commit -m "Log server and client activity to a fresh timestamped text file per run under logs/, covering connections, disconnects, errors and commands sent, separate from the existing in-game move log"
 ```
 
 ## איך להריץ ולבדוק (IntelliJ)

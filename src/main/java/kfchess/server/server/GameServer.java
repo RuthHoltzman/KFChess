@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import kfchess.account.AccountRepository;
 import kfchess.account.SqliteAccountRepository;
+import kfchess.logging.FileLogger;
 import kfchess.server.ClientCommand;
 import kfchess.server.ClientRole;
 import kfchess.server.ErrorMessage;
@@ -53,6 +54,11 @@ public class GameServer extends WebSocketServer {
     // הפנימיות של GameSession עצמה (assignRole וכו') כי כאן הבעיה היא ברמת
     // GameServer: איזה session בכלל נבחר, לא מה קורה בתוכו.
     private final Object sessionAllocationLock = new Object();
+    // שלב 6 חלק 2 (בקשת המנחה): לוג טכני/תפעולי לקובץ טקסט - לא קשור
+    // בכלל ל-moveLog (רישום מהלכי שחמט, כבר קיים) - ר' תיעוד FileLogger.
+    // אחד בלבד לכל תהליך שרת (לא לכל session) - "פעילות שרת" היא
+    // ברמת ה-GameServer, לא ברמת משחק בודד.
+    private final FileLogger fileLogger = new FileLogger("server");
     private long lastTickNanos = System.nanoTime();
 
     public GameServer(int port) {
@@ -65,6 +71,7 @@ public class GameServer extends WebSocketServer {
         lastTickNanos = System.nanoTime();
         tickExecutor.scheduleAtFixedRate(this::tickAllSessions, 0, TICK_INTERVAL_MILLIS, TimeUnit.MILLISECONDS);
         System.out.println("GameServer started on port " + getPort());
+        fileLogger.log("GameServer started on port " + getPort());
     }
 
     // חיבור חדש: קובע/יוצר את המשחק לפי הנתיב, קובע תפקיד (לבן/שחור/צופה)
@@ -84,17 +91,23 @@ public class GameServer extends WebSocketServer {
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
         String path = handshake.getResourceDescriptor();
         String gameId;
+        String connectionMethod;
         if (CreateRoomResolver.isCreateRoomRequest(path)) {
             gameId = createNewRoomGameId();
+            connectionMethod = "Create";
         } else if (MatchmakingResolver.isMatchmakingRequest(path)) {
             gameId = resolveMatchmakingGameId();
+            connectionMethod = "Play";
         } else {
             gameId = GameIdResolver.resolve(path);
+            connectionMethod = "Join";
         }
         String username = UsernameResolver.resolve(path).orElse(null);
         GameSession session = sessions.computeIfAbsent(gameId, id -> new GameSession(accountRepository));
         gameIdByConnection.put(conn, gameId);
         ClientRole role = session.assignRole(conn, username);
+        fileLogger.log("Connection opened via " + connectionMethod + ": gameId=" + gameId
+                + ", role=" + role + ", username=" + (username == null ? "-" : username));
         conn.send(gson.toJson(new RoleAssignedMessage(role.name(), gameId)));
     }
 
@@ -149,6 +162,7 @@ public class GameServer extends WebSocketServer {
     @Override
     public void onClose(WebSocket conn, int code, String reason, boolean remote) {
         String gameId = gameIdByConnection.remove(conn);
+        fileLogger.log("Connection closed: gameId=" + gameId + ", code=" + code + ", reason=" + reason);
         GameSession session = gameId == null ? null : sessions.get(gameId);
         if (session != null) {
             session.handleDisconnect(conn);
@@ -178,6 +192,7 @@ public class GameServer extends WebSocketServer {
     @Override
     public void onError(WebSocket conn, Exception ex) {
         System.err.println("GameServer error: " + ex.getMessage());
+        fileLogger.log("ERROR: " + ex.getMessage());
     }
 
     // רץ אך ורק על thread הטיק: מקדם את כל המשחקים הפעילים לפי הזמן שעבר, ואז משדר לכל אחד את מצבו.

@@ -3,6 +3,7 @@ package kfchess.server.client;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import kfchess.logging.FileLogger;
 import kfchess.server.ClientCommand;
 import kfchess.server.ClientCommandType;
 import org.java_websocket.client.WebSocketClient;
@@ -25,6 +26,12 @@ public class GameClient extends WebSocketClient {
     // אותו מראש בכלל, אז חייבים לחלץ אותו מהתשובה הראשונה כדי להציג
     // אותו בכותרת חלון המשחק (ר' NetworkGameWindowMain, Img.setTitle).
     private volatile String assignedGameId;
+    // שלב 6 חלק 2 (בקשת המנחה): לוג טכני/תפעולי לקובץ טקסט - ר' תיעוד
+    // FileLogger וגם GameServer.fileLogger (אותו רעיון, בצד הלקוח הפעם).
+    // אחד לכל GameClient - כלומר אחד לכל ניסיון חיבור (ר' HomeScreenMain.connect,
+    // שיוצרת GameClient חדש בכל לחיצת Play/Room), בדיוק מה שרות ביקשה
+    // ("קובץ בכל הרצה").
+    private final FileLogger fileLogger = new FileLogger("client");
 
     public GameClient(URI serverUri) {
         super(serverUri);
@@ -34,10 +41,13 @@ public class GameClient extends WebSocketClient {
     @Override
     public void onOpen(ServerHandshake handshakedata) {
         System.out.println("connected to " + getURI());
+        fileLogger.log("Connected to " + getURI());
     }
 
     // נקרא לכל הודעה נכנסת מהשרת - תמיד נשמרת (ל-status), אבל מודפסת מיד רק אם היא לא SNAPSHOT
     // (אלה מגיעות ברצף מהיר, ר' printLatestSnapshot להצגה לפי דרישה במקום הצפת מסוף).
+    // אותו כלל חל על הלוג לקובץ - SNAPSHOT לא נרשמת (30 פעם בשנייה זה
+    // הרבה מדי טקסט בלי תועלת), רק סוגי הודעות אחרים (ROLE_ASSIGNED/ERROR).
     @Override
     public void onMessage(String message) {
         latestMessage = message;
@@ -46,7 +56,9 @@ public class GameClient extends WebSocketClient {
             assignedGameId = json.get("gameId").getAsString();
         }
         if (!IncomingMessageSummary.isSnapshot(message)) {
-            System.out.println(IncomingMessageSummary.describe(message));
+            String summary = IncomingMessageSummary.describe(message);
+            System.out.println(summary);
+            fileLogger.log("Received: " + summary);
         }
     }
 
@@ -69,26 +81,31 @@ public class GameClient extends WebSocketClient {
     @Override
     public void onClose(int code, String reason, boolean remote) {
         System.out.println("disconnected: " + reason);
+        fileLogger.log("Disconnected: code=" + code + ", reason=" + reason);
     }
 
     @Override
     public void onError(Exception ex) {
         System.err.println("client error: " + ex.getMessage());
+        fileLogger.log("ERROR: " + ex.getMessage());
     }
 
     // בונה ClientCommand מסוג CLICK וממיר ל-JSON לפני שליחה - אותו DTO שהשרת מפענח, הפעם בכיוון ההפוך.
     public void sendClick(int row, int col) {
+        fileLogger.log("Sending CLICK row=" + row + " col=" + col);
         send(gson.toJson(new ClientCommand(ClientCommandType.CLICK, row, col)));
     }
 
     // כנ"ל, עבור JUMP.
     public void sendJump(int row, int col) {
+        fileLogger.log("Sending JUMP row=" + row + " col=" + col);
         send(gson.toJson(new ClientCommand(ClientCommandType.JUMP, row, col)));
     }
 
     // מבקש מהשרת לאתחל את הלוח (שני הצדדים צריכים לבקש - ר' GameSession.applyCommand).
     // row/col הם "דמה" (0,0) - RESTART לא צריך מיקום בכלל, ר' ClientCommand.isValid().
     public void sendRestart() {
+        fileLogger.log("Sending RESTART");
         send(gson.toJson(new ClientCommand(ClientCommandType.RESTART, 0, 0)));
     }
 }
