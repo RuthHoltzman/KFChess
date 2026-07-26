@@ -76,7 +76,7 @@ The game needs **one server process** plus **one client process per player**.
 
 **1 — Start the server**
 
-Run `kfchess.net.server.ServerMain`. In IntelliJ: open the file and click the
+Run `kfchess.server.server.ServerMain`. In IntelliJ: open the file and click the
 green ▶ beside `main`.
 
 ```
@@ -236,7 +236,7 @@ src/main/java/kfchess/
 
 | Class | Purpose |
 |---|---|
-| `kfchess.net.server.ServerMain` | WebSocket server — run once |
+| `kfchess.server.server.ServerMain` | WebSocket server — run once |
 | `kfchess.LoginScreenMain` | Player client — run once per player |
 | `kfchess.Main` | Console version of the game |
 
@@ -275,7 +275,7 @@ keeps the tests fast and deterministic.
 ## הוראות הרצה מקוצרות (עברית)
 
 1. **דרישות**: Java 17 (JDK) ו-Maven.
-2. **הרצת השרת** — מריצים את המחלקה `kfchess.net.server.ServerMain`.
+2. **הרצת השרת** — מריצים את המחלקה `kfchess.server.server.ServerMain`.
    אמורה להופיע השורה `GameServer started on port 8887`. משאירים אותו רץ.
 3. **הרצת הלקוח** — מריצים את **`kfchess.LoginScreenMain`**
    (נקודת הכניסה **היחידה** למשחק).

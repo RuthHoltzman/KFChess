@@ -1,4 +1,4 @@
-package kfchess.net.client;
+package kfchess.server.client;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;

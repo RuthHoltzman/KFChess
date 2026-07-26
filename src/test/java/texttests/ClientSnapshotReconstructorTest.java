@@ -6,11 +6,11 @@ import kfchess.model.Piece;
 import kfchess.model.PieceColor;
 import kfchess.model.PieceKind;
 import kfchess.model.Position;
-import kfchess.net.JumpDto;
-import kfchess.net.PieceDto;
-import kfchess.net.SnapshotMessage;
-import kfchess.net.client.ClientSnapshotReconstructor;
-import kfchess.net.client.IncomingSnapshot;
+import kfchess.server.JumpDto;
+import kfchess.server.PieceDto;
+import kfchess.server.SnapshotMessage;
+import kfchess.server.client.ClientSnapshotReconstructor;
+import kfchess.server.client.IncomingSnapshot;
 import kfchess.realtime.Motion;
 import org.junit.jupiter.api.Test;
 

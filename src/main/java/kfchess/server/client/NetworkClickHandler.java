@@ -1,4 +1,4 @@
-package kfchess.net.client;
+package kfchess.server.client;
 
 import kfchess.input.BoardMapper;
 import kfchess.model.Position;

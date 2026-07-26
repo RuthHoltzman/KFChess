@@ -6,7 +6,7 @@ import kfchess.model.Piece;
 import kfchess.model.PieceColor;
 import kfchess.model.PieceKind;
 import kfchess.model.Position;
-import kfchess.net.PieceDto;
+import kfchess.server.PieceDto;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

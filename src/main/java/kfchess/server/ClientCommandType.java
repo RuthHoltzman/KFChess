@@ -1,4 +1,4 @@
-package kfchess.net;
+package kfchess.server;
 
 /**
  * סוגי ההודעות שהלקוח יכול לשלוח לשרת. שדה ה-JSON "type" ({@link ClientCommand})

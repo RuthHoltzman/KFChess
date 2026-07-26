@@ -1,6 +1,6 @@
 package texttests;
 
-import kfchess.net.client.GameClient;
+import kfchess.server.client.GameClient;
 
 import java.net.URI;
 import java.net.URISyntaxException;

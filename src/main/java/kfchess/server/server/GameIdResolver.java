@@ -1,4 +1,4 @@
-package kfchess.net.server;
+package kfchess.server.server;
 
 /**
  * הופך את נתיב החיבור (מהבקשה ההתחלתית של ה-WebSocket) ל-gameId: מחלקה

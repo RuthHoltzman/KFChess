@@ -1,4 +1,4 @@
-package kfchess.net;
+package kfchess.server;
 
 /**
  * DTO דו-כיווני להודעת קליק/קפיצה: בצד השרת נבנה ע"י Gson מ-JSON גולמי

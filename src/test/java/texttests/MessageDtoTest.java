@@ -2,9 +2,9 @@ package texttests;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import kfchess.net.ErrorMessage;
-import kfchess.net.RoleAssignedMessage;
-import kfchess.net.SnapshotMessage;
+import kfchess.server.ErrorMessage;
+import kfchess.server.RoleAssignedMessage;
+import kfchess.server.SnapshotMessage;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

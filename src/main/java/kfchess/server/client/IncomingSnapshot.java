@@ -1,9 +1,9 @@
-package kfchess.net.client;
+package kfchess.server.client;
 
 import kfchess.engine.snapshot.CaptureEffect;
 import kfchess.model.Position;
-import kfchess.net.JumpDto;
-import kfchess.net.PieceDto;
+import kfchess.server.JumpDto;
+import kfchess.server.PieceDto;
 import kfchess.realtime.Motion;
 
 import java.util.List;

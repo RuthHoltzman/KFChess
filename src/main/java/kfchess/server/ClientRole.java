@@ -1,4 +1,4 @@
-package kfchess.net;
+package kfchess.server;
 
 import kfchess.model.PieceColor;
 
