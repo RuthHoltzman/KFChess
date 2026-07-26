@@ -450,4 +450,27 @@ class GameSessionTest {
         assertEquals(6, selected.get("row").getAsInt());
         assertEquals(4, selected.get("col").getAsInt());
     }
+
+    // --- בקשת רות (הסבב הזה): שדה waitingForOpponent ב-snapshot עצמו
+    // (בנוסף לחסימת הקליקים למעלה) - כדי שהלקוח יידע לצייר באנר "Waiting
+    // for an opponent..." (ר' GameSceneView.drawWaitingForOpponentBanner).
+
+    @Test
+    void snapshotFor_onlyWhiteConnected_reportsWaitingForOpponentTrue() {
+        GameSession session = new GameSession();
+        session.assignRole(new FakeWebSocket()); // רק WHITE, אין BLACK
+
+        JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
+        assertTrue(snapshot.get("waitingForOpponent").getAsBoolean());
+    }
+
+    @Test
+    void snapshotFor_bothSidesConnected_reportsWaitingForOpponentFalse() {
+        GameSession session = new GameSession();
+        session.assignRole(new FakeWebSocket()); // WHITE
+        session.assignRole(new FakeWebSocket()); // BLACK
+
+        JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
+        assertFalse(snapshot.get("waitingForOpponent").getAsBoolean());
+    }
 }

@@ -45,7 +45,8 @@ public class ClientSnapshotReconstructor {
             Map<PieceColor, Integer> scores,
             Map<PieceColor, List<String>> moveLog,
             boolean restartRequestedByViewer,
-            Integer disconnectSecondsRemaining
+            Integer disconnectSecondsRemaining,
+            boolean waitingForOpponent
     ) {}
 
     public Reconstructed reconstruct(IncomingSnapshot incoming) {
@@ -79,7 +80,8 @@ public class ClientSnapshotReconstructor {
                 incoming.selected(), incoming.legalMoves(),
                 incoming.gameOver(), incoming.winner(), incoming.now(),
                 scoresByColor(incoming.scores()), moveLogByColor(incoming.moveLog()),
-                incoming.restartRequestedByViewer(), incoming.disconnectSecondsRemaining());
+                incoming.restartRequestedByViewer(), incoming.disconnectSecondsRemaining(),
+                incoming.waitingForOpponent());
     }
 
     // לפי piece.id(): אם מוכר - מסנכרנת את המצב שלו ומחזירה את אותו אובייקט

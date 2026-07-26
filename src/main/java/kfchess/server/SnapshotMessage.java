@@ -52,6 +52,13 @@ public class SnapshotMessage {
     // פעיל" בלי לבדוק gameOver בנוסף (בניגוד ל-restartRequestedByViewer,
     // זה יכול להיות true גם כשהמשחק *לא* נגמר - זו בדיוק הנקודה).
     private final Integer disconnectSecondsRemaining;
+    // בקשת רות (הסבב הזה): true כל עוד GameSession.isWaitingForOpponent() -
+    // רק צד אחד (WHITE/BLACK) מחובר, השני עוד לא הצטרף - כדי שהלקוח יוכל
+    // לצייר באנר "Waiting for an opponent..." (ר' GameSceneView), באותה
+    // רוח בדיוק כמו disconnectSecondsRemaining. boolean רגיל ולא Boolean/
+    // Integer - בניגוד ל-disconnectSecondsRemaining, אין כאן צורך להבדיל
+    // "false" מ"לא רלוונטי בכלל": זה תמיד false כשיש כבר שני צדדים.
+    private final boolean waitingForOpponent;
 
     // חתימה ישנה, בלי restartRequestedByViewer/disconnectSecondsRemaining -
     // נשארת כדי ש-ClientSnapshotReconstructorTest/MessageDtoTest הקיימים
@@ -77,11 +84,24 @@ public class SnapshotMessage {
                 motions, jumps, captureEffects, restartRequestedByViewer, null);
     }
 
+    // חתימה קודמת (שלב 5 חלק 1), בלי waitingForOpponent - נשארת כדי
+    // ש-GameSessionTest/MessageDtoTest/ClientSnapshotReconstructorTest
+    // הקיימים ימשיכו לעבוד בלי שינוי; שקולה ל-waitingForOpponent=false.
     public SnapshotMessage(int boardWidthCells, int boardHeightCells, List<PieceDto> pieces, Position selected,
                            List<Position> legalMoves, Map<String, Integer> scores, Map<String, List<String>> moveLog,
                            boolean gameOver, String winner, long now,
                            List<Motion> motions, List<JumpDto> jumps, List<CaptureEffect> captureEffects,
                            boolean restartRequestedByViewer, Integer disconnectSecondsRemaining) {
+        this(boardWidthCells, boardHeightCells, pieces, selected, legalMoves, scores, moveLog, gameOver, winner, now,
+                motions, jumps, captureEffects, restartRequestedByViewer, disconnectSecondsRemaining, false);
+    }
+
+    public SnapshotMessage(int boardWidthCells, int boardHeightCells, List<PieceDto> pieces, Position selected,
+                           List<Position> legalMoves, Map<String, Integer> scores, Map<String, List<String>> moveLog,
+                           boolean gameOver, String winner, long now,
+                           List<Motion> motions, List<JumpDto> jumps, List<CaptureEffect> captureEffects,
+                           boolean restartRequestedByViewer, Integer disconnectSecondsRemaining,
+                           boolean waitingForOpponent) {
         this.boardWidthCells = boardWidthCells;
         this.boardHeightCells = boardHeightCells;
         this.pieces = pieces;
@@ -97,5 +117,6 @@ public class SnapshotMessage {
         this.captureEffects = captureEffects;
         this.restartRequestedByViewer = restartRequestedByViewer;
         this.disconnectSecondsRemaining = disconnectSecondsRemaining;
+        this.waitingForOpponent = waitingForOpponent;
     }
 }

@@ -36,14 +36,20 @@ public class GameSceneView {
     // יבלוט כ"אזהרה" ולא יתבלבל עם מסך ה-Game-Over, למרות שהם אף פעם
     // לא מוצגים בו-זמנית בפועל (ר' תיעוד drawDisconnectBanner).
     private static final Color DISCONNECT_BANNER_BACKGROUND = new Color(120, 40, 20, 210);
+    // כחול רגוע, שונה בכוונה מהכתום-אדמדם של ניתוק - זו לא "אזהרה" (אף
+    // אחד לא עשה משהו רע), רק מידע נייטרלי "עוד לא התחלנו". ר' תיעוד
+    // drawWaitingForOpponentBanner.
+    private static final Color WAITING_BANNER_BACKGROUND = new Color(20, 60, 110, 210);
 
     private static final int TITLE_FONT_SIZE = 42;
     private static final int SUBTITLE_FONT_SIZE = 20;
     private static final int BUTTON_WIDTH = 200;
     private static final int BUTTON_HEIGHT = 56;
     private static final int BUTTON_FONT_SIZE = 22;
-    private static final int DISCONNECT_BANNER_HEIGHT = 40;
-    private static final int DISCONNECT_BANNER_FONT_SIZE = 20;
+    // גובה/גודל-פונט משותפים לשני סוגי הבאנר העליון (ניתוק/המתנה ליריב) -
+    // אותה גיאומטריה בדיוק, רק צבע/טקסט שונים לפי המצב.
+    private static final int TOP_BANNER_HEIGHT = 40;
+    private static final int TOP_BANNER_FONT_SIZE = 20;
 
     private final BoardView boardView;
     private final SidePanelView sidePanelView;
@@ -100,6 +106,13 @@ public class GameSceneView {
         // לפי מה שה-snapshot בפועל מכיל, ולא לפי הנחה על מה "לא אמור" לקרות יחד.
         if (snapshot.disconnectSecondsRemaining() != null) {
             drawDisconnectBanner(boardCanvas, snapshot.disconnectSecondsRemaining());
+        }
+        // אף פעם לא קורה בו-זמנית עם disconnectSecondsRemaining (ר' תיעוד
+        // GameSession.isWaitingForOpponent - "פנוי" דורש שלא יהיה חלון-חסד
+        // פתוח על הצד השני, אז שני התנאים סותרים זה את זה) - שוב, if
+        // עצמאי בכוונה, לא תלוי בתנאי הקודם.
+        if (snapshot.waitingForOpponent()) {
+            drawWaitingForOpponentBanner(boardCanvas);
         }
         boardCanvas.drawOn(scene, boardOffsetX, boardOffsetY);
 
@@ -160,12 +173,29 @@ public class GameSceneView {
      * לא מוסתר) - רק באנר דק שמסביר *למה* הוא קפוא.
      */
     private void drawDisconnectBanner(Img boardCanvas, int secondsRemaining) {
-        boardCanvas.fillRect(0, 0, lastBoardPixelSize, DISCONNECT_BANNER_HEIGHT, DISCONNECT_BANNER_BACKGROUND);
+        boardCanvas.fillRect(0, 0, lastBoardPixelSize, TOP_BANNER_HEIGHT, DISCONNECT_BANNER_BACKGROUND);
 
         String text = "Opponent disconnected - " + secondsRemaining + "s to reconnect";
-        int textWidth = boardCanvas.textWidth(text, DISCONNECT_BANNER_FONT_SIZE, true);
+        int textWidth = boardCanvas.textWidth(text, TOP_BANNER_FONT_SIZE, true);
         int textX = (lastBoardPixelSize - textWidth) / 2;
-        int textY = DISCONNECT_BANNER_HEIGHT / 2 + DISCONNECT_BANNER_FONT_SIZE / 3;
-        boardCanvas.drawText(text, textX, textY, DISCONNECT_BANNER_FONT_SIZE, TITLE_COLOR, true);
+        int textY = TOP_BANNER_HEIGHT / 2 + TOP_BANNER_FONT_SIZE / 3;
+        boardCanvas.drawText(text, textX, textY, TOP_BANNER_FONT_SIZE, TITLE_COLOR, true);
+    }
+
+    /**
+     * מציירת פס עליון (אותה גיאומטריה בדיוק כמו drawDisconnectBanner, רק
+     * צבע כחול נייטרלי): "Waiting for an opponent to join..." - בקשת רות
+     * (הסבב הזה) - כל עוד GameSession.isWaitingForOpponent() (רק צד אחד
+     * מחובר), כדי שהשחקן/ית היחיד/ה שכבר בפנים ידע/תדע *למה* קליקים לא
+     * עושים כלום (ר' GameSession.applyCommand - נחסמים בשקט בלי הודעה).
+     */
+    private void drawWaitingForOpponentBanner(Img boardCanvas) {
+        boardCanvas.fillRect(0, 0, lastBoardPixelSize, TOP_BANNER_HEIGHT, WAITING_BANNER_BACKGROUND);
+
+        String text = "Waiting for an opponent to join...";
+        int textWidth = boardCanvas.textWidth(text, TOP_BANNER_FONT_SIZE, true);
+        int textX = (lastBoardPixelSize - textWidth) / 2;
+        int textY = TOP_BANNER_HEIGHT / 2 + TOP_BANNER_FONT_SIZE / 3;
+        boardCanvas.drawText(text, textX, textY, TOP_BANNER_FONT_SIZE, TITLE_COLOR, true);
     }
 }

@@ -443,7 +443,7 @@ public class GameSession {
         return new SnapshotMessage(board.width(), board.height(), scan.pieces(), selected.orElse(null), legalMoves,
                 scoresByName(), moveLogByName(), engine.isGameOver(), winner, engine.now(),
                 engine.activeMotions(), collectJumps(scan.positionByPiece()), engine.recentCaptureEffects(),
-                restartRequestedByViewer, disconnectSecondsRemaining());
+                restartRequestedByViewer, disconnectSecondsRemaining(), isWaitingForOpponent());
     }
 
     // סורק את כל הלוח (row/col) פעם אחת - אוסף גם PieceDto לשידור וגם piece->position לצורך collectJumps.

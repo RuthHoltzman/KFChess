@@ -632,14 +632,70 @@ Code Java world...") - בלי שום קשר לפרויקט. נכתב מחדש ל
   חוזרת (reentrant), לא deadlock.
   שעון המשחק (`engine.handleWait`) ממשיך לרוץ כרגיל בזמן ההמתנה - רק
   הקליקים עצמם נחסמים, לא הוספה שום עצירה של הטיימר.
-  **לא נוספה** אינדיקציה ויזואלית ("Waiting for opponent...") על המסך -
-  רק חסימה שקטה; רות יכולה לבקש את זה בנפרד אם תרצה.
+  **עדכון**: בהתחלה לא נוספה אינדיקציה ויזואלית - רות ביקשה בנפרד
+  שתהיה כזו, ר' הסעיף הבא "אינדיקציה ויזואלית - Waiting for an opponent".
 - **טסטים חדשים ב-`GameSessionTest`**: `tick_clickWhileWaitingForOpponent_isIgnored`
   (WHITE לבד/ה, קליק לא עובד - אין `selected` ב-snapshot),
   `tick_clickAfterOpponentJoins_isProcessedNormally` (אותו קליק אחרי
   ש-BLACK מצטרף/ת - עכשיו כן עובד).
 - **אימות שבוצע כאן**: איזון סוגריים - תקין. **טרם `mvn test`** - ר' "מה
   שנשאר לאמת" למטה.
+
+### אינדיקציה ויזואלית - "Waiting for an opponent..." (בקשת המשך, הסבב הזה)
+
+רות ביקשה שגם יהיה רואים ויזואלית שממתינים ליריב (בנוסף לחסימת הקליקים
+למעלה) - נבנה בדיוק לפי אותו דפוס שכבר קיים לבאנר הניתוק
+(`drawDisconnectBanner`), רק צבע/טקסט שונים.
+
+השדה `isWaitingForOpponent()` הועבר עד ללקוח דרך **כל שכבות ה-snapshot**
+(אותו "צינור" בדיוק ש-`disconnectSecondsRemaining` כבר עובר בו, שלב 5):
+
+- **`SnapshotMessage`** - שדה `boolean waitingForOpponent` חדש. נוסף
+  בנאי מלא חדש (עם הפרמטר הזה בסוף), וה"מלא" הקודם (עם
+  `disconnectSecondsRemaining`) הפך לחתימת-תאימות שמעבירה `false` -
+  בדיוק הדפוס שכבר קיים כאן לכל שדה חדש שנוסף (ר' ההיסטוריה של
+  הקובץ הזה - restartRequestedByViewer ו-disconnectSecondsRemaining
+  נוספו באותה שיטה בדיוק).
+- **`GameSession.snapshotFor`** - מעביר `isWaitingForOpponent()` לבנאי
+  החדש. אין בעיית thread: גם `snapshotFor` וגם `isWaitingForOpponent`
+  הן `synchronized(this)` - נעילה חוזרת, לא deadlock (אותו נימוק כמו
+  ב-`applyCommand` למעלה).
+- **`IncomingSnapshot`** (צד לקוח) - שדה מראה `waitingForOpponent` + getter.
+- **`ClientSnapshotReconstructor.Reconstructed`** - שדה נוסף בסוף ה-record,
+  מועבר הלאה בלי שום עיבוד (בדיוק כמו `disconnectSecondsRemaining`  -
+  אין כאן "שחזור זהות" לעשות, רק מעביר את הערך כמו שהוא).
+- **`GameSnapshot`** (record) + **`SnapshotFactory.createSnapshot`** -
+  פרמטר/שדה נוסף בסוף, מועבר עד לצייר.
+- **`NetworkGameWindowMain`** - עודכנו שני מקומות: הקריאה ל-`createSnapshot`
+  (מעבירה `state.waitingForOpponent()`) וגם `emptyReconstructedBeforeFirstSnapshot`
+  (ה"מצב ריק" לפני snapshot ראשון - `false`, כי עוד אין מספיק מידע לדעת).
+- **`GameSceneView`**:
+  - קבוע צבע חדש `WAITING_BANNER_BACKGROUND` (כחול רגוע - שונה בכוונה
+    מהכתום-אדמדם `DISCONNECT_BANNER_BACKGROUND` של ניתוק: זו לא "אזהרה",
+    רק מידע נייטרלי).
+  - **שינוי שם** (לא לוגי, רק ניקיון): `DISCONNECT_BANNER_HEIGHT`/`DISCONNECT_BANNER_FONT_SIZE`
+    → `TOP_BANNER_HEIGHT`/`TOP_BANNER_FONT_SIZE` - אותה גיאומטריה בדיוק
+    משמשת עכשיו את שני סוגי הבאנר (ניתוק + המתנה ליריב), אין טעם
+    בשני קבועים זהים בשם שונה. אין ל-`GameSceneView` טסטים ייחודיים
+    (בדק grep) - שינוי השם לא שובר כלום.
+  - `render()` - `if` עצמאי חדש: אם `snapshot.waitingForOpponent()` -
+    `drawWaitingForOpponentBanner(...)`. **לא תלוי** ב-`if` של הניתוק -
+    בפועל הם אף פעם לא קורים בו-זמנית (מוכח: `isWaitingForOpponent()`
+    דורשת שהצד השני יהיה "פנוי" *וגם* לא שמור בחלון-חסד, אז אם יש
+    חלון-חסד פתוח בכלל, `isWaitingForOpponent()` תמיד false) - אבל
+    בכוונה נשאר בלי תלות מפורשת, אותו עיקרון כמו ה-`if` של gameOver/ניתוק.
+  - **`drawWaitingForOpponentBanner`** (חדשה) - מציירת פס עליון לרוחב
+    הלוח: "Waiting for an opponent to join..." - בדיוק אותה גיאומטריה
+    כמו `drawDisconnectBanner`, רק צבע שונה.
+- **טסטים חדשים**: `GameSessionTest` - `snapshotFor_onlyWhiteConnected_reportsWaitingForOpponentTrue`,
+  `snapshotFor_bothSidesConnected_reportsWaitingForOpponentFalse`. `MessageDtoTest` -
+  `snapshotMessage_withWaitingForOpponentTrue_serializesField`,
+  `snapshotMessage_oldConstructorWithoutWaitingForOpponent_defaultsToFalse`.
+  `ClientSnapshotReconstructorTest` - `reconstruct_waitingForOpponent_passedThroughUnchanged`.
+- **אימות שבוצע כאן**: איזון סוגריים על כל הקבצים שנגעתי בהם - תקין,
+  grep ל-`DISCONNECT_BANNER_HEIGHT`/`DISCONNECT_BANNER_FONT_SIZE` הישנים
+  (ודא ששום מקום לא נשאר תלוי בשם הישן) - נקי. **טרם `mvn test` וטרם
+  הרצה ידנית** - ר' "מה שנשאר לאמת" למטה.
 
 ## מה שנשאר לאמת (רות - עדיין לא נעשה)
 
@@ -725,7 +781,15 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
    - חלון שני: Room... → Join עם אותו קוד - נכנס/ת כ-BLACK.
    - עכשיו לנסות שוב ללחוץ על כלי בחלון הראשון - לוודא שהפעם **כן
      עובד** רגיל (בחירה + תזוזה).
-9. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
+9. **הרצה ידנית של הבאנר "Waiting for an opponent..." (חדש, טרם נבדק
+   בפועל - הסבב הזה)**:
+   - חלון ראשון: Room... → Create - לוודא שמופיע **מיד** פס כחול בראש
+     הלוח עם הטקסט "Waiting for an opponent to join...".
+   - חלון שני: Room... → Join עם אותו קוד - לוודא שהפס **נעלם** משני
+     החלונות ברגע שה-BLACK מצטרף/ת בפועל.
+   - לוודא שהפס הכחול **לא** מופיע יחד עם פס הניתוק הכתום (הם לא אמורים
+     להופיע בו-זמנית לעולם - ר' התיעוד למעלה).
+10. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
    מופיעים כ-modified ב-`git status` (line-ending, לא תוכן - לא נגעתי
    בהם), ותיקיית `src/main/java/kfchess/.claude/` וקובץ `kfchess.db`
    שלא יצרתי (untracked, לא ב-git add המוצע).
@@ -785,6 +849,12 @@ git commit -m "Restrict Play matchmaking to sessions created via Play itself, so
 ```
 git add src/main/java/kfchess/server/server/GameSession.java src/test/java/texttests/GameSessionTest.java PROGRESS.md
 git commit -m "Ignore CLICK/JUMP commands from a lone connected player until an opponent actually joins, reusing the existing isWaitingForOpponent check so a solo player can no longer move pieces before anyone else is there to play against"
+```
+
+באנר "Waiting for an opponent..." (הסבב הזה, **טרם אומת ידנית/mvn test - ר' "מה שנשאר לאמת" סעיף 9**):
+```
+git add src/main/java/kfchess/server/SnapshotMessage.java src/main/java/kfchess/server/client/IncomingSnapshot.java src/main/java/kfchess/server/client/ClientSnapshotReconstructor.java src/main/java/kfchess/engine/snapshot/GameSnapshot.java src/main/java/kfchess/engine/snapshot/SnapshotFactory.java src/main/java/kfchess/server/server/GameSession.java src/main/java/kfchess/NetworkGameWindowMain.java src/main/java/kfchess/view/GameSceneView.java src/test/java/texttests/GameSessionTest.java src/test/java/texttests/MessageDtoTest.java src/test/java/texttests/ClientSnapshotReconstructorTest.java PROGRESS.md
+git commit -m "Show a blue banner reading Waiting for an opponent to join... on the board while a lone player waits, by threading a new waitingForOpponent flag through the whole snapshot pipeline from GameSession down to GameSceneView, the same way disconnectSecondsRemaining already travels"
 ```
 
 ## איך להריץ ולבדוק (IntelliJ)

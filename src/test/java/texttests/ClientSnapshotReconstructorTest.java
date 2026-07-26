@@ -198,4 +198,17 @@ class ClientSnapshotReconstructorTest {
 
         assertEquals(12, result.disconnectSecondsRemaining());
     }
+
+    // בקשת רות (הסבב הזה): waitingForOpponent עובר round-trip (JSON) בלי
+    // שינוי - בדיוק כמו disconnectSecondsRemaining למעלה.
+    @Test
+    void reconstruct_waitingForOpponent_passedThroughUnchanged() {
+        SnapshotMessage message = new SnapshotMessage(8, 8, List.of(), null, List.of(), Map.of(), Map.of(),
+                false, null, 0L, List.of(), List.of(), List.of(), false, null, true);
+
+        ClientSnapshotReconstructor.Reconstructed result =
+                new ClientSnapshotReconstructor().reconstruct(roundTrip(message));
+
+        assertTrue(result.waitingForOpponent());
+    }
 }

@@ -39,6 +39,10 @@ public class IncomingSnapshot {
     private List<CaptureEffect> captureEffects;
     private boolean restartRequestedByViewer;
     private Integer disconnectSecondsRemaining;
+    // בקשת רות (הסבב הזה) - ר' תיעוד SnapshotMessage.waitingForOpponent.
+    // boolean רגיל: Gson משאיר false אם השדה חסר ב-JSON (לא קורה בפועל -
+    // תמיד משודר, ר' SnapshotMessage - אבל בטוח גם אם ישתנה בעתיד).
+    private boolean waitingForOpponent;
 
     public String type() {
         return type;
@@ -105,5 +109,9 @@ public class IncomingSnapshot {
     // צורך בטיפול מיוחד כאן, בניגוד ל-List/Map (שם יש ברירת מחדל ל-List.of()/Map.of()).
     public Integer disconnectSecondsRemaining() {
         return disconnectSecondsRemaining;
+    }
+
+    public boolean waitingForOpponent() {
+        return waitingForOpponent;
     }
 }

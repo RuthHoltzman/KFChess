@@ -91,4 +91,30 @@ class MessageDtoTest {
 
         assertFalse(json.has("disconnectSecondsRemaining")); // null -> Gson משמיט את השדה לגמרי, לא כותב "null"
     }
+
+    // בקשת רות (הסבב הזה): שדה חדש waitingForOpponent - boolean רגיל,
+    // תמיד משודר (בניגוד ל-disconnectSecondsRemaining שהוא Integer ויכול
+    // להיות null/מושמט).
+
+    @Test
+    void snapshotMessage_withWaitingForOpponentTrue_serializesField() {
+        SnapshotMessage snapshot = new SnapshotMessage(
+                8, 8, List.of(), null, List.of(), Map.of(), Map.of(), false, null, 1234L,
+                List.of(), List.of(), List.of(), false, null, true);
+
+        JsonObject json = gson.toJsonTree(snapshot).getAsJsonObject();
+
+        assertTrue(json.get("waitingForOpponent").getAsBoolean());
+    }
+
+    @Test
+    void snapshotMessage_oldConstructorWithoutWaitingForOpponent_defaultsToFalse() {
+        SnapshotMessage snapshot = new SnapshotMessage(
+                8, 8, List.of(), null, List.of(), Map.of(), Map.of(), false, null, 1234L,
+                List.of(), List.of(), List.of());
+
+        JsonObject json = gson.toJsonTree(snapshot).getAsJsonObject();
+
+        assertFalse(json.get("waitingForOpponent").getAsBoolean());
+    }
 }
