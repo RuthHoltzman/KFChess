@@ -41,10 +41,19 @@ public class GameSceneView {
     // אחד לא עשה משהו רע), רק מידע נייטרלי "עוד לא התחלנו". ר' תיעוד
     // drawWaitingForOpponentBanner.
     private static final Color WAITING_BANNER_BACKGROUND = new Color(20, 60, 110, 210);
-    // אפור-כחלחל נייטרלי לפס שם-החדר - שונה מכל שאר הבאנרים (לא אזהרה,
-    // לא "עוד לא התחלנו") כי הוא לא תלוי-מצב בכלל, תמיד מוצג בדיוק אותו
-    // דבר (בקשת רות - שם החדר "בפס עליון קבוע").
-    private static final Color ROOM_HEADER_BACKGROUND = new Color(45, 45, 55);
+    // חום-כהה נייטרלי לפס שם-החדר - שונה מכל שאר הבאנרים (לא אזהרה, לא
+    // "עוד לא התחלנו") כי הוא לא תלוי-מצב בכלל, תמיד מוצג בדיוק אותו
+    // דבר (בקשת רות - שם החדר "בפס עליון קבוע"). עודכן (בקשת רות - עיצוב
+    // יותר יפה) מאפור-כחלחל שטוח לגוון חם, כדי להתאים ל-ROOM_ID_ACCENT
+    // למטה (שני-גוונים בטקסט עצמו - ר' drawRoomHeader).
+    private static final Color ROOM_HEADER_BACKGROUND = new Color(38, 34, 28);
+    // הצבע של מזהה החדר עצמו בתוך הפס (בהיר-חם, "זהב מעומעם") - שונה
+    // בכוונה מ-TITLE_COLOR (הלבן הרגיל) שמשמש למילה "Room" עצמה, כדי
+    // שהעין תתפוס מיד מה המידע ה"חשוב" (הקוד עצמו) מול המילה הכללית.
+    private static final Color ROOM_ID_ACCENT = new Color(201, 168, 118);
+    // גוון עמום לפרטים משניים בפס (כרגע רק "Spectator: ..." לצופה/ה) -
+    // לא אמור למשוך את העין כמו הקוד עצמו.
+    private static final Color ROOM_HEADER_MUTED = new Color(154, 149, 135);
 
     private static final int TITLE_FONT_SIZE = 42;
     private static final int SUBTITLE_FONT_SIZE = 20;
@@ -277,13 +286,56 @@ public class GameSceneView {
     private void drawRoomHeader(Img scene, int sceneWidthPx) {
         scene.fillRect(0, 0, sceneWidthPx, ROOM_HEADER_HEIGHT, ROOM_HEADER_BACKGROUND);
 
-        String text = "Room: " + (roomId == null ? "?" : roomId);
-        if (role == ClientRole.SPECTATOR) {
-            text += "   |   Spectator" + (username != null ? ": " + username : "");
-        }
-        int textWidth = scene.textWidth(text, ROOM_HEADER_FONT_SIZE, true);
-        int textX = (sceneWidthPx - textWidth) / 2;
+        // שלושה קטעים אפשריים, כל אחד בצבע/משמעות משלו (בקשת רות - עיצוב
+        // יותר יפה: להבדיל ויזואלית בין "המילה הכללית" למידע החשוב עצמו) -
+        // בניגוד לפני, שהיה מחרוזת אחת בצבע אחיד. textWidth נמדד לכל קטע
+        // בנפרד לפני הציור כדי למרכז את הקבוצה כולה, ואז מצייר ברצף עם
+        // "סמן" X שמתקדם - Img.drawText לא תומך בכמה צבעים במחרוזת אחת.
+        String label = "Room ";
+        String id = shortRoomId(roomId);
+        String spectatorSuffix = role == ClientRole.SPECTATOR
+                ? "   Spectator" + (username != null ? ": " + username : "")
+                : "";
+
+        int labelWidth = scene.textWidth(label, ROOM_HEADER_FONT_SIZE, true);
+        int idWidth = scene.textWidth(id, ROOM_HEADER_FONT_SIZE, true);
+        int suffixWidth = spectatorSuffix.isEmpty() ? 0 : scene.textWidth(spectatorSuffix, ROOM_HEADER_FONT_SIZE, false);
+        int totalWidth = labelWidth + idWidth + suffixWidth;
+
         int textY = ROOM_HEADER_HEIGHT / 2 + ROOM_HEADER_FONT_SIZE / 3;
-        scene.drawText(text, textX, textY, ROOM_HEADER_FONT_SIZE, TITLE_COLOR, true);
+        int cursorX = (sceneWidthPx - totalWidth) / 2;
+
+        scene.drawText(label, cursorX, textY, ROOM_HEADER_FONT_SIZE, TITLE_COLOR, true);
+        cursorX += labelWidth;
+        scene.drawText(id, cursorX, textY, ROOM_HEADER_FONT_SIZE, ROOM_ID_ACCENT, true);
+        cursorX += idWidth;
+        if (!spectatorSuffix.isEmpty()) {
+            scene.drawText(spectatorSuffix, cursorX, textY, ROOM_HEADER_FONT_SIZE, ROOM_HEADER_MUTED, false);
+        }
+    }
+
+    /**
+     * מקצרת gameId ארוך לתצוגה קריאה - רק עבור מזהי matchmaking
+     * ("match-&lt;uuid&gt;", ר' GameServer.resolveMatchmakingGameId) שהם
+     * ארוכים מדי ומכוערים על המסך (בקשת רות - זה בדיוק מה שהפך את הפס
+     * למכוער בצילום המסך שהיא שלחה). מציגה רק 8 התווים הראשונים של ה-UUID
+     * עצמו, **בלי** הקידומת "match-" - "Room: 816a33df" בדיוק כמו שרות
+     * ביקשה. <p>
+     * קודי חדר מ-Create/Join (הקוד הקצר שצריך למסור לחברה כדי שתצטרף,
+     * ר' RoomIdGenerator) **לא** מקוצרים בכלל - קיצור שלהם היה שובר את
+     * הפיצ'ר עצמו (השחקנית השנייה חייבת לראות/להקליד את הקוד המלא
+     * והמדויק). public+static (לא private) כדי שאפשר יהיה לבדוק את
+     * הלוגיקה הזו בטסט בלי להרים Swing בכלל - אין לה שום תלות ב-Img/גרפיקה.
+     */
+    public static String shortRoomId(String gameId) {
+        if (gameId == null) {
+            return "?";
+        }
+        String matchmakingPrefix = "match-";
+        if (gameId.startsWith(matchmakingPrefix)) {
+            String uuidPart = gameId.substring(matchmakingPrefix.length());
+            return uuidPart.length() > 8 ? uuidPart.substring(0, 8) : uuidPart;
+        }
+        return gameId;
     }
 }

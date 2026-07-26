@@ -218,6 +218,22 @@ public class Img {
         g.dispose();
     }
 
+    /**
+     * כמו fillRect, אבל עם פינות מעוגלות - נוסף לבקשת רות (עיצוב "פילה"
+     * לתג "You" בפאנל הצד, ר' SidePanelView) - fillRect/drawRect הקיימות
+     * נשארות ללא שינוי (עדיין רלוונטיות למקומות שבאמת רוצים פינות
+     * חדות - למשל גבול הלוח/הפאנלים עצמם). arcWidth/arcHeight - קוטר
+     * העיגול בכל פינה (לא רדיוס), בדיוק כמו Graphics2D.fillRoundRect עצמה.
+     */
+    public void fillRoundRect(int x, int y, int w, int h, int arcWidth, int arcHeight, Color color) {
+        if (img == null) throw new IllegalStateException("Image not loaded.");
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setColor(color);
+        g.fillRoundRect(x, y, w, h, arcWidth, arcHeight);
+        g.dispose();
+    }
+
     /* ----------- draw a rectangle outline (e.g. selection border) ----------- */
     public void drawRect(int x, int y, int w, int h, Color color, int thickness) {
         if (img == null) throw new IllegalStateException("Image not loaded.");

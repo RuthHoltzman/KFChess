@@ -896,6 +896,58 @@ can't find - pops up a message that can't find." רות אישרה לממש עכ
   תפיסה). מחכה לתיאור-חזרה מדויק מרות (איזה כפתור/קליק בדיוק, מה קרה
   בפועל) לפני שממשיכים.
 
+### עיצוב יותר יפה לתצוגת המידע (הסבב הזה)
+
+רות הריצה את הסבב הקודם ושלחה צילום מסך: הפס העליון החדש (שם החדר) הציג
+UUID ענק ("Room: match-816a33df-6e2a-4772-b3e7-09c6768d4150") שגלש כמעט
+לכל רוחב המסך - זה בדיוק מה שהפך אותו למכוער. גם הטקסט "(You: username)"
+בתוך כותרת הפאנל וגם הסטייל הכללי (פונט/צבעים שטוחים) צוינו כבעייתיים.
+לפני מימוש בקוד - **הוצג ל-רות mockup חזותי (HTML, לא קוד אמיתי)** דרך
+כלי ה-visualize כדי לתאם עיצוב/צבעים לפני שמשקיעים בקוד Swing בפועל -
+אושר ("ממש יפה"). רות שאלה במפורש אם זה משנה את **תמונות הכלים עצמן**
+(sprites/board.png) - **לא**: השינוי מוגבל לשלושה קבצים (`GameSceneView`,
+`SidePanelView`, `Img`) - לא נוגע ב-`BoardView`/`SnapshotFactory`/תמונות
+הכלים בכלל.
+
+- **`Img.fillRoundRect(...)`** (חדשה) - כמו `fillRect` הקיימת, אבל עם
+  פינות מעוגלות (`Graphics2D.fillRoundRect`) - נחוצה לתג "You" (למטה).
+  `fillRect`/`drawRect` הקיימות נשארות ללא שינוי (עדיין רלוונטיות למקומות
+  שרוצים פינות חדות - למשל גבול הלוח/הפאנלים עצמם).
+- **`GameSceneView.shortRoomId(String gameId)`** (חדשה, `public static`,
+  טהורה לגמרי - בלי Img/גרפיקה) - זו **הבעיה המרכזית** מהצילום: מזהי
+  matchmaking (`"match-<uuid>"`, ר' `GameServer.resolveMatchmakingGameId`)
+  ארוכים בטירוף לתצוגה. מציגה רק 8 התווים הראשונים של ה-UUID **בלי**
+  הקידומת "match-" - "Room: 816a33df" (בדיוק כמו שרות ביקשה). **קודי
+  Create/Join (הקוד הקצר שצריך למסור לחברה, ר' `RoomIdGenerator`) לא
+  נוגעים בהם בכלל** - קיצור שלהם היה שובר את הפיצ'ר עצמו (השחקנית השנייה
+  חייבת להקליד את הקוד המדויק). נבדקת ב-`GameSceneViewTest` חדש (5
+  טסטים) - הראשונה שנבדקת ישירות מהמחלקה הזו (שאר `GameSceneView` נשארת
+  בלי טסטים ייחודיים, ציור/Swing כמו קודם).
+- **`GameSceneView.drawRoomHeader(...)`** - שונתה מקריאת `drawText` אחת
+  בצבע אחיד לשלוש קריאות נפרדות ("Room " לבן, מזהה החדר המקוצר בגוון
+  זהב-עמום `ROOM_ID_ACCENT`, ול-SPECTATOR גם "Spectator: username" בגוון
+  עמום `ROOM_HEADER_MUTED`) - `Img.drawText` לא תומך בכמה צבעים במחרוזת
+  אחת, אז מחשבת `textWidth` לכל קטע מראש (למרכז את הקבוצה כולה) ואז
+  מציירת ברצף עם "סמן" X שמתקדם. `ROOM_HEADER_BACKGROUND` עודכן מאפור-
+  כחלחל שטוח לגוון חום-כהה, כדי להתאים לגוון הזהב של המזהה.
+- **`SidePanelView`** - שני שינויים:
+  1. **שתי "ערכות נושא" נפרדות** (`record Theme` פרטי חדש - background/
+     border/headerText/moveText/badgeBackground/badgeText) במקום צבע
+     אחיד ששני הפאנלים חלקו עד עכשיו - `WHITE_THEME` בהיר-חם, `BLACK_THEME`
+     כהה - נבחרת לפי הפרמטר `color` שכבר קיים ב-`draw()`, בלי פרמטר
+     חדש. זה בדיוק "עיצוב שונה לכל אזור" שרות ביקשה.
+  2. **"You: username" עבר משורת הכותרת לתג/פילה נפרדת** (`drawYouBadge`,
+     חדשה, פרטית) - מלבן מעוגל (`Img.fillRoundRect`) מתחת לכותרת, ברוחב
+     מחושב מהטקסט עצמו (כמו שכפתור ה-Restart כבר עושה). השטח מתחת
+     לכותרת (`BADGE_TOP_Y`) **שמור קבוע** גם כשהתג לא מוצג (יריב/ה) - כדי
+     ששני הפאנלים יישארו מיושרים בדיוק זה מול זה, בלי קשר למי מהם "שלי"
+     כרגע. `SCORE_Y`/`MOVES_TITLE_Y`/`MOVES_START_Y` זזו כולם ~10px למטה
+     כדי לפנות מקום לשורת התג.
+- **אימות שבוצע כאן**: איזון סוגריים על כל הקבצים שנגעתי בהם - תקין.
+  grep לקריאות `sidePanelView.draw(` - רק שתיים, שתיהן ב-`GameSceneView`
+  (כבר מתאימות לחתימה) - נקי. **טרם `mvn test` וטרם הרצה ידנית** - ר' "מה
+  שנשאר לאמת" למטה.
+
 ## מה שנשאר לאמת (רות - עדיין לא נעשה)
 
 שוב: אין לי `javac`/`mvn` בסביבה שלי (אין root, אין גישת רשת להוריד
@@ -1029,6 +1081,23 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
     מרות** (ר' הסעיף הייעודי למעלה) - לא נמצא נתיב-קוד תואם בבדיקת
     הקוד, צריך רות שתתאר בדיוק מה עשתה ומה ציפתה לראות לעומת מה שראתה
     בפועל, לפני שממשיכים.
+15. **הרצה ידנית של העיצוב המחודש (הסבב הזה, טרם נבדק בפועל כלל)**:
+    - חלון ראשון: **Play** (לא Room→Create) - לוודא שהפס העליון מציג
+      "Room " בלבן ואחריו קוד קצר בגוון זהב-עמום (8 תווים, **לא** UUID
+      ענק) - למשל "Room 816a33df", לא "Room match-816a33df-6e2a-...".
+    - חלון ראשון בנפרד: Room... → **Create** - לוודא שהקוד הקצר (6
+      תווים) מוצג **מלא** בפס (לא מקוצר עוד יותר) - זה הקוד שצריך למסור
+      לחברה כדי שתצטרף.
+    - לוודא שבפאנל השמאלי (White) יש רקע בהיר-חם (שונה מהאפור הקודם) עם
+      "פילה" קטנה מעוגלת "You: <username>" מתחת לכותרת "White" (לא
+      בתוך השורה עצמה).
+    - חלון שני: Join עם אותו קוד - לוודא שהפאנל הימני (Black) בעל רקע
+      כהה נפרד (לא אותו רקע כמו White), עם הפילה "You: ..." שלו/ה.
+    - לוודא שבשני החלונות, הפאנל של **היריב/ה** (לא שלי) לא מציג פילה
+      בכלל, אבל הניקוד/רשימת המהלכים עדיין באותו מקום בדיוק בשני
+      הפאנלים (לא "זזים" יחסית אחד לשני).
+    - חלון שלישי (SPECTATOR): לוודא שהפס העליון מציג גם "Spectator:
+      username" בגוון עמום יותר, ואף פאנל לא מציג פילה בשבילו/ה.
 
 ## פקודת commit מוצעת (לא הרצתי - רק `git status`/`git diff` לבדיקה)
 
@@ -1115,6 +1184,12 @@ git commit -m "Restrict Play matchmaking to opponents within 100 ELO of the sear
 ```
 git add src/main/java/kfchess/server/client/GameClient.java src/main/java/kfchess/HomeScreenMain.java src/main/java/kfchess/NetworkGameWindowMain.java src/main/java/kfchess/view/GameSceneView.java src/main/java/kfchess/view/SidePanelView.java src/test/java/texttests/GameClientTest.java PROGRESS.md
 git commit -m "Show the room id in a permanent header strip and the local player's own role/username in their side panel (or in the header for spectators), by finally reading the role that ROLE_ASSIGNED already sent and threading the logged-in username through to the game window"
+```
+
+עיצוב יותר יפה - קיצור מזהי matchmaking, ערכות נושא שונות ל-White/Black, תג "You" מעוגל (הסבב הזה, **טרם אומת ידנית - ר' "מה שנשאר לאמת" סעיף 15**):
+```
+git add src/main/java/kfchess/view/Img.java src/main/java/kfchess/view/GameSceneView.java src/main/java/kfchess/view/SidePanelView.java src/test/java/texttests/GameSceneViewTest.java PROGRESS.md
+git commit -m "Restyle the room header and side panels: truncate long matchmaking UUIDs to 8 characters (Create/Join short codes stay untouched), give White and Black distinct color themes, and move the You indicator into a rounded badge below the panel title instead of squeezing it into the header line"
 ```
 
 ## איך להריץ ולבדוק (IntelliJ)
