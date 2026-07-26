@@ -65,13 +65,15 @@ public class GameServer extends WebSocketServer {
         conn.send(gson.toJson(new RoleAssignedMessage(role.name(), gameId)));
     }
 
-    // ניתוק: מסיר את החיבור מהמשחק שלו כדי שלא ימשיך "לתפוס" צבע/להצטבר בתור.
+    // ניתוק: מעביר ל-GameSession.handleDisconnect (במקום removeConnection הישנה)
+    // כדי ש-WHITE/BLACK באמצע משחק פעיל יקבלו "חלון חסד" לחיבור מחדש
+    // (שלב 5, auto-resign) במקום להפסיד/להיתקע מיד - ר' תיעוד handleDisconnect.
     @Override
     public void onClose(WebSocket conn, int code, String reason, boolean remote) {
         String gameId = gameIdByConnection.remove(conn);
         GameSession session = gameId == null ? null : sessions.get(gameId);
         if (session != null) {
-            session.removeConnection(conn);
+            session.handleDisconnect(conn);
         }
     }
 

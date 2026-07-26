@@ -45,24 +45,43 @@ public class SnapshotMessage {
     // שהלוח יתאפס בפועל (ר' GameSession.applyRestartVote), אחרת מישהו
     // יכול "לברוח" מהפסד לבד. תמיד false לצופה (SPECTATOR).
     private final boolean restartRequestedByViewer;
+    // שניות שנותרו עד שהצד שהתנתק (אם יש כזה) יפסיד אוטומטית - ר'
+    // GameSession.disconnectSecondsRemaining/DISCONNECT_GRACE_MILLIS. null
+    // (לא 0) כשאין אף אחד ב"חלון חסד" כרגע - כדי שהלקוח יוכל להבדיל בין
+    // "0 שניות נשארו" (רגע לפני שהיריב מוכרז כמנצח) לבין "אין בכלל ניתוק
+    // פעיל" בלי לבדוק gameOver בנוסף (בניגוד ל-restartRequestedByViewer,
+    // זה יכול להיות true גם כשהמשחק *לא* נגמר - זו בדיוק הנקודה).
+    private final Integer disconnectSecondsRemaining;
 
-    // חתימה ישנה, בלי restartRequestedByViewer - נשארת כדי ש-
-    // ClientSnapshotReconstructorTest הקיים (8 קריאות) ימשיך לעבוד בלי
-    // שינוי; שקולה ל-restartRequestedByViewer=false (המקרה הרגיל - רלוונטי
-    // רק כש-gameOver=true בכלל).
+    // חתימה ישנה, בלי restartRequestedByViewer/disconnectSecondsRemaining -
+    // נשארת כדי ש-ClientSnapshotReconstructorTest/MessageDtoTest הקיימים
+    // ימשיכו לעבוד בלי שינוי; שקולה ל-restartRequestedByViewer=false,
+    // disconnectSecondsRemaining=null (המקרה הרגיל - אין restart וגם אין ניתוק).
     public SnapshotMessage(int boardWidthCells, int boardHeightCells, List<PieceDto> pieces, Position selected,
                            List<Position> legalMoves, Map<String, Integer> scores, Map<String, List<String>> moveLog,
                            boolean gameOver, String winner, long now,
                            List<Motion> motions, List<JumpDto> jumps, List<CaptureEffect> captureEffects) {
         this(boardWidthCells, boardHeightCells, pieces, selected, legalMoves, scores, moveLog, gameOver, winner, now,
-                motions, jumps, captureEffects, false);
+                motions, jumps, captureEffects, false, null);
+    }
+
+    // חתימה ביניים, עם restartRequestedByViewer אבל בלי disconnectSecondsRemaining -
+    // נשארת כדי שקוד/טסטים שנכתבו בסבב ה-Restart (לפני שלב 5) ימשיכו
+    // לעבוד בלי שינוי; שקולה ל-disconnectSecondsRemaining=null.
+    public SnapshotMessage(int boardWidthCells, int boardHeightCells, List<PieceDto> pieces, Position selected,
+                           List<Position> legalMoves, Map<String, Integer> scores, Map<String, List<String>> moveLog,
+                           boolean gameOver, String winner, long now,
+                           List<Motion> motions, List<JumpDto> jumps, List<CaptureEffect> captureEffects,
+                           boolean restartRequestedByViewer) {
+        this(boardWidthCells, boardHeightCells, pieces, selected, legalMoves, scores, moveLog, gameOver, winner, now,
+                motions, jumps, captureEffects, restartRequestedByViewer, null);
     }
 
     public SnapshotMessage(int boardWidthCells, int boardHeightCells, List<PieceDto> pieces, Position selected,
                            List<Position> legalMoves, Map<String, Integer> scores, Map<String, List<String>> moveLog,
                            boolean gameOver, String winner, long now,
                            List<Motion> motions, List<JumpDto> jumps, List<CaptureEffect> captureEffects,
-                           boolean restartRequestedByViewer) {
+                           boolean restartRequestedByViewer, Integer disconnectSecondsRemaining) {
         this.boardWidthCells = boardWidthCells;
         this.boardHeightCells = boardHeightCells;
         this.pieces = pieces;
@@ -77,5 +96,6 @@ public class SnapshotMessage {
         this.jumps = jumps;
         this.captureEffects = captureEffects;
         this.restartRequestedByViewer = restartRequestedByViewer;
+        this.disconnectSecondsRemaining = disconnectSecondsRemaining;
     }
 }

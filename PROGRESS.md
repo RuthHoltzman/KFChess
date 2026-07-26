@@ -25,7 +25,8 @@
    על ה-URI) ו-ELO מתעדכן אוטומטית בסוף כל משחק (`EloCalculator`, K=32).
    בנוסף (מעבר לדרישות השלב): **פיצ'ר Restart הדדי** - ✅ הושלם ואומת
    ידנית (ר' סעיף ייעודי למטה).
-5. Matchmaking (Play) + ניתוק/auto-resign - ⬜ לא התחיל. **זה הצעד הבא.**
+5. Matchmaking (Play) + ניתוק/auto-resign - 🟡 **חלק 1 (ניתוק/auto-resign) ממומש, טרם אומת** (ר' סעיף ייעודי
+   למטה - "מה שנשאר לאמת"). חלק 2 (Matchmaking) עדיין לא התחיל.
 6. חדרים (Create/Join/Cancel) + לוגים - ⬜ לא התחיל.
 
 ## החלטות ארכיטקטורה שנסגרו - כולן ממומשות בפועל
@@ -340,7 +341,84 @@ Code Java world...") - בלי שום קשר לפרויקט. נכתב מחדש ל
   `exec-maven-plugin` ב-`pom.xml` - הן היו נכשלות. הוסרו; ההוראות
   מתארות הרצה מ-IntelliJ בלבד, שעובדת בוודאות.
 
-## מה שנשאר לאמת (רות - עדיין לא נעשה, סבב Restart)
+### שלב 5, חלק 1 - ניתוק/auto-resign עם חלון חסד 20 שניות (הסבב הזה)
+
+רות אישרה שני החלטות פתוחות לפני שהתחלנו: (1) ניתוק **לא** מפסיד מיד -
+יש **חלון חסד של 20 שניות** לחיבור מחדש (אותו username בדיוק); (2) כן
+להוסיף אינדיקציה חזותית ("Opponent disconnected - Xs to reconnect"),
+בדומה ל"Waiting for opponent..." של Restart.
+
+- **`GameEngine.forceGameOver(PieceColor winner)`** (חדשה, ציבורית) -
+  הוצאה מ-`checkForKingCapture` (שתי השורות: `game.markGameOver` +
+  פרסום `GameLifecycleEvent(ENDED,...)`) לפונקציה משותפת אחת, כדי
+  שגם לכידת מלך וגם ניתוק/timeout יעברו באותה נקודה יחידה - בלי לשכפל
+  את "מה קורה כשמשחק נגמר" בשני מקומות.
+- **`GameSession` - התור השני (בנוסף ל-pendingCommands)**: `handleDisconnect(WebSocket)`
+  חדשה, נקראת מ-`GameServer.onClose` **במקום** `removeConnection` הישנה
+  (שנשארה כמות שהיא - עדיין נקראת ישירות מ-`GameSessionTest` ומ-`processDisconnections`
+  עצמה). קריטי: `handleDisconnect` **לא נוגעת ב-`connections`/`engine` בעצמה בכלל** -
+  היא רק מתייקת את החיבור ל-`pendingDisconnections` (עוד `ConcurrentLinkedQueue`,
+  בדיוק כמו `pendingCommands`), כי היא רצה מ-thread הרשת (`GameServer.onClose`)
+  ואסור לה לגעת ב-engine משם. `tick()` (thread הטיק היחיד) הוא זה שבאמת
+  מעבד ניתוקים, דרך `processDisconnections()` חדשה שרצה **לפני** לולאת
+  הפקודות: לכל חיבור שהצטבר - אם צופה או שהמשחק כבר נגמר, מסירה בלבד
+  (כמו ה-`onClose` המקורי); אחרת (WHITE/BLACK באמצע משחק פעיל) שומרת
+  `PendingDisconnect(username, deadlineMillis)` חדש ב-`pendingDisconnects`
+  (`EnumMap<ClientRole,...>`) - הדדליין מחושב לפי **`engine.now()`** (שעון
+  המשחק, לא `System.currentTimeMillis()`) בדיוק כמו `PieceTimers`/`CaptureEffectTracker`
+  הקיימים - כך `GameSessionTest` יכול "לקפוץ" 20 שניות קדימה ב-`tick(25_000)`
+  אחד בלי `Thread.sleep` אמיתי, ואין תלות בזמן-קיר.
+- **`resolveExpiredDisconnects()`** (חדשה, נקראת בסוף `tick()`) - אם דדליין
+  כלשהו עבר: הצד השני מוכרז מנצח דרך `engine.forceGameOver(winner)`
+  (אותה נקודה שגם לכידת מלך משתמשת בה - עדכון ה-ELO הקיים דרך
+  `GameLifecycleEvent(ENDED)` קורה אוטומטית, בלי קוד חדש), ואז `pendingDisconnects.clear()`.
+- **`assignRole` - reconnect**: לפני שקובעים תפקיד "רגיל", `tryReconnect(connection, username)`
+  חדשה בודקת אם יש חלון-חסד פתוח עם **אותו username בדיוק** - אם כן,
+  מבטלת אותו ומחזירה לחיבור החדש את אותו תפקיד. `isRoleOccupied(role)`
+  חדשה - "תפוס" עכשיו אומר "יש חיבור חי, **או** יש חלון-חסד פתוח על
+  התפקיד הזה" - כדי שאף אחד אחר לא "יגנוב" את הצבע שהתפנה תוך כדי
+  שהשחקן המקורי עדיין עשוי לחזור. **מגבלה מודעת**: reconnect מזוהה
+  אך ורק לפי username - שחקן שהתחבר בלי login (אנונימי) לא יכול לחזור
+  אחרי ניתוק, גם בתוך חלון החסד (התנהגותית שקול להפסד מיידי עבורו/ה).
+- **`usernameFor(role)`** תוקן - נופל חזרה ל-`pendingDisconnects` אם אין
+  חיבור חי (כדי ש-ELO עדיין ידע למי להוריד דירוג אחרי שהחיבור כבר הוסר).
+- **בעיית concurrency שנתפסה תוך כדי (ולא הייתה קודם)**: `pendingDisconnects`
+  הוא `EnumMap` רגיל (לא thread-safe כמו `connections`/`pendingCommands`
+  שהם `ConcurrentHashMap`/`ConcurrentLinkedQueue`) - ונקרא/נכתב גם
+  מ-thread הטיק (`tick`/`processDisconnections`/`resolveExpiredDisconnects`)
+  **וגם** מ-thread הרשת (`assignRole`, דרך `tryReconnect`/`isRoleOccupied`).
+  התיקון: `tick()` ו-`snapshotFor()` הפכו ל-`synchronized` (כמו ש-`assignRole`
+  כבר היה) - כל הגישה ל-`pendingDisconnects` עוברת עכשיו דרך אותו מנעול
+  (`this`) בין שני ה-threads.
+- **שידור למרחוק (אותו דפוס בדיוק כמו `restartRequestedByViewer`)**:
+  `disconnectSecondsRemaining()` חדשה ב-`GameSession` (מחשבת שניות
+  שנותרו לפי `engine.now()`, `Integer` ולא `int` כדי ש-`null` יבדיל "אין
+  ניתוק פעיל" מ-"0 שניות נשארו") מתווספת ל-`snapshotFor`, ועוברת דרך
+  אותן 5 מחלקות בדיוק: `SnapshotMessage` (עם overload ישן, בלי השדה,
+  שקול ל-`null` - כדי ש-`MessageDtoTest`/`ClientSnapshotReconstructorTest`
+  הקיימים ימשיכו לעבוד בלי שינוי) → `IncomingSnapshot` → `ClientSnapshotReconstructor.Reconstructed`
+  → `SnapshotFactory.createSnapshot` → `GameSnapshot`. **שונה במכוון**
+  מ-motions/jumps: השרת שולח מספר-שניות מוכן במקום timestamp גולמי
+  שהלקוח מחשב ממנו (כמו שהוא עושה לאנימציות) - כי זו רק תצוגת טקסט
+  סטטית, לא אנימציה חלקה, אז אין צורך בדיוק כזה.
+- **`GameSceneView.drawDisconnectBanner(...)`** (חדשה) - פס אזהרה צר
+  לרוחב הלוח, צמוד לקצה העליון: "Opponent disconnected - Xs to reconnect".
+  נקרא מ-`render()` כש-`snapshot.disconnectSecondsRemaining() != null`,
+  **בלי תלות** ב-`if (snapshot.gameOver())` הקיים (drawGameOverOverlay) -
+  זה בכוונה: ניתוק קורה **באמצע** משחק פעיל (`gameOver=false`), אז זה
+  לא יכול להיות אותו overlay מלא-מסך כמו סוף משחק.
+- **טסטים חדשים** (`GameSessionTest`): ניתוק באמצע משחק פותח חלון חסד
+  בלי הפסד מיידי; פקיעת הזמן (`tick` עם elapsed גדול) מכריזה על היריב
+  כמנצח; reconnect עם username תואם מבטל את החלון ומחזיר תפקיד; חלון
+  שמור לא נגנב ע"י חיבור אחר; ניתוק צופה מיידי כרגיל; ניתוק אחרי שהמשחק
+  כבר נגמר לא פותח חלון חדש. גם `MessageDtoTest`/`ClientSnapshotReconstructorTest`
+  קיבלו טסט לשדה החדש (כולל שהוא נעדר מה-JSON כש-`null`, לא נכתב כ-"null").
+- **אימות שבוצע כאן**: איזון סוגריים + grep להפניות ישנות שנשברו על **כל**
+  הקבצים שנגעו בפיצ'ר הזה - כולם תקינים. **טרם `mvn test` אמיתי וטרם
+  הרצה ידנית מקצה לקצה** (אין לי javac/mvn, ר' מגבלה קבועה למטה) - ר'
+  "מה שנשאר לאמת" למטה לפירוט המדויק.
+
+## מה שנשאר לאמת (רות - עדיין לא נעשה)
 
 שוב: אין לי `javac`/`mvn` בסביבה שלי (אין root, אין גישת רשת להוריד
 JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות שבורות לכל קובץ
@@ -350,9 +428,11 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
 1. `mvn clean test` - לוודא שהכל מתקמפל וש**כל** הטסטים ירוקים, כולל
    סבב Part B (`EloCalculatorTest`×3, `UsernameResolverTest`×7,
    `GameIdResolverTest`, `SqliteAccountRepositoryTest`, `HomeScreenMainTest`)
-   **וגם** סבב Restart החדש: `ClientCommandTest` (2 טסטים חדשים),
-   `GameSessionTest` (4 טסטים חדשים), `NetworkClickHandlerTest` (2 טסטים
-   חדשים + הבנאי המעודכן).
+   **וגם** סבב Restart (`ClientCommandTest`, `GameSessionTest`,
+   `NetworkClickHandlerTest`) - כבר ירוק, אושר ע"י רות - **וגם** סבב
+   ניתוק/auto-resign החדש (הסבב הזה): `GameSessionTest` (6 טסטים
+   חדשים), `MessageDtoTest` (2 טסטים חדשים), `ClientSnapshotReconstructorTest`
+   (טסט חדש אחד) - **עדיין לא הורץ בפועל, ר' סעיף 4 למטה**.
 2. **הרצה ידנית מקצה לקצה של ELO (עדיין לא בוצעה מאז שלב 4 Part B)**:
    - Run על `ServerMain`.
    - **Register שני חשבונות שונים** דרך `LoginScreenMain` (למשל
@@ -374,9 +454,28 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
      הצדדים (לא רק אצל מי שלחץ), אבל הלוח **לא** מתאפס.
    - ללחוץ Restart גם בצד השני - לוודא שהלוח **כן** מתאפס (חוזר למצב
      פתיחה) אצל שניהם, וה"Waiting" נעלם.
-4. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
+4. **הרצה ידנית של ניתוק/auto-resign (חדש, טרם נבדק בפועל כלל - הסבב הזה)**:
+   - Run על `ServerMain`, שני חלונות `LoginScreenMain` (WHITE+BLACK,
+     חשבונות שונים), לשחק כמה מהלכים (משחק עדיין פעיל, לא game over).
+   - **לסגור** את חלון ה-WHITE (או ה-BLACK) לגמרי - לוודא: אצל הצד
+     שנשאר מופיע באנר "Opponent disconnected - Xs to reconnect" למעלה
+     על הלוח, המספר יורד, והלוח "קפוא" (אין תנועה חדשה) אבל **לא**
+     נעלם/משתנה.
+   - **לפני שעברו 20 שניות**: לפתוח מחדש `LoginScreenMain`, **Login עם
+     אותו username בדיוק** שהתנתק, ולהתחבר לאותו room - לוודא: חוזר
+     בתור **אותו צבע** (WHITE/BLACK) שהיה לו/ה קודם, הבאנר נעלם אצל
+     שני הצדדים, והמשחק ממשיך רגיל (אפשר להזיז כלים משני הצדדים).
+   - **תרחיש שני, בלי לחבר מחדש**: לחזור על הניתוק, אבל הפעם **לחכות
+     20+ שניות בלי לחבר מחדש** - לוודא שהצד שנשאר מוכרז כמנצח אוטומטית
+     (מסך "X Wins!" מופיע), וה-ELO שלו/ה עולה (של הצד שהתנתק יורד) -
+     בדיוק כמו ניצחון רגיל.
+   - **בדיקת "לא נגנב"**: תוך כדי חלון החסד (אחרי ניתוק, לפני reconnect/timeout),
+     לנסות לפתוח `LoginScreenMain` **שלישי** עם username **אחר** ולהתחבר
+     לאותו room - לוודא שנכנס/ת כ-SPECTATOR (לא "תופס/ת" את הצבע השמור).
+5. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
    מופיעים כ-modified ב-`git status` (line-ending, לא תוכן - לא נגעתי
-   בהם), ותיקיית `src/main/java/kfchess/.claude/` שלא יצרתי.
+   בהם), ותיקיית `src/main/java/kfchess/.claude/` וקובץ `kfchess.db`
+   שלא יצרתי (untracked, לא ב-git add המוצע).
 
 ## פקודת commit מוצעת (לא הרצתי - רק `git status`/`git diff` לבדיקה)
 
@@ -390,6 +489,12 @@ git commit -m "Stage 4 Part B: wire logged-in username into the network protocol
 ```
 git add src/main/java/kfchess/net/ClientCommandType.java src/main/java/kfchess/net/ClientCommand.java src/main/java/kfchess/net/SnapshotMessage.java src/main/java/kfchess/net/client/GameClient.java src/main/java/kfchess/net/client/NetworkClickHandler.java src/main/java/kfchess/net/client/IncomingSnapshot.java src/main/java/kfchess/net/client/ClientSnapshotReconstructor.java src/main/java/kfchess/net/server/GameSession.java src/main/java/kfchess/engine/snapshot/SnapshotFactory.java src/main/java/kfchess/engine/snapshot/GameSnapshot.java src/main/java/kfchess/view/GameSceneView.java src/main/java/kfchess/NetworkGameWindowMain.java src/test/java/texttests/ClientCommandTest.java src/test/java/texttests/GameSessionTest.java src/test/java/texttests/NetworkClickHandlerTest.java src/test/java/texttests/RecordingGameClient.java PROGRESS.md
 git commit -m "Add mutual Restart voting (both sides must click) with a Waiting for opponent visual cue"
+```
+
+שלב 5, חלק 1 - ניתוק/auto-resign (הסבב הזה, **טרם אומת ידנית/mvn test - ר' "מה שנשאר לאמת"**):
+```
+git add src/main/java/kfchess/engine/GameEngine.java src/main/java/kfchess/net/server/GameSession.java src/main/java/kfchess/net/server/GameServer.java src/main/java/kfchess/net/SnapshotMessage.java src/main/java/kfchess/net/client/IncomingSnapshot.java src/main/java/kfchess/net/client/ClientSnapshotReconstructor.java src/main/java/kfchess/engine/snapshot/SnapshotFactory.java src/main/java/kfchess/engine/snapshot/GameSnapshot.java src/main/java/kfchess/view/GameSceneView.java src/main/java/kfchess/NetworkGameWindowMain.java src/test/java/texttests/GameSessionTest.java src/test/java/texttests/MessageDtoTest.java src/test/java/texttests/ClientSnapshotReconstructorTest.java PROGRESS.md
+git commit -m "Stage 5 part 1: auto-resign on disconnect with a 20s reconnect grace window"
 ```
 
 ## איך להריץ ולבדוק (IntelliJ)
@@ -438,22 +543,23 @@ git commit -m "Add mutual Restart voting (both sides must click) with a Waiting 
 שלבים 1-4 **הושלמו ואומתו ידנית**, וכן פיצ'ר ה-Restart ההדדי (מעבר
 לדרישות). ה-README נכתב מחדש (ר' סעיף למטה).
 
-**הצעד הבא הוא שלב 5, ובתוכו שני חלקים נפרדים:**
+**שלב 5, חלק 1 (ניתוק/auto-resign) ממומש בקוד בסבב הזה** - ר' הסעיף
+הייעודי למעלה לפירוט מלא של כל שינוי/פונקציה. **טרם אומת** (לא `mvn test`
+ולא ידנית) - ר' "מה שנשאר לאמת" למעלה, סעיפים 1+4, לפני שממשיכים הלאה.
 
-1. **טיפול בניתוק / auto-resign** - **מומלץ להתחיל מזה** (קטן יותר,
-   עצמאי, ומסיר את המגבלה הבולטת ביותר במערכת כרגע). כרגע `GameServer.onClose`
-   רק מסיר את החיבור מהמפה - המשחק פשוט קופא, אף אחד לא מפסיד, וה-ELO
-   לא מתעדכן. מה שצריך: כשצד WHITE/BLACK מתנתק **באמצע משחק פעיל**
-   (`!engine.isGameOver()`), להכריז על הצד השני כמנצח, לפרסם
-   `GameLifecycleEvent(ENDED)` (מה שיפעיל אוטומטית את עדכון ה-ELO הקיים -
-   לא צריך לכתוב אותו מחדש) ולשדר snapshot מעודכן. שאלות פתוחות להחליט
-   עם רות לפני שמתחילים: האם ניתוק *מיידי* מפסיד או שיש timeout/חלון
-   חסד לחיבור מחדש (כרגע סגירת חלון + פתיחה מחדש *כן* מצטרפת לאותו
-   משחק, וזו התנהגות שמישהו עשוי להסתמך עליה); ומה קורה אם *צופה* מתנתק
-   (כלום - צריך רק לוודא שלא נופלים על זה בטעות).
-2. **Matchmaking** - כפתור "Play" ב-`HomeScreenMain` שמשייך אוטומטית שני
-   שחקנים לחדר משותף, במקום להקליד שם room ידנית. דורש צד-שרת חדש (תור
-   המתנה) ולא רק שינוי UI.
+**אחרי שהחלק הזה יאומת, הצעד הבא הוא שלב 5 חלק 2:**
+
+**Matchmaking** - כפתור "Play" ב-`HomeScreenMain` שמשייך אוטומטית שני
+שחקנים לחדר משותף, במקום להקליד שם room ידנית. דורש צד-שרת חדש (תור
+המתנה) ולא רק שינוי UI.
+
+**מגבלה מודעת שנשארה פתוחה משלב 5 חלק 1** (לא נפתרה, לא הוחלט אם/מתי
+לטפל בה): אם משחק מסתיים ע"י auto-resign (ניתוק), הצד שהתנתק **לא
+מחובר יותר בכלל** - ולכן פיצ'ר ה-Restart ההדדי (ששני הצדדים צריכים
+ללחוץ) לא ישים למעשה על המשחק הזה (רק הצד שנשאר יכול "להצביע", לעולם
+לא יגיע לשניים). לא זיהיתי את זה כבאג - רק כתרחיש שלא טופל במפורש; אם
+רות תרצה, אפשר בעתיד לתת לצד היחיד שנשאר לפתוח לבד משחק חדש (בלי
+לחכות ל-restart ההדדי) כשה-gameOver נגרם ע"י ניתוק ולא ע"י לכידת מלך.
 
 אחרי שלב 5: **שלב 6** - חדרים אמיתיים (Create/Join/Cancel כמסכים נפרדים)
 + לוגים.

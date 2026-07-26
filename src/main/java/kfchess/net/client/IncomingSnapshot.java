@@ -38,6 +38,7 @@ public class IncomingSnapshot {
     private List<JumpDto> jumps;
     private List<CaptureEffect> captureEffects;
     private boolean restartRequestedByViewer;
+    private Integer disconnectSecondsRemaining;
 
     public String type() {
         return type;
@@ -97,5 +98,12 @@ public class IncomingSnapshot {
 
     public boolean restartRequestedByViewer() {
         return restartRequestedByViewer;
+    }
+
+    // null (לא 0) כשאין אף אחד ב"חלון חסד" כרגע - Gson משאיר את השדה
+    // null אם ה-JSON לא כלל אותו (בדיוק כמו כל שדה חסר אחר), אז אין
+    // צורך בטיפול מיוחד כאן, בניגוד ל-List/Map (שם יש ברירת מחדל ל-List.of()/Map.of()).
+    public Integer disconnectSecondsRemaining() {
+        return disconnectSecondsRemaining;
     }
 }

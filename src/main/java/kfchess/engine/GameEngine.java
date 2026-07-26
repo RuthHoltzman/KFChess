@@ -318,10 +318,26 @@ public class GameEngine {
     private void checkForKingCapture(Piece movingPiece, Optional<Piece> defender) {
         defender.ifPresent(captured -> {
             if (captured.kind() == PieceKind.KING) {
-                game.markGameOver(movingPiece.color());
-                bus.publish(new GameLifecycleEvent(GameLifecycleEvent.Phase.ENDED, movingPiece.color()));
+                forceGameOver(movingPiece.color());
             }
         });
+    }
+
+    /**
+     * מסיימת את המשחק "בכוח" עם מנצח נתון, בלי שום לכידת מלך בפועל -
+     * המקום המשותף שגם checkForKingCapture (ניצחון "רגיל") וגם ניתוק/
+     * auto-resign (ר' GameSession, שלב 5) קוראים לו, כדי לא לשכפל את
+     * שתי הפעולות שחייבות לקרות יחד בכל סיום משחק: לסמן את המצב עצמו
+     * כ-game-over (Game.markGameOver) ולפרסם GameLifecycleEvent(ENDED)
+     * שממנו GameSession.onGameLifecycleEvent כבר יודע לעדכן ELO -
+     * בלי הבדל אם הסיבה לניצחון היא לכידת מלך או ניתוק היריב.
+     * לא בודקת isGameOver() בעצמה - זו אחריות הקורא (GameSession כבר
+     * בודק !engine.isGameOver() לפני שהיא קוראת לכאן, כדי לא "לדרוס"
+     * ניצחון אמיתי שכבר קרה).
+     */
+    public void forceGameOver(PieceColor winner) {
+        game.markGameOver(winner);
+        bus.publish(new GameLifecycleEvent(GameLifecycleEvent.Phase.ENDED, winner));
     }
     private void maybePromote(Piece piece, Position at) {
         if (piece.kind() != PieceKind.PAWN) {

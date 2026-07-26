@@ -185,4 +185,17 @@ class ClientSnapshotReconstructorTest {
         assertEquals(3, result.scores().get(PieceColor.BLACK));
         assertEquals(List.of("e2e4"), result.moveLog().get(PieceColor.WHITE));
     }
+
+    // שלב 5, חלק 1: מוודא ש-disconnectSecondsRemaining עובר round-trip (JSON) בלי שינוי -
+    // בניגוד לכלים/מהלכים, אין כאן שום "שחזור זהות" לעשות, רק להעביר את הערך הלאה כמו שהוא.
+    @Test
+    void reconstruct_disconnectSecondsRemaining_passedThroughUnchanged() {
+        SnapshotMessage message = new SnapshotMessage(8, 8, List.of(), null, List.of(), Map.of(), Map.of(),
+                false, null, 0L, List.of(), List.of(), List.of(), false, 12);
+
+        ClientSnapshotReconstructor.Reconstructed result =
+                new ClientSnapshotReconstructor().reconstruct(roundTrip(message));
+
+        assertEquals(12, result.disconnectSecondsRemaining());
+    }
 }

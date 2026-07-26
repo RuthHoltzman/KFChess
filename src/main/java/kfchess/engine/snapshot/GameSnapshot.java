@@ -16,7 +16,8 @@ public record GameSnapshot(
         String winner,
         Map<PieceColor, Integer> scores,
         Map<PieceColor, List<String>> moveLog,
-        boolean restartRequestedByViewer
+        boolean restartRequestedByViewer,
+        Integer disconnectSecondsRemaining
 ) {
     public GameSnapshot {
         pieces = List.copyOf(pieces); // הגנה - אי אפשר לשנות את הרשימה אחרי היצירה

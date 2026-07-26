@@ -32,12 +32,18 @@ public class GameSceneView {
     private static final Color BUTTON_COLOR = new Color(46, 139, 87);
     private static final Color BUTTON_BORDER_COLOR = Color.WHITE;
     private static final Color BUTTON_TEXT_COLOR = Color.WHITE;
+    // כתום-אדמדם, שונה בכוונה מ-OVERLAY_BACKGROUND (שחור) - כדי שהבאנר
+    // יבלוט כ"אזהרה" ולא יתבלבל עם מסך ה-Game-Over, למרות שהם אף פעם
+    // לא מוצגים בו-זמנית בפועל (ר' תיעוד drawDisconnectBanner).
+    private static final Color DISCONNECT_BANNER_BACKGROUND = new Color(120, 40, 20, 210);
 
     private static final int TITLE_FONT_SIZE = 42;
     private static final int SUBTITLE_FONT_SIZE = 20;
     private static final int BUTTON_WIDTH = 200;
     private static final int BUTTON_HEIGHT = 56;
     private static final int BUTTON_FONT_SIZE = 22;
+    private static final int DISCONNECT_BANNER_HEIGHT = 40;
+    private static final int DISCONNECT_BANNER_FONT_SIZE = 20;
 
     private final BoardView boardView;
     private final SidePanelView sidePanelView;
@@ -88,6 +94,13 @@ public class GameSceneView {
         if (snapshot.gameOver()) {
             drawGameOverOverlay(boardCanvas, snapshot.winner(), snapshot.restartRequestedByViewer());
         }
+        // בפועל אף פעם לא קורה בו-זמנית עם gameOver (ר' GameSession.resolveExpiredDisconnects -
+        // ברגע שחלון החסד פג, gameOver הופך ל-true ו-disconnectSecondsRemaining חוזר ל-null
+        // באותו טיק) - אבל אין תלות מפורשת בין שני ה-if-ים כאן בכוונה, כל אחד עצמאי לגמרי
+        // לפי מה שה-snapshot בפועל מכיל, ולא לפי הנחה על מה "לא אמור" לקרות יחד.
+        if (snapshot.disconnectSecondsRemaining() != null) {
+            drawDisconnectBanner(boardCanvas, snapshot.disconnectSecondsRemaining());
+        }
         boardCanvas.drawOn(scene, boardOffsetX, boardOffsetY);
 
         int panelWidth = sidePanelView.panelWidth();
@@ -136,5 +149,23 @@ public class GameSceneView {
         int buttonTextX = button.x + (button.width - buttonTextWidth) / 2;
         int buttonTextY = button.y + button.height / 2 + BUTTON_FONT_SIZE / 3;
         boardCanvas.drawText(buttonText, buttonTextX, buttonTextY, BUTTON_FONT_SIZE, BUTTON_TEXT_COLOR, true);
+    }
+
+    /**
+     * מציירת פס אזהרה צר לרוחב הלוח כולו, צמוד לקצה העליון: "Opponent
+     * disconnected - Xs to reconnect" - שלב 5 (auto-resign), ר' תיעוד
+     * GameSession.pendingDisconnects/DISCONNECT_GRACE_MILLIS. בכוונה
+     * *לא* overlay מלא כמו drawGameOverOverlay - המשחק לא נגמר, הלוח
+     * עדיין אמור להיראות (קפוא, כי אין tick חדש עד שהניתוק נפתר, אבל
+     * לא מוסתר) - רק באנר דק שמסביר *למה* הוא קפוא.
+     */
+    private void drawDisconnectBanner(Img boardCanvas, int secondsRemaining) {
+        boardCanvas.fillRect(0, 0, lastBoardPixelSize, DISCONNECT_BANNER_HEIGHT, DISCONNECT_BANNER_BACKGROUND);
+
+        String text = "Opponent disconnected - " + secondsRemaining + "s to reconnect";
+        int textWidth = boardCanvas.textWidth(text, DISCONNECT_BANNER_FONT_SIZE, true);
+        int textX = (lastBoardPixelSize - textWidth) / 2;
+        int textY = DISCONNECT_BANNER_HEIGHT / 2 + DISCONNECT_BANNER_FONT_SIZE / 3;
+        boardCanvas.drawText(text, textX, textY, DISCONNECT_BANNER_FONT_SIZE, TITLE_COLOR, true);
     }
 }

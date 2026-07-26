@@ -66,4 +66,29 @@ class MessageDtoTest {
         assertTrue(json.get("gameOver").getAsBoolean());
         assertEquals("WHITE", json.get("winner").getAsString());
     }
+
+    // שלב 5, חלק 1: שדה חדש (ר' SnapshotMessage.disconnectSecondsRemaining) - Integer
+    // ולא int/boolean בכוונה, כדי שאפשר יהיה להבדיל "0 שניות נשארו" מ-"אין ניתוק פעיל".
+
+    @Test
+    void snapshotMessage_withDisconnectSecondsRemaining_serializesField() {
+        SnapshotMessage snapshot = new SnapshotMessage(
+                8, 8, List.of(), null, List.of(), Map.of(), Map.of(), false, null, 1234L,
+                List.of(), List.of(), List.of(), false, 15);
+
+        JsonObject json = gson.toJsonTree(snapshot).getAsJsonObject();
+
+        assertEquals(15, json.get("disconnectSecondsRemaining").getAsInt());
+    }
+
+    @Test
+    void snapshotMessage_withoutDisconnectSecondsRemaining_omitsFieldFromJson() {
+        SnapshotMessage snapshot = new SnapshotMessage(
+                8, 8, List.of(), null, List.of(), Map.of(), Map.of(), false, null, 1234L,
+                List.of(), List.of(), List.of());
+
+        JsonObject json = gson.toJsonTree(snapshot).getAsJsonObject();
+
+        assertFalse(json.has("disconnectSecondsRemaining")); // null -> Gson משמיט את השדה לגמרי, לא כותב "null"
+    }
 }

@@ -89,7 +89,7 @@ public class NetworkGameWindowMain {
     private static ClientSnapshotReconstructor.Reconstructed emptyReconstructedBeforeFirstSnapshot() {
         return new ClientSnapshotReconstructor.Reconstructed(
                 Board.createDefault(PLACEHOLDER_BOARD_SIZE, PLACEHOLDER_BOARD_SIZE),
-                List.of(), List.of(), List.of(), null, List.of(), false, null, 0L, Map.of(), Map.of(), false);
+                List.of(), List.of(), List.of(), null, List.of(), false, null, 0L, Map.of(), Map.of(), false, null);
     }
 
     // נקרא בכל טיק של ה-Timer: קורא את ההודעה האחרונה שהתקבלה מ-GameClient
@@ -141,7 +141,7 @@ public class NetworkGameWindowMain {
                 state.selected(), state.gameOver(), state.winner(),
                 state.motions(), state.jumps(), state.captureEffects(),
                 state.legalMoves(), state.scores(), state.moveLog(),
-                state.restartRequestedByViewer());
+                state.restartRequestedByViewer(), state.disconnectSecondsRemaining());
 
         sceneView.render(snapshot, content.width, content.height,
                 layout.boardPixelSize(), layout.offsetX(), layout.offsetY());

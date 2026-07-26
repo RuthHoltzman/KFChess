@@ -257,4 +257,108 @@ class GameSessionTest {
         assertTrue(snapshot.get("gameOver").getAsBoolean()); // עדיין לא התאפס
         assertEquals(1, snapshot.getAsJsonArray("pieces").size());
     }
+
+    // --- שלב 5, חלק 1: ניתוק/auto-resign עם חלון חסד (ר' GameSession.processDisconnections/
+    // resolveExpiredDisconnects/DISCONNECT_GRACE_MILLIS). כל הטסטים כאן משתמשים ב-tick()
+    // כדי "לקפוץ" בזמן, בדיוק כמו הטסטים הקיימים - הדדליין נמדד לפי engine.now()
+    // (שעון המשחק, מוזרק כ-RaelTime), לא שעון-קיר אמיתי, בדיוק בשביל זה.
+
+    @Test
+    void disconnect_duringActiveGame_opensGracePeriodInsteadOfImmediateLoss() {
+        GameSession session = new GameSession();
+        FakeWebSocket white = new FakeWebSocket();
+        FakeWebSocket black = new FakeWebSocket();
+        session.assignRole(white, "ruth");
+        session.assignRole(black, "dani");
+
+        session.handleDisconnect(white);
+        session.tick(0); // מעבד את הניתוק (processDisconnections) - עדיין הרבה לפני 20 שניות
+
+        assertFalse(session.connections().containsKey(white)); // החיבור המת כן הוסר...
+        JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.BLACK)).getAsJsonObject();
+        assertFalse(snapshot.get("gameOver").getAsBoolean()); // ...אבל היריב עדיין לא זכה - בתוך חלון החסד
+    }
+
+    @Test
+    void disconnect_graceWindowExpires_opponentIsDeclaredWinner() {
+        GameSession session = new GameSession();
+        FakeWebSocket white = new FakeWebSocket();
+        FakeWebSocket black = new FakeWebSocket();
+        session.assignRole(white, "ruth");
+        session.assignRole(black, "dani");
+
+        session.handleDisconnect(white);
+        session.tick(0); // פותח את חלון החסד (דדליין = engine.now() + 20000)
+        session.tick(25_000); // מקדם את שעון המשחק מעבר לדדליין - חלון החסד פג
+
+        JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.BLACK)).getAsJsonObject();
+        assertTrue(snapshot.get("gameOver").getAsBoolean());
+        assertEquals("BLACK", snapshot.get("winner").getAsString()); // מי שנשאר (שחור) ניצח, לא מי שהתנתק
+    }
+
+    @Test
+    void disconnect_thenReconnectWithSameUsername_cancelsGraceAndRestoresRole() {
+        GameSession session = new GameSession();
+        FakeWebSocket white = new FakeWebSocket();
+        FakeWebSocket black = new FakeWebSocket();
+        session.assignRole(white, "ruth");
+        session.assignRole(black, "dani");
+
+        session.handleDisconnect(white);
+        session.tick(0);
+
+        FakeWebSocket whiteReconnected = new FakeWebSocket();
+        ClientRole role = session.assignRole(whiteReconnected, "ruth");
+        assertEquals(ClientRole.WHITE, role); // אותו תפקיד בדיוק בחזרה
+
+        session.tick(30_000); // הרבה מעבר ל-20 שניות המקוריות - אבל חלון החסד כבר בוטל
+        JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.BLACK)).getAsJsonObject();
+        assertFalse(snapshot.get("gameOver").getAsBoolean());
+    }
+
+    @Test
+    void disconnect_duringGrace_reservedRoleCannotBeTakenByUnrelatedConnection() {
+        GameSession session = new GameSession();
+        FakeWebSocket white = new FakeWebSocket();
+        FakeWebSocket black = new FakeWebSocket();
+        session.assignRole(white, "ruth");
+        session.assignRole(black, "dani");
+
+        session.handleDisconnect(white);
+        session.tick(0);
+
+        FakeWebSocket newcomer = new FakeWebSocket();
+        ClientRole role = session.assignRole(newcomer, "someone-else");
+
+        assertEquals(ClientRole.SPECTATOR, role); // WHITE עדיין שמור לרות, לא נגנב
+    }
+
+    @Test
+    void disconnect_spectator_isRemovedImmediatelyWithoutGracePeriod() {
+        GameSession session = new GameSession();
+        session.assignRole(new FakeWebSocket()); // WHITE
+        session.assignRole(new FakeWebSocket()); // BLACK
+        FakeWebSocket spectator = new FakeWebSocket();
+        session.assignRole(spectator);
+
+        session.handleDisconnect(spectator);
+        session.tick(0);
+
+        assertFalse(session.connections().containsKey(spectator));
+    }
+
+    @Test
+    void disconnect_afterGameAlreadyOver_isRemovedImmediatelyWithoutOpeningNewGracePeriod() {
+        FakeWebSocket white = new FakeWebSocket();
+        FakeWebSocket black = new FakeWebSocket();
+        GameSession session = sessionAfterKingCapture(white, black); // המשחק כבר נגמר (לכידת מלך)
+
+        session.handleDisconnect(black); // הצד שהפסיד מתנתק אחרי סוף המשחק
+        session.tick(0);
+
+        assertFalse(session.connections().containsKey(black));
+        JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
+        assertTrue(snapshot.get("gameOver").getAsBoolean());
+        assertEquals("WHITE", snapshot.get("winner").getAsString()); // עדיין המנצח המקורי, לא שונה בגלל הניתוק
+    }
 }

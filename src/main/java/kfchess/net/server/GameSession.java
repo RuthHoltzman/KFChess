@@ -24,6 +24,7 @@ import kfchess.rules.RuleEngine;
 import org.java_websocket.WebSocket;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -68,6 +69,22 @@ public class GameSession {
     private record ConnectedPlayer(ClientRole role, String username) {
     }
 
+    /**
+     * "חלון חסד" פתוח על תפקיד WHITE/BLACK אחרי שהחיבור החי שלו נסגר
+     * באמצע משחק פעיל (ר' processDisconnections) - שומר את ה-username
+     * כדי לזהות reconnect (ר' tryReconnect) ואת הרגע שבו פג הזמן, לפי
+     * engine.now() (שעון המשחק, לא שעון-קיר) - בדיוק כמו כל שאר לוגיקת
+     * הזמן במשחק (ר' PieceTimers/CaptureEffectTracker), כדי שהכול יתקדם
+     * מ-thread הטיק היחיד ובלי תלות בזמן-קיר אמיתי (גם נוח יותר לבדיקה:
+     * GameSessionTest יכול "לקפוץ" 20 שניות קדימה ב-tick() אחד, בלי sleep אמיתי).
+     */
+    private record PendingDisconnect(String username, long deadlineMillis) {
+    }
+
+    // 20 שניות - כמה זמן שמור לצד שהתנתק לחזור (אותו username בדיוק)
+    // לפני שהיריב מוכרז כמנצח אוטומטית. אושר עם רות.
+    private static final long DISCONNECT_GRACE_MILLIS = 20_000;
+
     // לא-final מרגע שנוסף RESTART: resetGame() בונה לוח/מנוע חדשים לגמרי
     // לתוך אותם שדות - ר' resetGame() למטה. עד אז (Part A/B) היו final,
     // כי המשחק תמיד היה נבנה פעם אחת ולא מתאפס.
@@ -77,6 +94,15 @@ public class GameSession {
     private final EventBus bus = new EventBus();
     private final AccountRepository accountRepository;
     private final Map<WebSocket, ConnectedPlayer> connections = new ConcurrentHashMap<>();
+    // WHITE/BLACK בלבד יכולים להופיע כאן (ר' handleDisconnect - צופה
+    // מוסר מיד, בלי חלון חסד). EnumMap כי המפתח סגור לשני ערכים בלבד,
+    // אותו עיקרון כמו restartVotes למטה.
+    private final Map<ClientRole, PendingDisconnect> pendingDisconnects = new EnumMap<>(ClientRole.class);
+    // חיבורים שנסגרו ועדיין לא עובדו - בדיוק כמו pendingCommands: handleDisconnect
+    // (thread הרשת, ר' GameServer.onClose) רק מתייקת לכאן, ו-tick() (thread
+    // הטיק היחיד) הוא זה שבאמת קורא ל-engine.isGameOver()/engine.now() ומחליט
+    // מה לעשות (ר' processDisconnections) - אסור לגעת ב-engine משום thread אחר.
+    private final Queue<WebSocket> pendingDisconnections = new ConcurrentLinkedQueue<>();
     private final Queue<PendingCommand> pendingCommands = new ConcurrentLinkedQueue<>();
     // מי (WHITE/BLACK) כבר ביקש/ה RESTART מאז שהמשחק הנוכחי נגמר - נמחק
     // (clear()) בכל resetGame(). Set ולא boolean יחיד לכל צד, כי צריך
@@ -139,17 +165,61 @@ public class GameSession {
 
     // הראשון שמתחבר מקבל WHITE, השני BLACK, כל השאר SPECTATOR; synchronized כדי שלא ייכנסו שני "ראשונים" בו-זמנית.
     // username נשמר יחד עם התפקיד כדי ש-onGameLifecycleEvent ידע בסוף המשחק למי לעדכן ELO.
+    // קודם בודקים reconnect (ר' tryReconnect) - חיבור חדש עם username שתואם
+    // בדיוק למי שנמצא כרגע ב"חלון חסד" (ר' handleDisconnect/pendingDisconnects)
+    // מקבל בחזרה את אותו תפקיד בדיוק, במקום להיחשב כחיבור "רגיל".
     public synchronized ClientRole assignRole(WebSocket connection, String username) {
-        boolean whiteTaken = connections.values().stream().anyMatch(p -> p.role() == ClientRole.WHITE);
-        boolean blackTaken = connections.values().stream().anyMatch(p -> p.role() == ClientRole.BLACK);
+        Optional<ClientRole> reconnected = tryReconnect(connection, username);
+        if (reconnected.isPresent()) {
+            return reconnected.get();
+        }
+        boolean whiteTaken = isRoleOccupied(ClientRole.WHITE);
+        boolean blackTaken = isRoleOccupied(ClientRole.BLACK);
         ClientRole role = !whiteTaken ? ClientRole.WHITE : !blackTaken ? ClientRole.BLACK : ClientRole.SPECTATOR;
         connections.put(connection, new ConnectedPlayer(role, username));
         return role;
     }
 
+    // "תפוס" = יש עליו חיבור חי, *או* הוא שמור לצד שהתנתק ועדיין בתוך
+    // חלון החסד - כדי שאף אחד אחר לא "יגנוב" את הצבע שהתפנה תוך כדי
+    // שהשחקן המקורי עדיין עשוי לחזור.
+    private boolean isRoleOccupied(ClientRole role) {
+        return connections.values().stream().anyMatch(p -> p.role() == role) || pendingDisconnects.containsKey(role);
+    }
+
+    // אם יש חלון-חסד פתוח (על WHITE או BLACK) עם בדיוק אותו username -
+    // זה חיבור-מחדש: מבטלים את חלון החסד ומחזירים לחיבור החדש את אותו
+    // תפקיד. username=null (לא מזוהה בכלל) אף פעם לא "מזהה" reconnect -
+    // אחרת כל חיבור אנונימי היה תופס בטעות מקום ששמור למישהו מזוהה.
+    private Optional<ClientRole> tryReconnect(WebSocket connection, String username) {
+        if (username == null) {
+            return Optional.empty();
+        }
+        for (Map.Entry<ClientRole, PendingDisconnect> entry : pendingDisconnects.entrySet()) {
+            if (username.equals(entry.getValue().username())) {
+                ClientRole role = entry.getKey();
+                pendingDisconnects.remove(role);
+                connections.put(connection, new ConnectedPlayer(role, username));
+                return Optional.of(role);
+            }
+        }
+        return Optional.empty();
+    }
+
     // מסיר חיבור שהתנתק - לא משפיע על צבעים תפוסים אחרים (אין "פינוי מקום" ליריב שכבר מחובר).
+    // ציבורית ונשארת כמו שהיא (בלי לוגיקת חלון-חסד בכלל) כי GameSessionTest
+    // הקיים קורא לה ישירות; handleDisconnect למטה היא הכניסה האמיתית
+    // מ-GameServer.onClose, ומוסיפה מעליה את לוגיקת חלון-החסד.
     public void removeConnection(WebSocket connection) {
         connections.remove(connection);
+    }
+
+    // נקראת מ-thread הרשת (GameServer.onClose). לא נוגעת ב-connections/engine
+    // בעצמה בכלל - רק מתייקת את החיבור, בדיוק כמו ש-enqueueCommand מתייקת
+    // פקודות (ר' תיעוד pendingDisconnections למעלה) - העיבוד האמיתי קורה
+    // ב-processDisconnections, מ-thread הטיק בלבד.
+    public void handleDisconnect(WebSocket connection) {
+        pendingDisconnections.add(connection);
     }
 
     // נקרא מ-thread הרשת (onMessage): רק מכניס לתור, לא נוגע ב-engine בכלל.
@@ -157,13 +227,68 @@ public class GameSession {
         pendingCommands.add(new PendingCommand(connection, command));
     }
 
-    // נקרא רק מה-thread היחיד של לולאת הטיק: מבצע קודם את כל הפקודות שהצטברו, ואז מקדם את שעון המשחק.
-    public void tick(long elapsedMillis) {
+    // נקרא רק מה-thread היחיד של לולאת הטיק: קודם מעבד ניתוקים שהצטברו
+    // (processDisconnections - חייב לקרות לפני applyCommand, כדי שפקודה
+    // שהגיעה מחיבור שכבר נסגר לא "תעבור" רק כי עדיין לא ניקינו אותו),
+    // אז את כל הפקודות הרגילות, מקדם את שעון המשחק, ולבסוף בודק אם
+    // חלון-חסד כלשהו פג (resolveExpiredDisconnects) - הכול על אותו
+    // thread יחיד בדיוק, בלי Timer/thread נפרד.
+    // synchronized (חדש, שלב 5): pendingDisconnects (EnumMap, לא thread-safe
+    // כמו connections/pendingCommands) נקרא/נכתב גם כאן (מ-thread הטיק)
+    // וגם מ-assignRole (מ-thread הרשת, ר' tryReconnect/isRoleOccupied) -
+    // שני המתודות חייבות לחלוק את אותו מנעול (this) כדי שלא יתנגשו.
+    public synchronized void tick(long elapsedMillis) {
+        processDisconnections();
         PendingCommand pending;
         while ((pending = pendingCommands.poll()) != null) {
             applyCommand(pending);
         }
         engine.handleWait(elapsedMillis);
+        resolveExpiredDisconnects();
+    }
+
+    // מעבד את כל הניתוקים שהצטברו מאז הטיק הקודם (ר' handleDisconnect) -
+    // כאן, ורק כאן, מותר לגעת ב-connections/engine בעקבות ניתוק. לכל
+    // חיבור: אם היה צופה, או שהמשחק כבר נגמר - מוסר בלבד (removeConnection,
+    // כמו התנהגות ה-onClose המקורית). אחרת (WHITE/BLACK באמצע משחק פעיל) -
+    // מוסיר את החיבור המת אבל *שומר* את התפקיד+username ב-pendingDisconnects
+    // עם דדליין DISCONNECT_GRACE_MILLIS קדימה על שעון המשחק (engine.now()) -
+    // resolveExpiredDisconnects למטה בודק את זה בכל טיק.
+    private void processDisconnections() {
+        WebSocket connection;
+        while ((connection = pendingDisconnections.poll()) != null) {
+            ConnectedPlayer player = connections.get(connection);
+            removeConnection(connection);
+            if (player != null && player.role() != ClientRole.SPECTATOR && !engine.isGameOver()) {
+                pendingDisconnects.put(player.role(),
+                        new PendingDisconnect(player.username(), engine.now() + DISCONNECT_GRACE_MILLIS));
+            }
+        }
+    }
+
+    // אם WHITE/BLACK כלשהו נמצא מעבר לדדליין שלו ב-pendingDisconnects -
+    // ההפסד קורה עכשיו: הצבע השני (opposite) מוכרז כמנצח דרך
+    // engine.forceGameOver - אותה נקודה משותפת שגם לכידת מלך משתמשת בה
+    // (ר' GameEngine.forceGameOver), כדי שעדכון ה-ELO הקיים (מאזין ל-
+    // GameLifecycleEvent(ENDED), ר' onGameLifecycleEvent) יקרה בלי לכתוב
+    // אותו שוב. usernameFor(loserRole) בתוך onGameLifecycleEvent חייב
+    // עדיין למצוא את ה-username דרך pendingDisconnects (ר' usernameFor
+    // למטה) - זו הסיבה ש-clear() קורה *אחרי* forceGameOver ולא לפניו.
+    // בודקת engine.isGameOver() קודם כדי לא "לדרוס" סיום משחק שכבר קרה
+    // (למשל לכידת מלך רגילה) באותו טיק.
+    private void resolveExpiredDisconnects() {
+        if (engine.isGameOver() || pendingDisconnects.isEmpty()) {
+            return;
+        }
+        long now = engine.now();
+        for (Map.Entry<ClientRole, PendingDisconnect> entry : pendingDisconnects.entrySet()) {
+            if (now >= entry.getValue().deadlineMillis()) {
+                PieceColor winner = entry.getKey().toPieceColor().orElseThrow().opposite();
+                engine.forceGameOver(winner);
+                pendingDisconnects.clear();
+                return;
+            }
+        }
     }
 
     // מנתב פקודה בודדת לפי הצבע ששויך לחיבור ששלח אותה; מתעלם משולח לא-מזוהה או צופה.
@@ -236,13 +361,34 @@ public class GameSession {
     }
 
     // ה-username של מי שמחזיק כרגע בתפקיד הנתון, או null אם אין כזה (לא
-    // מחובר בכלל, או התחבר בלי username - ר' UsernameResolver).
+    // מחובר בכלל, או התחבר בלי username - ר' UsernameResolver). כשהתפקיד
+    // הוא של צד שהתנתק ממש עכשיו (ר' resolveExpiredDisconnects שקורא
+    // לכאן דרך GameLifecycleEvent, לפני שה-pending נמחק) - אין לו יותר
+    // חיבור חי ב-connections בכלל, אז נופלים חזרה ל-pendingDisconnects
+    // כדי שעדכון ה-ELO עדיין ידע למי להוריד דירוג.
     private String usernameFor(ClientRole role) {
         return connections.values().stream()
                 .filter(player -> player.role() == role)
                 .map(ConnectedPlayer::username)
                 .findFirst()
+                .or(() -> Optional.ofNullable(pendingDisconnects.get(role)).map(PendingDisconnect::username))
                 .orElse(null);
+    }
+
+    // שניות שנותרו עד שהצד שהתנתק (אם יש כזה) יפסיד אוטומטית - null אם
+    // אף אחד לא נמצא כרגע ב"חלון חסד". בכוונה לא תלוי ב-viewerRole (בניגוד
+    // ל-restartRequestedByViewer) - זו הודעה זהה לכולם (כולל צופים), לא הצבעה אישית.
+    private Integer disconnectSecondsRemaining() {
+        if (pendingDisconnects.isEmpty()) {
+            return null;
+        }
+        long now = engine.now();
+        long soonestDeadline = pendingDisconnects.values().stream()
+                .mapToLong(PendingDisconnect::deadlineMillis)
+                .min()
+                .orElseThrow();
+        long remainingMillis = Math.max(0, soonestDeadline - now);
+        return (int) Math.ceil(remainingMillis / 1000.0);
     }
 
     /** תוצאת סריקת הלוח: הכלים לשידור + מיקום כל כלי (זהות, לא ערך) - דרוש כדי לאתר קפיצות (ר' collectJumps). */
@@ -251,7 +397,9 @@ public class GameSession {
 
     // בונה את הודעת המצב (snapshot) עבור צופה ספציפי - selected/legalMoves הם רק ביחס לצבע שלו.
     // motions/jumps/captureEffects זהים לכל הצופים - זה בדיוק מה שה-UI המקומי מצייר כאנימציה.
-    public SnapshotMessage snapshotFor(ClientRole viewerRole) {
+    // synchronized (חדש, שלב 5): disconnectSecondsRemaining() קורא מ-pendingDisconnects,
+    // שגם assignRole (thread הרשת) יכול לגעת בו בו-זמנית - אותו מנעול כמו tick()/assignRole.
+    public synchronized SnapshotMessage snapshotFor(ClientRole viewerRole) {
         BoardScan scan = scanBoard();
         Optional<Position> selected = viewerRole.toPieceColor()
                 .flatMap(networkActions::selectedPositionFor);
@@ -264,7 +412,7 @@ public class GameSession {
         return new SnapshotMessage(board.width(), board.height(), scan.pieces(), selected.orElse(null), legalMoves,
                 scoresByName(), moveLogByName(), engine.isGameOver(), winner, engine.now(),
                 engine.activeMotions(), collectJumps(scan.positionByPiece()), engine.recentCaptureEffects(),
-                restartRequestedByViewer);
+                restartRequestedByViewer, disconnectSecondsRemaining());
     }
 
     // סורק את כל הלוח (row/col) פעם אחת - אוסף גם PieceDto לשידור וגם piece->position לצורך collectJumps.
