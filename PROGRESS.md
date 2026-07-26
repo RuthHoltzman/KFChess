@@ -888,13 +888,11 @@ can't find - pops up a message that can't find." רות אישרה לממש עכ
   הישן בכוונה. חישבתי ידנית (בלי `mvn`) את הגיאומטריה במקרה הרגיל -
   תקין, הלוח לא גולש. **טרם `mvn test` וטרם הרצה ידנית** - ר' "מה שנשאר
   לאמת" למטה.
-- **בעיית הניקוד (קפיצה-תפיסה) - עדיין פתוחה**: לא נמצא נתיב-קוד תואם
-  לתיאור ("JUMP לא נספר בניקוד") - כל תפיסה אמיתית עוברת דרך
-  `GameEngine.completeMotion()` → `MoveHistory.recordMove()` (מקום יחיד
-  שמעדכן ניקוד), ו-JUMP (`GameEngine.handleJump`/`NetworkActions.handleJump`)
-  לא נוגע בלוח בכלל - רק מסמן `PieceState.JUMPING` זמני (הגנה, לא
-  תפיסה). מחכה לתיאור-חזרה מדויק מרות (איזה כפתור/קליק בדיוק, מה קרה
-  בפועל) לפני שממשיכים.
+- **בעיית הניקוד (קפיצה-תפיסה) - תוארה מדויק בהמשך ותוקנה** (ר' סעיף
+  ייעודי בהמשך הקובץ, אחרי סעיף העיצוב) - התיאור הראשוני היה עמום מדי
+  לאתר; רות תיארה מדויק יותר: "כלי בא לאכול כלי אחר, הכלי המותקף קופץ
+  ואוכל את התוקף" - זה בדיוק תרחיש "לכידה באוויר"
+  (`captureFailsAgainstJumpingDefender`), לא ה-JUMP הרגיל.
 
 ### עיצוב יותר יפה לתצוגת המידע (הסבב הזה)
 
@@ -946,6 +944,51 @@ UUID ענק ("Room: match-816a33df-6e2a-4772-b3e7-09c6768d4150") שגלש כמע
 - **אימות שבוצע כאן**: איזון סוגריים על כל הקבצים שנגעתי בהם - תקין.
   grep לקריאות `sidePanelView.draw(` - רק שתיים, שתיהן ב-`GameSceneView`
   (כבר מתאימות לחתימה) - נקי. **טרם `mvn test` וטרם הרצה ידנית** - ר' "מה
+  שנשאר לאמת" למטה.
+
+### תיקון באג ניקוד - "לכידה באוויר" (הסבב הזה)
+
+רות תיארה מדויק: "כשכלי בא לאכול כלי אחר ובסוף הכלי המותקף קופץ ואוכל
+את התוקף הוא לא מקבל נקודות". זה בדיוק תרחיש `GameEngine.
+captureFailsAgainstJumpingDefender` ("לכידה באוויר", ר' התיעוד למעלה
+בתחילת הקובץ): כלי א' זז לתפוס את כלי ב', אבל ב' נמצא/ת במצב JUMPING
+(קפיצה, לא תנועה) - א' "מתאדה" (נמחק מהלוח) ו-ב' נשאר/ת שלם/ה במקום.
+**מנקודת המבט של ב' זו תפיסה אמיתית** (א' נמחק בפועל) - אבל הקוד הקודם
+לא זיקף נקודות לאף אחד, "כאילו לא קרה כלום".
+
+- **`MoveHistory.recordCounterCapture(defender, attacker, from, to)`**
+  (חדשה, מחליפה את `recordFailedCapture` הקודמת - שלא היה לה קורא נוסף
+  בכלל, לא היה טעם להשאיר את שתיהן) - שתי שורות ביומן: אחת לתוקף/ת (המהלך
+  *שלו/ה* נכשל, סימון "?!" בדיוק כמו קודם) ואחת למגן/ת (תפיסה-נגדית
+  מוצלחת, סימון "(jump)" חדש) - **ורק המגן/ת מקבל/ת נקודות** (`scores.merge`
+  לפי `attacker.kind().value()`, בדיוק אותה נוסחה כמו ב-`recordMove`
+  הרגילה, רק שהצדדים הפוכים - "מי תפס את מי" הוא המגן/ת הפעם, לא
+  התוקף/ת). `SoundEvent` שונה מ-`ILLEGAL` ל-`CAPTURE` - תפיסה אמיתית
+  קרתה, גם אם לא בכיוון שהתוקף/ת תכנן/ה.
+- **`GameEngine.captureFailsAgainstJumpingDefender(motion, movingPiece, defendingPiece)`**
+  - קיבלה פרמטר שלישי חדש (`defendingPiece`, את הכלי המגן עצמו - קודם
+    הפונקציה קיבלה רק את התוקף) - כדי ש-`recordCounterCapture` תדע *למי*
+    לזקוף את הניקוד. קריאה יחידה לפונקציה הזו (מ-`completeMotion`)
+    עודכנה בהתאם.
+- **מה שלא השתנה בכוונה**: תפיסה רגילה (המגן/ת *לא* קופץ/ת) עדיין
+  עוברת ב-`MoveHistory.recordMove()` בדיוק כמו קודם, בלי שום שינוי - זה
+  היה, ונשאר, המסלול הנכון והיחיד לתפיסות "רגילות". ה-JUMP עצמו
+  (`GameEngine.handleJump`/`NetworkActions.handleJump`, ר' התיעוד
+  המקורי למעלה) גם הוא לא השתנה - עדיין לא מזיז/תופס שום דבר בעצמו,
+  רק מסמן `PieceState.JUMPING`; זה ה-`completeMotion` של הצד השני
+  (התוקף/ת) שמגלה את המצב הזה ומפעיל עכשיו את הניקוד.
+- **טסטים חדשים**: `GameEngineTest` (קובץ חדש - אין `GameEngineTest`
+  קיים, `RuleEngineTest` בודק חוקיות-מהלכים טהורה בלבד, לא את
+  `GameEngine` עצמו) - 3 טסטים: המגן/ת מקבל/ת את ערך הכלי של התוקף/ת
+  בניקוד; התוקף/ת נמחק/ת מהלוח והמגן/ת נשאר/ת שלם/ה; ורגרסיה מפורשת -
+  תפיסה רגילה (בלי קפיצה) עדיין מזקיפה נקודות לתוקף/ת כמו קודם, לא
+  השתנתה. בונה `GameEngine` ישירות (`new GameEngine(new Game(board), new
+  RuleEngine(), new RaelTime(), new EventBus())`) עם `RaelTime` מדומה
+  (`handleWait(1000)` "מקפיץ" את הזמן בלי `Thread.sleep` אמיתי) - אותה
+  שיטה בדיוק כמו `GameSessionTest`.
+- **אימות שבוצע כאן**: איזון סוגריים על `GameEngine.java`/`MoveHistory.java`/
+  `GameEngineTest.java` - תקין. grep ל-`recordFailedCapture` (השם הישן) -
+  אין אף הפניה שנשארה, נקי. **טרם `mvn test` וטרם הרצה ידנית** - ר' "מה
   שנשאר לאמת" למטה.
 
 ## מה שנשאר לאמת (רות - עדיין לא נעשה)
@@ -1077,10 +1120,22 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
       הפאנלים **לא** מציג "(You: ...)" עבורו/ה (אין "פאנל שלו/ה").
     - לוודא שקליקים/Restart/הבאנרים הקיימים (ניתוק/המתנה) עדיין עובדים
       בדיוק כמו קודם - השינוי הזה לא אמור לשבור אף אחד מהם.
-14. **בעיית הניקוד בקפיצה-תפיסה - עדיין ממתינה לתיאור-חזרה מדויק
-    מרות** (ר' הסעיף הייעודי למעלה) - לא נמצא נתיב-קוד תואם בבדיקת
-    הקוד, צריך רות שתתאר בדיוק מה עשתה ומה ציפתה לראות לעומת מה שראתה
-    בפועל, לפני שממשיכים.
+14. **הרצה ידנית של תיקון הניקוד ("לכידה באוויר", הסבב הזה, טרם נבדק
+    בפועל כלל)**:
+    - שני חלונות, שני חשבונות. צד אחד (למשל BLACK) קליק-ימני על כלי
+      שלו/ה כדי לגרום לו לקפוץ (מסגרת/אנימציית קפיצה אמורה להיראות).
+    - הצד השני (WHITE) קליק על כלי שיכול לזוז/לתפוס את הכלי שקופץ,
+      ולפני שהקפיצה נגמרת - קליק על המשבצת של הכלי הקופץ (תפיסה).
+    - לוודא: הכלי **התוקף** (WHITE) נעלם מהלוח, הכלי הקופץ (BLACK) נשאר
+      במקומו בשלמותו, וה-Score **של BLACK** (המגן/ת) עולה בערך הכלי
+      שנעלם (למשל 5 אם זה היה צריח). Score של WHITE **לא** משתנה.
+    - לוודא שתפיסה רגילה (בלי קפיצה בכלל) עדיין עובדת כרגיל - לא נשברה.
+    - **הערה חשובה לסבב AI עתידי**: בסבב הזה רות ביקשה במפורש **לא
+      לתקן** שני דברים ידועים בעיצוב (ר' סעיף העיצוב למעלה) - הבאנרים
+      הכחול/כתום (ניתוק/המתנה) עדיין שקופים-למחצה (לא הפכתי אותם ל-flat),
+      וייתכן שיש באג ב-`Img.drawText` שמציג טקסט עברי הפוך (`drawString`
+      גולמי, לא `TextLayout`) - **שניהם ידועים, לא תוקנו בכוונה, אל תניחי
+      שהם "נשמטו"** - רק אם רות תבקש את זה במפורש בעתיד.
 15. **הרצה ידנית של העיצוב המחודש (הסבב הזה, טרם נבדק בפועל כלל)**:
     - חלון ראשון: **Play** (לא Room→Create) - לוודא שהפס העליון מציג
       "Room " בלבן ואחריו קוד קצר בגוון זהב-עמום (8 תווים, **לא** UUID
@@ -1190,6 +1245,12 @@ git commit -m "Show the room id in a permanent header strip and the local player
 ```
 git add src/main/java/kfchess/view/Img.java src/main/java/kfchess/view/GameSceneView.java src/main/java/kfchess/view/SidePanelView.java src/test/java/texttests/GameSceneViewTest.java PROGRESS.md
 git commit -m "Restyle the room header and side panels: truncate long matchmaking UUIDs to 8 characters (Create/Join short codes stay untouched), give White and Black distinct color themes, and move the You indicator into a rounded badge below the panel title instead of squeezing it into the header line"
+```
+
+תיקון באג ניקוד - לכידה באוויר (הסבב הזה, **טרם אומת ידנית - ר' "מה שנשאר לאמת" סעיף 14**):
+```
+git add src/main/java/kfchess/engine/GameEngine.java src/main/java/kfchess/engine/MoveHistory.java src/test/java/texttests/GameEngineTest.java PROGRESS.md
+git commit -m "Award the defending piece capture points when an attacker's move fails against a jumping defender, since the attacker actually vanishes from the board - previously neither side scored for this, even though it is a real capture from the defender's point of view"
 ```
 
 ## איך להריץ ולבדוק (IntelliJ)
