@@ -292,6 +292,15 @@ public class GameSession {
     }
 
     // מנתב פקודה בודדת לפי הצבע ששויך לחיבור ששלח אותה; מתעלם משולח לא-מזוהה או צופה.
+    // בקשת רות: כל עוד ממתינים ליריב (isWaitingForOpponent) - צד יחיד
+    // שכבר מחובר לא יכול "להתחיל לשחק" (CLICK/JUMP מתעלמים בשקט, בלי
+    // הודעת שגיאה ללקוח - פשוט לא קורה כלום). נבדק *אחרי* RESTART בכוונה:
+    // RESTART ממילא רלוונטי רק כש-engine.isGameOver() (ר' applyRestartVote),
+    // ואם המשחק נגמר isWaitingForOpponent() תמיד false בכל מקרה - אין כאן
+    // התנגשות אמיתית, רק סדר בדיקות הגיוני (קודם המקרה המיוחד, RESTART).
+    // isWaitingForOpponent() היא synchronized(this) - קריאה מכאן בטוחה
+    // כי applyCommand תמיד רץ מתוך tick(), שכבר מחזיק את אותו מנעול
+    // (נעילה חוזרת/reentrant, לא deadlock).
     private void applyCommand(PendingCommand pending) {
         ConnectedPlayer player = connections.get(pending.connection());
         if (player == null || !pending.command().isValid()) {
@@ -299,6 +308,9 @@ public class GameSession {
         }
         if (pending.command().type() == ClientCommandType.RESTART) {
             applyRestartVote(player.role());
+            return;
+        }
+        if (isWaitingForOpponent()) {
             return;
         }
         player.role().toPieceColor().ifPresent(color -> {

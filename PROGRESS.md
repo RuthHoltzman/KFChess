@@ -612,6 +612,35 @@ Code Java world...") - בלי שום קשר לפרויקט. נכתב מחדש ל
   ייחודיים** (בדיוק כמו `GameClient` - דורש שרת חי אמיתי) - טעון בדיקה
   ידנית בלבד, ר' "מה שנשאר לאמת" למטה.
 
+### פיצ'ר חדש (בקשת רות) - לא ניתן להתחיל לשחק בזמן המתנה ליריב
+
+בקשת רות: כל עוד רק צד אחד (WHITE או BLACK) מחובר/ת ואין עדיין יריב/ה -
+אסור לצד המחובר להזיז/לבחור כלים בכלל, עד שהיריב/ה מצטרף/ת בפועל.
+
+- **`GameSession.applyCommand`** - הוספה בדיקה חדשה: אם `isWaitingForOpponent()`
+  מחזירה true - פקודות CLICK/JUMP מתעלמות בשקט (return מוקדם, בלי הודעת
+  שגיאה ללקוח - פשוט שום דבר לא קורה). הבדיקה ממוקמת *אחרי* הטיפול
+  ב-RESTART (RESTART ממילא רלוונטי רק כש-`engine.isGameOver()`, ואז
+  `isWaitingForOpponent()` תמיד false ממילא - אין התנגשות אמיתית, רק
+  סדר בדיקות הגיוני).
+  שימוש חוזר ב-`isWaitingForOpponent()` הקיימת (נבנתה לשלב 5 חלק 2,
+  matchmaking) - בלי לשכפל לוגיקה: "יש בדיוק צד אחד מחובר והשני לא
+  תפוס גם לא ע"י חלון-חסד" נשאר קריטריון אחד ויחיד לשני השימושים
+  (matchmaking + חסימת מהלכים).
+  קריאה בטוחה מבחינת thread: `isWaitingForOpponent()` היא `synchronized(this)`,
+  ו-`applyCommand` תמיד רץ מתוך `tick()` שכבר מחזיק את אותו מנעול - נעילה
+  חוזרת (reentrant), לא deadlock.
+  שעון המשחק (`engine.handleWait`) ממשיך לרוץ כרגיל בזמן ההמתנה - רק
+  הקליקים עצמם נחסמים, לא הוספה שום עצירה של הטיימר.
+  **לא נוספה** אינדיקציה ויזואלית ("Waiting for opponent...") על המסך -
+  רק חסימה שקטה; רות יכולה לבקש את זה בנפרד אם תרצה.
+- **טסטים חדשים ב-`GameSessionTest`**: `tick_clickWhileWaitingForOpponent_isIgnored`
+  (WHITE לבד/ה, קליק לא עובד - אין `selected` ב-snapshot),
+  `tick_clickAfterOpponentJoins_isProcessedNormally` (אותו קליק אחרי
+  ש-BLACK מצטרף/ת - עכשיו כן עובד).
+- **אימות שבוצע כאן**: איזון סוגריים - תקין. **טרם `mvn test`** - ר' "מה
+  שנשאר לאמת" למטה.
+
 ## מה שנשאר לאמת (רות - עדיין לא נעשה)
 
 שוב: אין לי `javac`/`mvn` בסביבה שלי (אין root, אין גישת רשת להוריד
@@ -688,7 +717,15 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
      אמור/ה לפתוח matchmaking session חדש ולחכות שם.
    - לוודא ש-Play עדיין עובד רגיל בין שני לקוחות ששניהם לחצו Play
      (התרחיש שכבר אומת בעבר - בלי רגרסיה).
-8. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
+8. **הרצה ידנית של "לא ניתן להתחיל לשחק בזמן המתנה" (חדש, טרם נבדק
+   בפועל - הסבב הזה)**:
+   - חלון ראשון: Room... → Create, נכנס/ת כ-WHITE, לבד/ה בחדר.
+   - לנסות ללחוץ/לבחור כלי - לוודא ש**שום דבר לא קורה** (אין הדגשה
+     ויזואלית של הכלי, אין תזוזה).
+   - חלון שני: Room... → Join עם אותו קוד - נכנס/ת כ-BLACK.
+   - עכשיו לנסות שוב ללחוץ על כלי בחלון הראשון - לוודא שהפעם **כן
+     עובד** רגיל (בחירה + תזוזה).
+9. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
    מופיעים כ-modified ב-`git status` (line-ending, לא תוכן - לא נגעתי
    בהם), ותיקיית `src/main/java/kfchess/.claude/` וקובץ `kfchess.db`
    שלא יצרתי (untracked, לא ב-git add המוצע).
@@ -742,6 +779,12 @@ git commit -m "Stage 6 part 1: real rooms via a Room dialog (Create/Join/Cancel)
 ```
 git add src/main/java/kfchess/server/server/GameServer.java PROGRESS.md
 git commit -m "Restrict Play matchmaking to sessions created via Play itself, so it can no longer join a private room opened via Create just because that room's creator is also waiting for someone"
+```
+
+מניעת מהלכים בזמן המתנה ליריב (הסבב הזה, **טרם אומת ידנית/mvn test - ר' "מה שנשאר לאמת" סעיף 8**):
+```
+git add src/main/java/kfchess/server/server/GameSession.java src/test/java/texttests/GameSessionTest.java PROGRESS.md
+git commit -m "Ignore CLICK/JUMP commands from a lone connected player until an opponent actually joins, reusing the existing isWaitingForOpponent check so a solo player can no longer move pieces before anyone else is there to play against"
 ```
 
 ## איך להריץ ולבדוק (IntelliJ)

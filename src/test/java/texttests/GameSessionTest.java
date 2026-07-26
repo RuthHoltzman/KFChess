@@ -414,4 +414,40 @@ class GameSessionTest {
 
         assertFalse(session.isWaitingForOpponent()); // המשחק נגמר - אין טעם לצרף אליו יריב/ה חדש/ה
     }
+
+    // --- בקשת רות (הסבב הזה): כל עוד ממתינים ליריב (isWaitingForOpponent),
+    // הצד היחיד שכבר מחובר לא יכול "להתחיל לשחק" - CLICK/JUMP מתעלמים
+    // בשקט (ר' GameSession.applyCommand).
+
+    @Test
+    void tick_clickWhileWaitingForOpponent_isIgnored() {
+        GameSession session = new GameSession();
+        FakeWebSocket white = new FakeWebSocket();
+        session.assignRole(white); // רק WHITE מחובר - אין BLACK בכלל עדיין
+
+        session.enqueueCommand(white, click(6, 4));
+        session.tick(0);
+
+        JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
+        assertFalse(snapshot.has("selected")); // הקליק לא בוצע בכלל - עדיין ממתינים ליריב
+    }
+
+    @Test
+    void tick_clickAfterOpponentJoins_isProcessedNormally() {
+        GameSession session = new GameSession();
+        FakeWebSocket white = new FakeWebSocket();
+        session.assignRole(white);
+
+        session.enqueueCommand(white, click(6, 4)); // לפני שהצטרף/ה יריב - יתעלם
+        session.tick(0);
+
+        session.assignRole(new FakeWebSocket()); // BLACK מצטרף עכשיו - אין יותר המתנה
+        session.enqueueCommand(white, click(6, 4)); // אותו קליק בדיוק, הפעם אמור לעבוד
+        session.tick(0);
+
+        JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
+        JsonObject selected = snapshot.getAsJsonObject("selected");
+        assertEquals(6, selected.get("row").getAsInt());
+        assertEquals(4, selected.get("col").getAsInt());
+    }
 }
