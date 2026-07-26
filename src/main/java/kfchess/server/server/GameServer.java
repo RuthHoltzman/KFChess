@@ -39,10 +39,13 @@ public class GameServer extends WebSocketServer {
     private final Map<String, GameSession> sessions = new ConcurrentHashMap<>();
     private final Map<WebSocket, String> gameIdByConnection = new ConcurrentHashMap<>();
     private final ScheduledExecutorService tickExecutor = Executors.newSingleThreadScheduledExecutor();
-    // נעילה ייעודית ל"מצא-או-צור" של matchmaking (ר' resolveMatchmakingGameId) -
-    // נפרדת מהנעילות הפנימיות של GameSession עצמה (assignRole וכו') כי כאן
-    // הבעיה היא ברמת GameServer: איזה session בכלל נבחר, לא מה קורה בתוכו.
-    private final Object matchmakingLock = new Object();
+    // נעילה ייעודית ל"החלטה איזה gameId להשתמש בו" - גם matchmaking
+    // (ר' resolveMatchmakingGameId) וגם Create room (ר' createNewRoomGameId)
+    // חולקים אותה, כי שתיהן אותה בעיה בעצם ("תמצא/י או תמציא/י gameId פנוי
+    // ותשמרי אותו לפני שמישהו אחר עושה בדיוק אותו דבר"). נפרדת מהנעילות
+    // הפנימיות של GameSession עצמה (assignRole וכו') כי כאן הבעיה היא ברמת
+    // GameServer: איזה session בכלל נבחר, לא מה קורה בתוכו.
+    private final Object sessionAllocationLock = new Object();
     private long lastTickNanos = System.nanoTime();
 
     public GameServer(int port) {
@@ -66,12 +69,21 @@ public class GameServer extends WebSocketServer {
     // (חדר-בשם-ספציפי, GameIdResolver). שום דבר אחר כאן לא משתנה - גם
     // matchmaking בסוף עובר דרך אותו computeIfAbsent (בטוח לקרוא לו שוב
     // גם אם resolveMatchmakingGameId כבר יצרה את ה-session - no-op).
+    // שלב 6 (Create room, כפתור Create בדיאלוג Room): אם הנתיב הוא בקשת
+    // "Create" (ר' CreateRoomResolver) - ה-gameId מגיע מ-createNewRoomGameId
+    // (קוד קצר שהשרת ממציא, ר' RoomIdGenerator) - נבדק *לפני* matchmaking,
+    // כי שני הנתיבים השמורים (_create/_play) הדדית בלעדיים.
     @Override
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
         String path = handshake.getResourceDescriptor();
-        String gameId = MatchmakingResolver.isMatchmakingRequest(path)
-                ? resolveMatchmakingGameId()
-                : GameIdResolver.resolve(path);
+        String gameId;
+        if (CreateRoomResolver.isCreateRoomRequest(path)) {
+            gameId = createNewRoomGameId();
+        } else if (MatchmakingResolver.isMatchmakingRequest(path)) {
+            gameId = resolveMatchmakingGameId();
+        } else {
+            gameId = GameIdResolver.resolve(path);
+        }
         String username = UsernameResolver.resolve(path).orElse(null);
         GameSession session = sessions.computeIfAbsent(gameId, id -> new GameSession(accountRepository));
         gameIdByConnection.put(conn, gameId);
@@ -82,19 +94,36 @@ public class GameServer extends WebSocketServer {
     // מוצאת session קיים שממתין ליריב (ר' GameSession.isWaitingForOpponent) ומצטרפת
     // אליו; אם אין כזה - יוצרת session חדש עם gameId ייחודי ("match-<uuid>", לא
     // ניתן להקליד ידנית בשדה room - אין סיכוי התנגשות עם חדר-בשם שמישהי הקלידה).
-    // synchronized(matchmakingLock) חובה: בלי זה, שני חיבורים שמגיעים כמעט
+    // synchronized(sessionAllocationLock) חובה: בלי זה, שני חיבורים שמגיעים כמעט
     // בו-זמנית עלולים *שניהם* לסרוק ולא למצוא אף session ממתין (כי אף אחד
     // מהם עדיין לא נוצר), ואז *שניהם* ייצרו לעצמם session נפרד - ולעולם לא
     // ייפגשו. הבחירה כאן היא "הראשון שנמצא בסריקה" - לא תור FIFO אמיתי לפי
     // כמה זמן מישהו/י ממתין/ה; מספיק טוב לשלב הזה.
     private String resolveMatchmakingGameId() {
-        synchronized (matchmakingLock) {
+        synchronized (sessionAllocationLock) {
             for (Map.Entry<String, GameSession> entry : sessions.entrySet()) {
                 if (entry.getValue().isWaitingForOpponent()) {
                     return entry.getKey();
                 }
             }
             String newGameId = "match-" + UUID.randomUUID();
+            sessions.computeIfAbsent(newGameId, id -> new GameSession(accountRepository));
+            return newGameId;
+        }
+    }
+
+    // מייצרת gameId חדש וייחודי בעזרת RoomIdGenerator (קוד קצר, קריא -
+    // בניגוד ל-UUID של matchmaking, כי הקוד הזה כן צריך להיכתב/להיאמר
+    // בין אנשים בפועל - ר' תיעוד RoomIdGenerator), ופותחת עבורו session
+    // חדש. synchronized(sessionAllocationLock): בלי זה, שני לחיצות Create
+    // כמעט-בו-זמניות (תיאורטי, נדיר מאוד עם 6 תווים אקראיים) עלולות תיאורטית
+    // "לנחש" את אותו קוד ולדרוס אחת את השנייה בין הבדיקה ליצירה בפועל.
+    private String createNewRoomGameId() {
+        synchronized (sessionAllocationLock) {
+            String newGameId;
+            do {
+                newGameId = RoomIdGenerator.generate();
+            } while (sessions.containsKey(newGameId));
             sessions.computeIfAbsent(newGameId, id -> new GameSession(accountRepository));
             return newGameId;
         }

@@ -62,4 +62,15 @@ class IncomingMessageSummaryTest {
         assertFalse(IncomingMessageSummary.isSnapshot("{\"type\":\"ROLE_ASSIGNED\"}"));
         assertFalse(IncomingMessageSummary.isSnapshot("{\"type\":\"ERROR\"}"));
     }
+
+    @Test
+    void isRoleAssigned_roleAssignedMessage_returnsTrue() {
+        assertTrue(IncomingMessageSummary.isRoleAssigned("{\"type\":\"ROLE_ASSIGNED\"}"));
+    }
+
+    @Test
+    void isRoleAssigned_otherMessageTypes_returnFalse() {
+        assertFalse(IncomingMessageSummary.isRoleAssigned("{\"type\":\"SNAPSHOT\"}"));
+        assertFalse(IncomingMessageSummary.isRoleAssigned("{\"type\":\"ERROR\"}"));
+    }
 }

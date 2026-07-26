@@ -25,6 +25,14 @@ public final class IncomingMessageSummary {
         return "SNAPSHOT".equals(messageType(json));
     }
 
+    // true אם זו הודעת ROLE_ASSIGNED - נשלחת פעם אחת בלבד, מיד אחרי החיבור
+    // (ר' RoleAssignedMessage). GameClient משתמש בזה כדי לדעת מתי לחלץ את
+    // ה-gameId בפועל (שלב 6 - "Create room": השרת ממציא אותו, הלקוח לא
+    // יודע אותו מראש בכלל).
+    public static boolean isRoleAssigned(String json) {
+        return "ROLE_ASSIGNED".equals(messageType(json));
+    }
+
     // קוראת רק את שדה "type" ומפיקה שורה מתאימה; הודעה לא מזוהה/פגומה מקבלת שורה גנרית ולא זורקת חריגה.
     public static String describe(String json) {
         JsonObject message = JsonParser.parseString(json).getAsJsonObject();

@@ -46,7 +46,11 @@ public class NetworkGameWindowMain {
     // (לפי room שהוזן במסך הבית), בלי לשכפל כאן את כל חיווט ה-Swing/Timer.
     // אין כאן main() עצמאי בכוונה - kfchess.LoginScreenMain הוא המיין
     // היחיד להרצת הלקוח (Login/Register → room → המסך הזה, בשרשרת אחת).
-    public static void launch(GameClient client) {
+    // gameId (שלב 6): נכתב "בראש המסך" (כותרת החלון, ר' Img.setTitle) -
+    // חשוב במיוחד ל"Create room", שם ה-HomeScreenMain לא ידע את ה-ID
+    // מראש בכלל (השרת המציא אותו) - ר' HomeScreenMain.waitForAssignedGameId.
+    public static void launch(GameClient client, String gameId) {
+        Img.setTitle("KFChess - Room: " + gameId);
         Gson gson = new Gson();
         ClientSnapshotReconstructor reconstructor = new ClientSnapshotReconstructor();
         SnapshotFactory snapshotFactory = new SnapshotFactory();

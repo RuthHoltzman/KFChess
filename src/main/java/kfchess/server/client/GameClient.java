@@ -1,6 +1,8 @@
 package kfchess.server.client;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import kfchess.server.ClientCommand;
 import kfchess.server.ClientCommandType;
 import org.java_websocket.client.WebSocketClient;
@@ -18,6 +20,11 @@ public class GameClient extends WebSocketClient {
 
     private final Gson gson = new Gson();
     private volatile String latestMessage;
+    // נחתך מתוך הודעת ROLE_ASSIGNED הראשונה (ר' onMessage) - שלב 6:
+    // "Create room" - השרת הוא זה שממציא את ה-gameId, הלקוח לא יודע
+    // אותו מראש בכלל, אז חייבים לחלץ אותו מהתשובה הראשונה כדי להציג
+    // אותו בכותרת חלון המשחק (ר' NetworkGameWindowMain, Img.setTitle).
+    private volatile String assignedGameId;
 
     public GameClient(URI serverUri) {
         super(serverUri);
@@ -34,9 +41,21 @@ public class GameClient extends WebSocketClient {
     @Override
     public void onMessage(String message) {
         latestMessage = message;
+        if (IncomingMessageSummary.isRoleAssigned(message)) {
+            JsonObject json = JsonParser.parseString(message).getAsJsonObject();
+            assignedGameId = json.get("gameId").getAsString();
+        }
         if (!IncomingMessageSummary.isSnapshot(message)) {
             System.out.println(IncomingMessageSummary.describe(message));
         }
+    }
+
+    // ה-gameId בפועל שהשרת הקצה לחיבור הזה (ר' RoleAssignedMessage), או
+    // null אם ROLE_ASSIGNED עוד לא הגיעה. volatile כבר מבטיח קריאה בטוחה
+    // בין threads (בדיוק כמו latestMessage למעלה) - HomeScreenMain קורא
+    // לזה מ-thread רקע אחרי connectBlocking (ר' waitForAssignedGameId).
+    public String assignedGameId() {
+        return assignedGameId;
     }
 
     // JSON הגולמי של ההודעה האחרונה שהתקבלה (או null אם עוד לא התקבל כלום) -

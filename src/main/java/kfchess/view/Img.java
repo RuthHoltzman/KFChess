@@ -21,6 +21,10 @@ public class Img {
     private BufferedImage img;
     private static JFrame frame;
     static JLabel label;
+    // כותרת חלון "ממתינה" (שלב 6, ר' setTitle) - נחוצה כי show() יוצרת
+    // את ה-frame באיחור (בתוך invokeLater משלה, בפעם הראשונה בלבד) - אם
+    // setTitle נקראת *לפני* שזה קרה, אין frame קיים לעדכן עדיין.
+    private static String pendingTitle;
 
     /* ----------- load & optional resize ----------- */
     public Img read(String path,
@@ -259,7 +263,7 @@ public class Img {
         // ההתחלתי (לפי גודל התמונה הראשונה) - אחרי זה setResizable
         // משאיר למשתמשת לגרור ולשנות גודל בעצמה.
         SwingUtilities.invokeLater(() -> {
-            frame = new JFrame("Image");
+            frame = new JFrame(pendingTitle != null ? pendingTitle : "Image");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setResizable(true);
             label = new JLabel(new ImageIcon(img));
@@ -312,6 +316,21 @@ public class Img {
         }
         return frame.getContentPane().getSize();
     }
+
+/**
+ * קובעת את כותרת חלון המשחק (שלב 6 - "לכתוב את ה-room id בראש המסך",
+ * ר' NetworkGameWindowMain) - סטטית, כמו frame/label, כי כל ה-Img
+ * "canvases" הזמניים ש-render() יוצר בכל טיק חולקים אותו חלון אחד.
+ * אם frame כבר קיים - מעדכנת אותו ישירות (על ה-EDT); אחרת שומרת
+ * ב-pendingTitle, ו-show() (למעלה) מיישמת אותה ברגע שהיא יוצרת את
+ * ה-frame בפעם הראשונה.
+ */
+public static void setTitle(String title) {
+    pendingTitle = title;
+    if (frame != null) {
+        SwingUtilities.invokeLater(() -> frame.setTitle(title));
+    }
+}
 
 public void onClick(java.util.function.BiConsumer<Integer, Integer> handler) {
     if (label == null) {

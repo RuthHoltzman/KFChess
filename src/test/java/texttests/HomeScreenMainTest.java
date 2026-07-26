@@ -69,4 +69,22 @@ class HomeScreenMainTest {
     void buildMatchmakingUri_withBlankUsername_sameAsWithoutUsername() {
         assertEquals("ws://localhost:8887/_play", HomeScreenMain.buildMatchmakingUri("   "));
     }
+
+    // שלב 6: buildCreateRoomUri (כפתור "Create" בדיאלוג Room) - נתיב שמור
+    // נפרד מ-matchmaking, מתעלם לגמרי מכל שם room.
+
+    @Test
+    void buildCreateRoomUri_withoutUsername_pointsToCreateRoomPath() {
+        assertEquals("ws://localhost:8887/_create", HomeScreenMain.buildCreateRoomUri(null));
+    }
+
+    @Test
+    void buildCreateRoomUri_withUsername_appendsAsQueryParameter() {
+        assertEquals("ws://localhost:8887/_create?username=ruth", HomeScreenMain.buildCreateRoomUri("ruth"));
+    }
+
+    @Test
+    void buildCreateRoomUri_withBlankUsername_sameAsWithoutUsername() {
+        assertEquals("ws://localhost:8887/_create", HomeScreenMain.buildCreateRoomUri("   "));
+    }
 }

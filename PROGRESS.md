@@ -25,25 +25,53 @@
    על ה-URI) ו-ELO מתעדכן אוטומטית בסוף כל משחק (`EloCalculator`, K=32).
    בנוסף (מעבר לדרישות השלב): **פיצ'ר Restart הדדי** - ✅ הושלם ואומת
    ידנית (ר' סעיף ייעודי למטה).
-5. Matchmaking (Play) + ניתוק/auto-resign - 🟡 **שני החלקים ממומשים בקוד.**
-   חלק 1 (ניתוק/auto-resign) - **אומת ידנית ברובו** (ר' "אימות ידני שבוצע
-   בפועל"). חלק 2 (Matchmaking, כפתור "Skip") - **הסבב הזה, טרם אומת כלל**
-   (לא `mvn test` ולא ידנית) - ר' "מה שנשאר לאמת".
-6. חדרים (Create/Join/Cancel) + לוגים - ⬜ לא התחיל.
+5. Matchmaking ("Play"/Skip) + ניתוק/auto-resign - 🟡 **auto-resign הושלם
+   ואומת לגמרי, committed.** ה-matchmaking עצמו (כפתור "Skip", עדיין לא
+   שונה שם ל-"Play") **לא לגמרי לפי המפרט המקורי** - ר' "הערה חשובה -
+   פער ידוע משלב 5" למטה (נמצא רק אחרי שרות סיפקה את ה-PDF המקורי;
+   הוחלט במפורש עם רות **לדחות את התיקון** ולהתקדם לשלב 6 קודם).
+6. חדרים (Create/Join/Cancel) + לוגים - 🟡 **חלק 1 (Create/Join/Cancel)
+   ממומש בקוד הסבב הזה, טרם אומת.** חלק 2 (לוגים בצד שרת+לקוח) - עדיין
+   לא התחיל, סבב נפרד מתוכנן.
+
+## הערה חשובה - קובץ ההוראות המקורי (PDF) והפער הידוע משלב 5
+
+רות סיפקה את `CTD 26 (Server).pptx (1).pdf` (לא היה קודם בתיקיית
+הפרויקט - חולץ טקסט ממנו, לא נשמר קובץ). **הציטוט המדויק לשלב 5**:
+
+> Add "Play" Button: Finds the other player with ELO in range of ±100
+> that also seeks for a game. If doesn't find - waits for 1 min, if
+> can't find - pops up a message that can't find.
+> If player disconnected - auto-resign after 20 sec. Make a "count down" on the screen.
+
+**auto-resign + countdown תואמים בדיוק** למה שכבר מומש (שלב 5 חלק 1).
+אבל כפתור ה-"Skip" (שלב 5 חלק 2, כפי שמומש) **סוטה מהמפרט**: לא בודק
+טווח ELO ±100 בכלל (מתאים לכל מי שממתין/ה), ולא מגביל את ההמתנה לדקה
+עם הודעת "לא נמצא" (ממתין ללא הגבלה, פותח משחק חדש מיד אם אין מתאים).
+**רות ביקשה במפורש לדחות את התיקון** ולהתקדם לשלב 6 קודם - זה **עדיין
+פתוח וצריך לחזור אליו**.
+
+**הציטוט המדויק לשלב 6** (המקור לתכנון החדרים בסעיף הייעודי למטה):
+
+> At Home screen: Button: Room → Open a windows message with text box
+> and buttons: Create / Join / Cancel. Create: Generated a new room id,
+> and writes it on top of the screen. Join: Enters the room whose ID
+> you typed in the text box. The room ID is again written on the top
+> of the screen. Inside a room: the second person that joins the room
+> is the Black player of the game. The following people who join are viewers.
+> Store logs on both server and client side, for all of the client/server activity.
 
 ## הערה טכנית חשובה - שינוי שם חבילה (לא נעשה על ידי Claude)
 
-בין סבב "שלב 5 חלק 1" לסבב "שלב 5 חלק 2" רות שינתה (כנראה refactor
-דרך IntelliJ, "Rename Package") את שם החבילה `kfchess.net` ל-`kfchess.server`
-בכל הפרויקט - `kfchess.net.server`→`kfchess.server.server`,
+רות שינתה (refactor דרך IntelliJ, "Rename Package", בין סבב "שלב 5 חלק 1"
+לסבב "שלב 5 חלק 2") את שם החבילה `kfchess.net` ל-`kfchess.server` בכל
+הפרויקט - `kfchess.net.server`→`kfchess.server.server`,
 `kfchess.net.client`→`kfchess.server.client`, ו-`kfchess.net.*` (ה-DTOs
 עצמם - `ClientCommand`/`SnapshotMessage`/`ClientRole`/וכו') →`kfchess.server.*`
-ישירות. **חשוב לכל שיחת AI עתידית**: כל התיעוד למעלה בקובץ הזה (מלפני
-הסבב הזה) עדיין מזכיר `kfchess.net.*` בטקסט - זה נכון *היסטורית* (זה
+ישירות. **בוצע commit נפרד לשינוי השם עצמו** (לפני commit ה-matchmaking).
+**חשוב לכל שיחת AI עתידית**: כל התיעוד למעלה בקובץ הזה (מלפני שני
+הסבבים האלה) עדיין מזכיר `kfchess.net.*` בטקסט - זה נכון *היסטורית* (זה
 היה שם החבילה כשזה נכתב), אבל **הנתיבים בפועל בקוד היום הם `kfchess.server.*`**.
-נכון לרגע כתיבת ההערה הזו, השינוי הזה **עדיין לא committed** (רק
-`git add`-ed/staged חלקית) - ר' "פקודת commit מוצעת" למטה להערה על מה
-זה אומר לגבי ה-commit הבא.
 
 ## החלטות ארכיטקטורה שנסגרו - כולן ממומשות בפועל
 
@@ -492,6 +520,74 @@ Code Java world...") - בלי שום קשר לפרויקט. נכתב מחדש ל
   הקבצים שנגעו בפיצ'ר הזה - כולם תקינים. **טרם `mvn test` וטרם הרצה
   ידנית מקצה לקצה** (אין לי javac/mvn) - ר' "מה שנשאר לאמת" למטה.
 
+### שלב 6, חלק 1 - חדרים: Create/Join/Cancel (הסבב הזה)
+
+לפני זה, שדה room חופשי + כפתור "Connect" ב-`HomeScreenMain` נתנו דרך
+לא-רשמית לעשות את אותו הדבר (זו הייתה תוספת-תשתית מסבב קודם, לא חלק
+מהדרישה המקורית בכלל). **הוחלפו** לגמרי (לא נשארו לצד הדיאלוג החדש) -
+רות אישרה במפורש.
+
+- **`RoomIdGenerator`** (מחלקה חדשה, טהורה) - `generate()`: קוד קצר
+  (6 תווים, אותיות גדולות+ספרות) - בכוונה **לא** UUID כמו ב-matchmaking:
+  הקוד הזה צריך "להיכתב על המסך" ושמישהי אחרת תקליד אותו כדי להצטרף
+  (Join) - UUID ארוך מדי לזה בפועל.
+- **`CreateRoomResolver`** (מחלקה חדשה, מקבילה ל-`MatchmakingResolver`) -
+  `isCreateRoomRequest(path)`: בודקת נתיב שמור `"_create"` (שונה מ-`"_play"`
+  של matchmaking - שני נתיבים שמורים עצמאיים).
+- **`GameServer`**:
+  - **`createNewRoomGameId()`** (חדשה) - מייצרת קוד עם `RoomIdGenerator`,
+    בודקת מול `sessions` שהוא לא תפוס (לולאת retry אם כן - נדיר מאוד),
+    פותחת session חדש. עטופה באותה נעילה ששימשה קודם רק את matchmaking -
+    שונה שם מ-`matchmakingLock` ל-**`sessionAllocationLock`** (שם כללי
+    יותר, כי עכשיו שתי פעולות שונות חולקות אותה: "תמצא/י או תמציא/י
+    gameId פנוי ושמרי אותו לפני שמישהו אחר עושה בדיוק אותו דבר").
+  - **`onOpen`** - ענף שלישי (נבדק ראשון): אם `CreateRoomResolver.isCreateRoomRequest`
+    → `createNewRoomGameId()`; אחרת matchmaking כמו קודם; אחרת חדר-בשם
+    (Join, `GameIdResolver` - **בלי שינוי בכלל**, "Join" זה בדיוק אותו
+    flow שכבר היה).
+- **הצגת ה-gameId "בראש המסך" (הדרישה המדויקת)**:
+  - **`Img.setTitle(String)`** (חדשה, סטטית) - כותרת חלון המשחק. תומכת
+    בקריאה *לפני* שה-frame נוצר בפועל (הוא נוצר באיחור, בתוך `invokeLater`
+    משלה בפעם הראשונה - ר' `show()`) ע"י שמירת `pendingTitle` שמוחלת
+    ברגע היצירה.
+  - **`IncomingMessageSummary.isRoleAssigned(json)`** (חדשה, טהורה) -
+    מזהה הודעת ROLE_ASSIGNED (מקבילה ל-`isSnapshot`).
+  - **`GameClient.assignedGameId()`** (חדשה) - שדה `volatile` חדש שנחתך
+    מתוך ה-JSON ב-`onMessage` כש-`isRoleAssigned` - זה ה-gameId **בפועל**
+    שהשרת הקצה (קריטי ל-Create: הלקוח לא ידע אותו מראש בכלל, השרת המציא אותו).
+  - **`NetworkGameWindowMain.launch(GameClient, String gameId)`** - קיבלה
+    פרמטר `gameId` חדש (שינוי חתימה, לא overload - הקריאה היחידה אליה
+    היא מ-`HomeScreenMain`, אין טסטים ישירים ל-`launch`), קוראת ל-
+    `Img.setTitle("KFChess - Room: " + gameId)` בתחילת המתודה.
+  - **`HomeScreenMain.waitForAssignedGameId(GameClient)`** (חדשה, private) -
+    אחרי `connectBlocking()` (עדיין על thread הרקע, לא ה-EDT), ממתינה
+    (poll כל 20ms, עד 2 שניות timeout) ל-`client.assignedGameId()` -
+    כי ROLE_ASSIGNED מגיעה כהודעת רשת נפרדת, לא בהכרח כבר הגיעה ברגע
+    ש-`connectBlocking()` חוזר.
+- **`HomeScreenMain` - שינוי ה-UI**:
+  - כפתורי מסך הבית: **"Play"** (היה "Skip" - שם הכפתור עצמו שונה כדי
+    להתקרב למפרט; הלוגיקה מאחוריו **לא** שונתה - עדיין הפער הידוע משלב 5)
+    + **"Room..."** חדש (במקום שדה room+Connect).
+  - **`showRoomDialog(...)`** (חדשה) - `JDialog` מודלי עם תיבת טקסט +
+    Create/Join/Cancel, בדיוק לפי המפרט. Join עם תיבה ריקה **לא** מתחברת
+    בכלל (מציגה הודעה מקומית בדיאלוג) - כדי שלא "יתגלגלו" בטעות לחדר
+    `default` המשותף (ההתנהגות הזו של `buildUri` עצמה נשארה ללא שינוי,
+    לתאימות הטסטים הקיימים - רק ה-UI לא נותן להגיע לזה).
+  - **`buildCreateRoomUri(username)`** (חדשה, ציבורית, טהורה) - מקבילה
+    ל-`buildMatchmakingUri`, נתיב `_create`.
+  - **`connect(...)`/`showFailure(...)`** - שונו ל-varargs (`JButton...
+    buttonsToToggle`) במקום פרמטרים קשיחים - כל כפתורי מסך הבית מושבתים
+    יחד בזמן חיבור, לא רק זה שנלחץ, כדי שלא אפשר לפתוח בטעות שני חיבורים.
+- **טסטים חדשים**: `RoomIdGeneratorTest` (פורמט + "שתי קריאות שונות"),
+  `CreateRoomResolverTest` (6 טסטים, מקביל ל-`MatchmakingResolverTest`),
+  `IncomingMessageSummaryTest` (2 טסטים ל-`isRoleAssigned`), `HomeScreenMainTest`
+  (3 טסטים ל-`buildCreateRoomUri`). `GameClient.assignedGameId`/`waitForAssignedGameId`
+  לא נבדקו ביחידה ישירות (דורשים שרת חי - כמו כל שאר `GameClient`/`connect`, לא שונה).
+- **אימות שבוצע כאן**: איזון סוגריים + grep להפניות ישנות שנשברו על כל
+  הקבצים - תקינים. **טרם `mvn test` וטרם הרצה ידנית** - ר' "מה שנשאר לאמת" למטה.
+- **עדיין לא בוצע בסבב הזה** (שלב 6 חלק 2, סבב נפרד): לוגים בצד שרת
+  וגם בצד לקוח, על כל הפעילות - רות בחרה "קובץ טקסט" כפורמט השמירה.
+
 ## מה שנשאר לאמת (רות - עדיין לא נעשה)
 
 שוב: אין לי `javac`/`mvn` בסביבה שלי (אין root, אין גישת רשת להוריד
@@ -546,7 +642,22 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
      ומחכה/ת (בדיוק הבעיה שדיווחת - אמורה להיפתר).
    - לוודא ש-Connect (עם שם room ידני) עדיין עובד בדיוק כמו קודם, בלי
      שינוי - זה משהו ש-matchmaking לא אמור לגעת בו בכלל.
-6. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
+6. **הרצה ידנית של חדרים (Create/Join/Cancel, חדש, טרם נבדק בפועל כלל -
+   הסבב הזה)**:
+   - Run על `ServerMain`, `LoginScreenMain` (Allow multiple instances).
+   - חלון ראשון: **Room...** → **Create** - לוודא: מסך המשחק נפתח מיד
+     (כ-WHITE), וכותרת החלון מציגה `KFChess - Room: XXXXXX` (קוד בן 6
+     תווים) - **זה ה-ID שצריך למסור לשחקן/ית השני/ה**.
+   - חלון שני: **Room...** → מקלידים בתיבה בדיוק את הקוד מהחלון הראשון →
+     **Join** - לוודא: נכנס/ת לאותו משחק כ-BLACK, כותרת החלון זהה
+     (אותו קוד), הלוחות מסונכרנים.
+   - חלון שלישי: אותו תהליך (Join עם אותו קוד) - לוודא שנכנס/ת כ-SPECTATOR.
+   - לוודא ש-**Cancel** בדיאלוג פשוט סוגר אותו בלי לחבר כלום.
+   - לוודא ש-**Join עם תיבה ריקה** מציג הודעת שגיאה מקומית בדיאלוג
+     ("Enter a room ID to join") ולא מתחבר בכלל.
+   - לוודא ש-**Play** (השם החדש לכפתור "Skip" לשעבר - הלוגיקה לא שונתה)
+     ו-Join-לפי-קוד לא "מתנגשים" - עדיין ניתן להשתמש בשניהם לסירוגין.
+7. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
    מופיעים כ-modified ב-`git status` (line-ending, לא תוכן - לא נגעתי
    בהם), ותיקיית `src/main/java/kfchess/.claude/` וקובץ `kfchess.db`
    שלא יצרתי (untracked, לא ב-git add המוצע).
@@ -586,6 +697,12 @@ git add src/main/java/kfchess/HomeScreenMain.java src/main/java/kfchess/server/s
 git commit -m "Stage 5 part 2: random matchmaking via a Skip button (find-or-create a waiting game)"
 ```
 
+שלב 6, חלק 1 - חדרים: Create/Join/Cancel (הסבב הזה, **טרם אומת ידנית/mvn test - ר' "מה שנשאר לאמת"**):
+```
+git add src/main/java/kfchess/HomeScreenMain.java src/main/java/kfchess/NetworkGameWindowMain.java src/main/java/kfchess/view/Img.java src/main/java/kfchess/server/server/GameServer.java src/main/java/kfchess/server/server/CreateRoomResolver.java src/main/java/kfchess/server/server/RoomIdGenerator.java src/main/java/kfchess/server/client/GameClient.java src/main/java/kfchess/server/client/IncomingMessageSummary.java src/test/java/texttests/HomeScreenMainTest.java src/test/java/texttests/CreateRoomResolverTest.java src/test/java/texttests/RoomIdGeneratorTest.java src/test/java/texttests/IncomingMessageSummaryTest.java PROGRESS.md
+git commit -m "Stage 6 part 1: real rooms via a Room dialog (Create/Join/Cancel), room id shown in the window title"
+```
+
 ## איך להריץ ולבדוק (IntelliJ)
 
 1. Run על `kfchess.server.server.ServerMain` - אמורה להיכתב שורה
@@ -594,13 +711,16 @@ git commit -m "Stage 5 part 2: random matchmaking via a Skip button (find-or-cre
    לקוח/שחקנית** (אין יותר `main()` נפרד ב-`HomeScreenMain`/
    `NetworkGameWindowMain` - הוסרו בכוונה, ר' "ניקוי המיינים" למעלה).
    Register עם username+password חדשים (או Login אם כבר יש חשבון) →
-   נפתח מסך הבית עם "Logged in as" → מזינים room (או משאירים `default`)
-   ולוחצים Connect - נכנס כ-WHITE.
+   נפתח מסך הבית עם "Logged in as" ושני כפתורים: **"Play"** (matchmaking
+   אקראי - היה "Skip") ו-**"Room..."** (פותח דיאלוג Create/Join/Cancel -
+   שלב 6, החליף לגמרי את שדה ה-room+Connect הישן).
+   ללחוץ **Room...** → **Create** - נכנס/ת כ-WHITE, וקוד החדר (6 תווים)
+   מופיע בכותרת חלון המשחק.
 3. **לשני שחקנים בו-זמנית**: בקונפיגורציית `LoginScreenMain` (Edit
    Configurations → Modify options → **Allow multiple instances**), ואז
    Run עליה **שוב** בלי לעצור את הריצה הראשונה - Register/Login עם
    username שני (או אותו אחד - עדיין לא קשור לתפקיד, ר' `ClientRole`),
-   ואז Connect לאותו room (`default` אם לא שינו) - נכנס כ-BLACK.
+   **Room...** → מקלידים את קוד החדר מהחלון הראשון → **Join** - נכנס/ת כ-BLACK.
 4. בדיקת פרוטוקול גולמי: מקונסולת דפדפן (F12) עם `WebSocket` ישיר
    (`kfchess.server.client.ClientMain`, לקוח הקונסולה, הוסר - ר' "ניקוי המיינים").
 
@@ -649,10 +769,19 @@ git commit -m "Stage 5 part 2: random matchmaking via a Skip button (find-or-cre
 החסד, ו"לא נגנב") - ר' "מה שנשאר לאמת" סעיף 4 למעלה - לא חוסמים באופן
 מהותי את המשך העבודה, אבל כדאי לוודא לפני commit סופי.
 
-**שלב 5, חלק 2 (Matchmaking, כפתור "Skip") ממומש בקוד בסבב הזה** - ר'
+**שלב 5, חלק 2 (Matchmaking, כפתור "Skip"/"Play") ממומש בקוד** - ר'
 הסעיף הייעודי למעלה. **טרם אומת** (לא `mvn test` ולא ידנית) - ר' "מה
-שנשאר לאמת" סעיף 5 למעלה. אחרי שיאומת - **שלב 5 שלם**, והצעד הבא הוא
-שלב 6 (חדרים אמיתיים + לוגים).
+שנשאר לאמת" סעיף 5 למעלה. **בנוסף - סטייה ידועה מהמפרט המקורי (התגלתה
+רק אחרי שרות סיפקה את ה-PDF)**: אין סינון ELO ±100, אין timeout של דקה,
+אין הודעת "לא נמצא" - ר' "הערה חשובה - קובץ ההוראות המקורי" למעלה.
+**רות בחרה במפורש לדחות את התיקון הזה** ולהתקדם לשלב 6 קודם - עדיין
+פתוח, צריך לחזור אליו.
+
+**שלב 6, חלק 1 (חדרים - Create/Join/Cancel) ממומש בקוד בסבב הזה** - ר'
+הסעיף הייעודי למעלה. **טרם אומת** (לא `mvn test` ולא ידנית) - ר' "מה
+שנשאר לאמת" סעיף 6 למעלה. אחרי שיאומת ויעשה commit - **שלב 6, חלק 2
+(לוגים בצד שרת+לקוח, לקובץ טקסט - בחירת רות)** הוא הצעד הבא, וגם
+(בנפרד) לחזור לתיקון ה-matchmaking שנדחה משלב 5.
 
 **מגבלה מודעת שנשארה פתוחה משלב 5 חלק 1** (לא נפתרה, לא הוחלט אם/מתי
 לטפל בה): אם משחק מסתיים ע"י auto-resign (ניתוק), הצד שהתנתק **לא
