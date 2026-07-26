@@ -26,10 +26,12 @@
    בנוסף (מעבר לדרישות השלב): **פיצ'ר Restart הדדי** - ✅ הושלם ואומת
    ידנית (ר' סעיף ייעודי למטה).
 5. Matchmaking ("Play"/Skip) + ניתוק/auto-resign - 🟡 **auto-resign הושלם
-   ואומת לגמרי, committed.** ה-matchmaking עצמו (כפתור "Skip", עדיין לא
-   שונה שם ל-"Play") **לא לגמרי לפי המפרט המקורי** - ר' "הערה חשובה -
-   פער ידוע משלב 5" למטה (נמצא רק אחרי שרות סיפקה את ה-PDF המקורי;
-   הוחלט במפורש עם רות **לדחות את התיקון** ולהתקדם לשלב 6 קודם).
+   ואומת לגמרי, committed.** כפתור "Skip" שונה שם ל-**"Play"** (שלב 6
+   חלק 1). **תוקן**: באג שרות מצאה - Play היה "גונב" חדר פרטי שנוצר דרך
+   Create (ר' "תיקון - Play לא אמור להצטרף לחדרים פרטיים" למטה), טרם
+   אומת ידנית. עדיין **לא לגמרי לפי המפרט המקורי** מעבר לזה - ר' "הערה
+   חשובה - פער ידוע משלב 5" למטה (סינון ELO ±100, timeout של דקה, הודעת
+   "לא נמצא" - **רות בחרה במפורש לדחות** ולהתקדם לשלב 6 קודם, עדיין פתוח).
 6. חדרים (Create/Join/Cancel) + לוגים - 🟡 **חלק 1 (Create/Join/Cancel)
    ממומש בקוד הסבב הזה, טרם אומת.** חלק 2 (לוגים בצד שרת+לקוח) - עדיין
    לא התחיל, סבב נפרד מתוכנן.
@@ -588,6 +590,28 @@ Code Java world...") - בלי שום קשר לפרויקט. נכתב מחדש ל
 - **עדיין לא בוצע בסבב הזה** (שלב 6 חלק 2, סבב נפרד): לוגים בצד שרת
   וגם בצד לקוח, על כל הפעילות - רות בחרה "קובץ טקסט" כפורמט השמירה.
 
+### תיקון - Play לא אמור להצטרף לחדרים פרטיים (הסבב הזה)
+
+רות דיווחה: הרצה של שני לקוחות, אחד/ת עשה/תה Create (חדר פרטי) והשני/ה
+לחצ/ה Play (matchmaking) - שניהם נכנסו לאותו חדר. זה באג: Play אמור
+להתאים רק למי שגם הוא/היא לחצ/ה Play, לא "לגנוב" חדר פרטי שממתין
+לחברה ספציפית עם קוד.
+
+- **הסיבה**: `GameServer.resolveMatchmakingGameId()` סרקה את **כל**
+  ה-sessions וחיפשה כל אחד שממתין ליריב (`isWaitingForOpponent()`) -
+  בלי לבדוק בכלל איך ה-session נוצר. חדר פרטי עם רק WHITE מחובר/ת
+  "נראה" בדיוק כמו session שממתין ל-matchmaking.
+- **התיקון**: שדה חדש ב-`GameServer` - `Set<String> matchmakingSessionIds`
+  (`ConcurrentHashMap.newKeySet()` - נגיש גם מ-thread הרשת). כל gameId
+  שנוצר *דרך* `resolveMatchmakingGameId()` עצמה (כשלא נמצא match קיים)
+  נוסף לסט. הסריקה עכשיו דורשת גם `isWaitingForOpponent()` וגם
+  `matchmakingSessionIds.contains(entry.getKey())` - חדרים מ-Create
+  (`RoomIdGenerator`) וחדרים מ-Join-לפי-שם (`GameIdResolver`) לעולם לא
+  נכנסים לסט, ולכן Play לעולם לא יתפוס אותם.
+- **אימות שבוצע כאן**: איזון סוגריים - תקין. **אין ל-`GameServer` טסטים
+  ייחודיים** (בדיוק כמו `GameClient` - דורש שרת חי אמיתי) - טעון בדיקה
+  ידנית בלבד, ר' "מה שנשאר לאמת" למטה.
+
 ## מה שנשאר לאמת (רות - עדיין לא נעשה)
 
 שוב: אין לי `javac`/`mvn` בסביבה שלי (אין root, אין גישת רשת להוריד
@@ -657,7 +681,14 @@ JDK/Maven) - בדקתי רק איזון סוגריים + חיפוש הפניות
      ("Enter a room ID to join") ולא מתחבר בכלל.
    - לוודא ש-**Play** (השם החדש לכפתור "Skip" לשעבר - הלוגיקה לא שונתה)
      ו-Join-לפי-קוד לא "מתנגשים" - עדיין ניתן להשתמש בשניהם לסירוגין.
-7. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
+7. **הרצה ידנית של התיקון ל-Play/חדרים פרטיים (חדש, טרם נבדק בפועל -
+   הסבב הזה, זה בדיוק התרחיש שרות דיווחה)**:
+   - חלון ראשון: Room... → Create (חדר פרטי, ממתין).
+   - חלון שני: **Play** (לא Join) - לוודא ש-**לא** מצטרף/ת לחדר הפרטי -
+     אמור/ה לפתוח matchmaking session חדש ולחכות שם.
+   - לוודא ש-Play עדיין עובד רגיל בין שני לקוחות ששניהם לחצו Play
+     (התרחיש שכבר אומת בעבר - בלי רגרסיה).
+8. תזכורות מסבבים קודמים שעדיין רלוונטיות: קבצים לא-קשורים שכבר
    מופיעים כ-modified ב-`git status` (line-ending, לא תוכן - לא נגעתי
    בהם), ותיקיית `src/main/java/kfchess/.claude/` וקובץ `kfchess.db`
    שלא יצרתי (untracked, לא ב-git add המוצע).
@@ -701,6 +732,16 @@ git commit -m "Stage 5 part 2: random matchmaking via a Skip button (find-or-cre
 ```
 git add src/main/java/kfchess/HomeScreenMain.java src/main/java/kfchess/NetworkGameWindowMain.java src/main/java/kfchess/view/Img.java src/main/java/kfchess/server/server/GameServer.java src/main/java/kfchess/server/server/CreateRoomResolver.java src/main/java/kfchess/server/server/RoomIdGenerator.java src/main/java/kfchess/server/client/GameClient.java src/main/java/kfchess/server/client/IncomingMessageSummary.java src/test/java/texttests/HomeScreenMainTest.java src/test/java/texttests/CreateRoomResolverTest.java src/test/java/texttests/RoomIdGeneratorTest.java src/test/java/texttests/IncomingMessageSummaryTest.java PROGRESS.md
 git commit -m "Stage 6 part 1: real rooms via a Room dialog (Create/Join/Cancel), room id shown in the window title"
+```
+
+**הערה על הודעות commit מכאן ואילך**: רות ביקשה שהודעות ה-commit יכללו
+רק הסבר ופרוט של מה השתנה ולמה, בלי לתייג אותן לפי "שלב X חלק Y" - ר'
+הבלוק הבא כדוגמה לפורמט החדש.
+
+תיקון - Play לא אמור להצטרף לחדרים פרטיים (הסבב הזה, **טרם אומת ידנית - ר' "מה שנשאר לאמת" סעיף 7**):
+```
+git add src/main/java/kfchess/server/server/GameServer.java PROGRESS.md
+git commit -m "Restrict Play matchmaking to sessions created via Play itself, so it can no longer join a private room opened via Create just because that room's creator is also waiting for someone"
 ```
 
 ## איך להריץ ולבדוק (IntelliJ)

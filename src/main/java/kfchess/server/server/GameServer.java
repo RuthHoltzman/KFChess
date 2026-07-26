@@ -14,6 +14,7 @@ import org.java_websocket.server.WebSocketServer;
 
 import java.net.InetSocketAddress;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -38,6 +39,12 @@ public class GameServer extends WebSocketServer {
             new SqliteAccountRepository(SqliteAccountRepository.DEFAULT_DB_FILE);
     private final Map<String, GameSession> sessions = new ConcurrentHashMap<>();
     private final Map<WebSocket, String> gameIdByConnection = new ConcurrentHashMap<>();
+    // gameId-ים שנוצרו *דרך Play עצמו* (ר' resolveMatchmakingGameId) - בלי
+    // זה, סריקת ה-matchmaking הייתה עלולה "לגנוב" session שממתין ליריב אבל
+    // נוצר דרך Create/Join (חדר פרטי/בשם) - Play חייב להתאים רק למי שגם
+    // הוא/היא הגיע/ה דרך Play. ConcurrentHashMap.newKeySet() כי נקרא גם
+    // מ-thread הרשת (onOpen/resolveMatchmakingGameId).
+    private final Set<String> matchmakingSessionIds = ConcurrentHashMap.newKeySet();
     private final ScheduledExecutorService tickExecutor = Executors.newSingleThreadScheduledExecutor();
     // נעילה ייעודית ל"החלטה איזה gameId להשתמש בו" - גם matchmaking
     // (ר' resolveMatchmakingGameId) וגם Create room (ר' createNewRoomGameId)
@@ -99,14 +106,21 @@ public class GameServer extends WebSocketServer {
     // מהם עדיין לא נוצר), ואז *שניהם* ייצרו לעצמם session נפרד - ולעולם לא
     // ייפגשו. הבחירה כאן היא "הראשון שנמצא בסריקה" - לא תור FIFO אמיתי לפי
     // כמה זמן מישהו/י ממתין/ה; מספיק טוב לשלב הזה.
+    // matchmakingSessionIds.contains(entry.getKey()) - תנאי חדש (הוסף אחרי
+    // שרות דיווחה שלחיצת Play "גנבה" חדר פרטי שנוצר ע"י Create): בלי התנאי
+    // הזה, isWaitingForOpponent() לבד לא מבחין בין "ממתין/ה כי לחצתי Play"
+    // לבין "ממתין/ה כי פתחתי חדר פרטי ומחכה שחברה ספציפית תעשה Join" - שני
+    // המצבים נראים זהים מבחינת GameSession עצמו (רק צד אחד מחובר). ה-Set
+    // מבטיח ש-Play יתאים רק ל-session שגם הוא נוצר במקור דרך Play.
     private String resolveMatchmakingGameId() {
         synchronized (sessionAllocationLock) {
             for (Map.Entry<String, GameSession> entry : sessions.entrySet()) {
-                if (entry.getValue().isWaitingForOpponent()) {
+                if (matchmakingSessionIds.contains(entry.getKey()) && entry.getValue().isWaitingForOpponent()) {
                     return entry.getKey();
                 }
             }
             String newGameId = "match-" + UUID.randomUUID();
+            matchmakingSessionIds.add(newGameId);
             sessions.computeIfAbsent(newGameId, id -> new GameSession(accountRepository));
             return newGameId;
         }
