@@ -7,27 +7,15 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Optional;
 
-/**
- * מימוש AccountRepository על גבי קובץ SQLite אחד (טבלה יחידה `accounts`).
- * פותחת חיבור JDBC חדש בכל קריאה (register/login) ולא מחזיקה חיבור
- * פתוח קבוע - קובץ SQLite מקומי נפתח/נסגר מהר מספיק, וכך נמנעים
- * מבעיות concurrency סביב חיבור משותף בין threads בלי לסבך את המחלקה
- * בפול (pool) שלא צריך בסדר גודל הזה.
- */
+
 public class SqliteAccountRepository implements AccountRepository {
 
     private static final int STARTING_ELO = 1200;
 
-    // קובץ ברירת המחדל - קבוע ציבורי אחד ולא שכפול של המחרוזת בכל מקום
-    // שיוצר repository (LoginScreenMain, GameServer): שני הצדדים צריכים
-    // להצביע על אותו קובץ DB בפועל.
     public static final String DEFAULT_DB_FILE = "kfchess.db";
 
     private final String jdbcUrl;
 
-    // dbFilePath, למשל "kfchess.db" - נוצר כקובץ יחסי לתיקיית ההרצה. יוצר
-    // את הטבלה מיד אם היא לא קיימת עדיין, כדי שכל שאר המחלקה תוכל להניח
-    // בבטחה שהיא כבר שם.
     public SqliteAccountRepository(String dbFilePath) {
         this.jdbcUrl = "jdbc:sqlite:" + dbFilePath;
         createTableIfMissing();
@@ -58,9 +46,6 @@ public class SqliteAccountRepository implements AccountRepository {
             statement.executeUpdate();
             return new Account(username, STARTING_ELO);
         } catch (SQLException insertFailed) {
-            // PRIMARY KEY על username - הדרך הסטנדרטית לזהות "כבר קיים" היא
-            // לתפוס את הכשלון מה-DB עצמו (constraint violation) במקום
-            // SELECT-then-INSERT נפרד, שיש בו חלון race בין שני threads.
             if (isUniqueConstraintViolation(insertFailed)) {
                 throw new UsernameTakenException(username);
             }
