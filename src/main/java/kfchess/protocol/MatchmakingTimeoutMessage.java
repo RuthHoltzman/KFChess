@@ -1,4 +1,4 @@
-package kfchess.server;
+package kfchess.protocol;
 
 /**
  * נשלח לחיבור היחיד שממתין ל-Play כשעברה דקה בלי שנמצא/ה יריב/ה עם ELO

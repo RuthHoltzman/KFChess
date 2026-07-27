@@ -1,4 +1,4 @@
-package kfchess.server;
+package kfchess.protocol;
 
 import kfchess.model.Piece;
 import kfchess.model.Position;

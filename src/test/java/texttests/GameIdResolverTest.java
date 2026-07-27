@@ -1,6 +1,6 @@
 package texttests;
 
-import kfchess.server.server.GameIdResolver;
+import kfchess.server.GameIdResolver;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

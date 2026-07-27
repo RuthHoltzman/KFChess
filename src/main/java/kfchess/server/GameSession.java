@@ -1,4 +1,4 @@
-package kfchess.server.server;
+package kfchess.server;
 
 import kfchess.account.AccountRepository;
 import kfchess.account.EloCalculator;
@@ -13,12 +13,12 @@ import kfchess.model.Game;
 import kfchess.model.Piece;
 import kfchess.model.PieceColor;
 import kfchess.model.Position;
-import kfchess.server.ClientCommand;
-import kfchess.server.ClientCommandType;
-import kfchess.server.ClientRole;
-import kfchess.server.JumpDto;
-import kfchess.server.PieceDto;
-import kfchess.server.SnapshotMessage;
+import kfchess.protocol.ClientCommand;
+import kfchess.protocol.ClientCommandType;
+import kfchess.model.ClientRole;
+import kfchess.protocol.JumpDto;
+import kfchess.protocol.PieceDto;
+import kfchess.protocol.SnapshotMessage;
 import kfchess.realtime.RaelTime;
 import kfchess.rules.RuleEngine;
 import org.java_websocket.WebSocket;
@@ -336,7 +336,7 @@ public class GameSession {
     }
 
     // "ממתין/ה ליריב" - נחוץ ל-matchmaking (שלב 5 חלק 2, כפתור "Skip" ב-
-    // HomeScreenMain/GameServer.resolveMatchmakingGameId): true רק אם יש
+    // HomeScreen/GameServer.resolveMatchmakingGameId): true רק אם יש
     // *בדיוק* צד אחד (WHITE או BLACK) מחובר בפועל, והצד השני **לא** מחובר
     // *וגם* לא שמור לו חלון-חסד (ר' pendingDisconnects, שלב 5 חלק 1) - כדי
     // שמי שממתין/ה לחיבור-מחדש של היריב המקורי (אחרי ניתוק) לא "תיחטף"

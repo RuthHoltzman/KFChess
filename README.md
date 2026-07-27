@@ -76,7 +76,7 @@ The game needs **one server process** plus **one client process per player**.
 
 **1 — Start the server**
 
-Run `kfchess.server.server.ServerMain`. In IntelliJ: open the file and click the
+Run `kfchess.server.ServerMain`. In IntelliJ: open the file and click the
 green ▶ beside `main`.
 
 ```
@@ -88,7 +88,7 @@ working directory on first use.
 
 **2 — Start a client**
 
-Run **`kfchess.LoginScreenMain`** — the single entry point for playing.
+Run **`kfchess.app.LoginScreenMain`** — the single entry point for playing.
 
 ```
 Login / Register  →  Home screen (pick a room)  →  Game window
@@ -141,7 +141,7 @@ player clicks as well.
 ```mermaid
 flowchart LR
     subgraph Client["Client (Swing)"]
-        L[LoginScreenMain] --> H[HomeScreenMain] --> W[NetworkGameWindowMain]
+        L[LoginScreenMain] --> H[HomeScreen] --> W[NetworkGameWindow]
         W --> CH[NetworkClickHandler]
         W --> R[ClientSnapshotReconstructor]
     end
@@ -212,33 +212,32 @@ its own selection highlight and its own restart vote.
 
 ```
 src/main/java/kfchess/
-├── model/                 Board, Piece, Position, colors / kinds / states
+├── model/                 Board, Piece, Position, colors / kinds / states / ClientRole
 ├── rules/                 RuleEngine + PieceRules (per-piece legality)
 ├── realtime/              RaelTime (game clock), Motion (piece in transit)
 ├── engine/                GameEngine, MoveHistory, NetworkActions
 │   └── snapshot/          SnapshotFactory + immutable GameSnapshot view model
 ├── bus/                   EventBus (pub/sub) + game event types
-├── io/                    BoardParser / BoardPrinter (text board format)
+├── io/                    BoardParser (text board format, used by the Restart feature)
 ├── view/                  Swing rendering, animation, images
 │   └── layout/            BoardLayoutCalculator (screen geometry)
-├── input/                 BoardMapper, Controller (pixel ↔ board coordinates)
+├── input/                 BoardMapper (pixel ↔ board coordinates)
 ├── account/               Accounts, bcrypt hashing, SQLite repo, EloCalculator
-├── net/                   Shared protocol DTOs
-│   ├── server/            GameServer, GameSession, ServerMain, resolvers
-│   └── client/            GameClient, snapshot reconstruction, click handling
-├── LoginScreenMain        ← entry point: login / register
-├── HomeScreenMain         ← room selection
-├── NetworkGameWindowMain  ← the game window
-└── Main                   ← console version
+├── protocol/              Shared WebSocket DTOs (ClientCommand, SnapshotMessage, ...)
+├── server/                GameServer, GameSession, ServerMain, resolvers
+├── client/                GameClient, snapshot reconstruction, click handling
+└── app/                   Client entry points
+    ├── LoginScreenMain    ← entry point: login / register
+    ├── HomeScreen         ← room selection
+    └── NetworkGameWindow  ← the game window
 ```
 
 **Entry points**
 
 | Class | Purpose |
 |---|---|
-| `kfchess.server.server.ServerMain` | WebSocket server — run once |
-| `kfchess.LoginScreenMain` | Player client — run once per player |
-| `kfchess.Main` | Console version of the game |
+| `kfchess.server.ServerMain` | WebSocket server — run once |
+| `kfchess.app.LoginScreenMain` | Player client — run once per player |
 
 ---
 
@@ -275,9 +274,9 @@ keeps the tests fast and deterministic.
 ## הוראות הרצה מקוצרות (עברית)
 
 1. **דרישות**: Java 17 (JDK) ו-Maven.
-2. **הרצת השרת** — מריצים את המחלקה `kfchess.server.server.ServerMain`.
+2. **הרצת השרת** — מריצים את המחלקה `kfchess.server.ServerMain`.
    אמורה להופיע השורה `GameServer started on port 8887`. משאירים אותו רץ.
-3. **הרצת הלקוח** — מריצים את **`kfchess.LoginScreenMain`**
+3. **הרצת הלקוח** — מריצים את **`kfchess.app.LoginScreenMain`**
    (נקודת הכניסה **היחידה** למשחק).
    - **Register** ליצירת חשבון חדש (דירוג התחלתי 1200), או **Login** לחשבון קיים.
    - במסך הבית מזינים שם חדר (או משאירים `default`) ולוחצים **Connect**.

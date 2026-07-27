@@ -1,16 +1,16 @@
-package kfchess;
+package kfchess.app;
 
 import com.google.gson.Gson;
 import kfchess.engine.snapshot.GameSnapshot;
 import kfchess.engine.snapshot.SnapshotFactory;
 import kfchess.input.BoardMapper;
 import kfchess.model.Board;
-import kfchess.server.ClientRole;
-import kfchess.server.client.ClientSnapshotReconstructor;
-import kfchess.server.client.GameClient;
-import kfchess.server.client.IncomingMessageSummary;
-import kfchess.server.client.IncomingSnapshot;
-import kfchess.server.client.NetworkClickHandler;
+import kfchess.model.ClientRole;
+import kfchess.client.ClientSnapshotReconstructor;
+import kfchess.client.GameClient;
+import kfchess.client.IncomingMessageSummary;
+import kfchess.client.IncomingSnapshot;
+import kfchess.client.NetworkClickHandler;
 import kfchess.view.BoardView;
 import kfchess.view.GameSceneView;
 import kfchess.view.Img;
@@ -34,7 +34,7 @@ import java.util.Map;
  * חוקית (כולל דחיית קליקים של צופה - ר' GameSession.applyCommand),
  * ולכן אין כאן שום כפילות של הבדיקה הזו בצד הלקוח.
  */
-public class NetworkGameWindowMain {
+public class NetworkGameWindow {
 
     private static final int INITIAL_CELL_SIZE = 100;
     private static final int SIDE_PANEL_WIDTH = 240;
@@ -44,18 +44,18 @@ public class NetworkGameWindowMain {
     private static final int PLACEHOLDER_BOARD_SIZE = 8;
 
     // פותחת את חלון המשחק עבור לקוח שכבר מחובר לשרת (connectBlocking() כבר
-    // הצליח) - נקראת מ-HomeScreenMain אחרי שהיא מחברת GameClient משלה
+    // הצליח) - נקראת מ-HomeScreen אחרי שהיא מחברת GameClient משלה
     // (לפי room שהוזן במסך הבית), בלי לשכפל כאן את כל חיווט ה-Swing/Timer.
-    // אין כאן main() עצמאי בכוונה - kfchess.LoginScreenMain הוא המיין
+    // אין כאן main() עצמאי בכוונה - kfchess.app.LoginScreenMain הוא המיין
     // היחיד להרצת הלקוח (Login/Register → room → המסך הזה, בשרשרת אחת).
     // gameId (שלב 6): נכתב "בראש המסך" (כותרת החלון, ר' Img.setTitle) -
-    // חשוב במיוחד ל"Create room", שם ה-HomeScreenMain לא ידע את ה-ID
-    // מראש בכלל (השרת המציא אותו) - ר' HomeScreenMain.waitForAssignedGameId.
+    // חשוב במיוחד ל"Create room", שם ה-HomeScreen לא ידע את ה-ID
+    // מראש בכלל (השרת המציא אותו) - ר' HomeScreen.waitForAssignedGameId.
     // username (בקשת רות - להציג "שם שחקן" על המסך): מגיע כאן עכשיו גם
-    // הוא, מ-HomeScreenMain (שכבר ידעה אותו מה-Account, רק לא העבירה
+    // הוא, מ-HomeScreen (שכבר ידעה אותו מה-Account, רק לא העבירה
     // קודם). role - client.assignedRole() אמור להיות כבר מוכן בשלב הזה
     // (מגיעה באותה הודעת ROLE_ASSIGNED בדיוק כמו gameId - ר' GameClient.onMessage,
-    // ו-HomeScreenMain.waitForAssignedGameId שכבר מחכה לה).
+    // ו-HomeScreen.waitForAssignedGameId שכבר מחכה לה).
     public static void launch(GameClient client, String gameId, String username) {
         Img.setTitle("KFChess - Room: " + gameId);
         Gson gson = new Gson();

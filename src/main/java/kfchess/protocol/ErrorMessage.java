@@ -1,4 +1,4 @@
-package kfchess.server;
+package kfchess.protocol;
 
 /**
  * נשלח כשהלקוח שולח הודעה פגומה (JSON לא תקין, שדות חסרים) או פקודה

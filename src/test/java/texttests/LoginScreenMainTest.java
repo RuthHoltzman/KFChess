@@ -1,6 +1,6 @@
 package texttests;
 
-import kfchess.LoginScreenMain;
+import kfchess.app.LoginScreenMain;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;

@@ -1,4 +1,4 @@
-package kfchess.server.client;
+package kfchess.client;
 
 import kfchess.input.BoardMapper;
 import kfchess.model.Position;
@@ -9,7 +9,7 @@ import java.awt.Rectangle;
 import java.util.Optional;
 
 /**
- * מטפל בקליק/קליק-ימני על הלוח במצב רשת - הוצא מ-NetworkGameWindowMain
+ * מטפל בקליק/קליק-ימני על הלוח במצב רשת - הוצא מ-NetworkGameWindow
  * (היה שם כמתודה פרטית) כדי שחישוב "איפה בדיוק נלחץ" יהיה נגיש לבדיקה
  * בנפרד, בלי Swing/רשת אמיתיים. זו בדיוק הלוגיקה שההערה ב-
  * BoardLayoutCalculator מזהירה עליה כמקור לשני באגים קודמים ("קליק לא
@@ -20,7 +20,7 @@ import java.util.Optional;
  * בלי רשת) - נבדקת ישירות ב-NetworkClickHandlerTest. handle() היא
  * השכבה הדקה שעוטפת אותה בבדיקת gameOver ובשליחה בפועל ל-GameClient -
  * לא נבדקת ישירות בהצלחה (תלויה בחיבור רשת אמיתי), באותה גישה בדיוק כמו
- * HomeScreenMain.connect()/LoginScreenMain.handleLogin() שלא נבדקות
+ * HomeScreen.connect()/LoginScreenMain.handleLogin() שלא נבדקות
  * ישירות בעוד buildUri()/validate() כן.
  * <p>
  * מחזיקה גם GameSceneView (רק לשם שאילת restartButtonBounds()) - לא

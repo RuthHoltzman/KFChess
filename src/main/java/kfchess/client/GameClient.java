@@ -1,46 +1,33 @@
-package kfchess.server.client;
+package kfchess.client;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import kfchess.logging.FileLogger;
-import kfchess.server.ClientCommand;
-import kfchess.server.ClientCommandType;
-import kfchess.server.ClientRole;
+import kfchess.protocol.ClientCommand;
+import kfchess.protocol.ClientCommandType;
+import kfchess.model.ClientRole;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
 import java.net.URI;
 
-/**
- * לקוח WebSocket מינימלי - שלב ראשון של "צד לקוח", עוד בלי חיבור ל-GUI
- * (ר' PROGRESS.md): מטרתו רק להוכיח שהתקשורת מול GameServer עובדת -
- * מתחבר, שולח CLICK/JUMP, ומדפיס תקציר קריא של מה שהתקבל (לא JSON גולמי,
- * כדי לא להציף את המסוף כמו בבדיקה הידנית מהדפדפן - ר' IncomingMessageSummary).
- */
+
 public class GameClient extends WebSocketClient {
 
     private final Gson gson = new Gson();
     private volatile String latestMessage;
-    // נחתך מתוך הודעת ROLE_ASSIGNED הראשונה (ר' onMessage) - שלב 6:
-    // "Create room" - השרת הוא זה שממציא את ה-gameId, הלקוח לא יודע
-    // אותו מראש בכלל, אז חייבים לחלץ אותו מהתשובה הראשונה כדי להציג
-    // אותו בכותרת חלון המשחק (ר' NetworkGameWindowMain, Img.setTitle).
+
     private volatile String assignedGameId;
-    // נחתך מאותה הודעת ROLE_ASSIGNED בדיוק כמו assignedGameId למעלה (ר'
-    // onMessage) - בקשת רות: להציג בחלון המשחק "את/ה: WHITE" וכו'. עד
-    // עכשיו השרת כן שלח את זה אבל אף אחד לא קרא את השדה בצד הלקוח.
-    // ClientRole.valueOf(...) בטוח כאן: השרת תמיד שולח role.name() של
-    // אותו enum בדיוק (ר' GameServer.onOpen) - אין תרגום/מחרוזת חופשית.
     private volatile ClientRole assignedRole;
     // תיקון "Play" לפי המפרט המדויק (ELO ±100 / timeout של דקה) - נחתך
     // מתוך הודעת MATCHMAKING_TIMEOUT אם/כשמגיעה (ר' onMessage). null כל
-    // עוד לא הגיעה כזו הודעה - NetworkGameWindowMain בודק את זה בכל טיק
+    // עוד לא הגיעה כזו הודעה - NetworkGameWindow בודק את זה בכל טיק
     // (בדיוק כמו assignedGameId/latestMessage, אותו דפוס polling).
     private volatile String matchmakingTimeoutMessage;
     // שלב 6 חלק 2 (בקשת המנחה): לוג טכני/תפעולי לקובץ טקסט - ר' תיעוד
     // FileLogger וגם GameServer.fileLogger (אותו רעיון, בצד הלקוח הפעם).
-    // אחד לכל GameClient - כלומר אחד לכל ניסיון חיבור (ר' HomeScreenMain.connect,
+    // אחד לכל GameClient - כלומר אחד לכל ניסיון חיבור (ר' HomeScreen.connect,
     // שיוצרת GameClient חדש בכל לחיצת Play/Room), בדיוק מה שרות ביקשה
     // ("קובץ בכל הרצה").
     private final FileLogger fileLogger = new FileLogger("client");
@@ -81,7 +68,7 @@ public class GameClient extends WebSocketClient {
 
     // ה-gameId בפועל שהשרת הקצה לחיבור הזה (ר' RoleAssignedMessage), או
     // null אם ROLE_ASSIGNED עוד לא הגיעה. volatile כבר מבטיח קריאה בטוחה
-    // בין threads (בדיוק כמו latestMessage למעלה) - HomeScreenMain קורא
+    // בין threads (בדיוק כמו latestMessage למעלה) - HomeScreen קורא
     // לזה מ-thread רקע אחרי connectBlocking (ר' waitForAssignedGameId).
     public String assignedGameId() {
         return assignedGameId;
@@ -95,7 +82,7 @@ public class GameClient extends WebSocketClient {
     }
 
     // הטקסט מתוך MATCHMAKING_TIMEOUT (ר' MatchmakingTimeoutMessage), או
-    // null אם עוד לא התקבלה כזו הודעה. NetworkGameWindowMain בודק את
+    // null אם עוד לא התקבלה כזו הודעה. NetworkGameWindow בודק את
     // זה בכל טיק (בדיוק כמו assignedGameId למעלה) כדי להציג popup ולסגור
     // את החלון ברגע שהיא מגיעה.
     public String matchmakingTimeoutMessage() {
@@ -103,7 +90,7 @@ public class GameClient extends WebSocketClient {
     }
 
     // JSON הגולמי של ההודעה האחרונה שהתקבלה (או null אם עוד לא התקבל כלום) -
-    // צריך ל-NetworkGameWindowMain כדי "לסקור" (polling) מ-Timer של Swing
+    // צריך ל-NetworkGameWindow כדי "לסקור" (polling) מ-Timer של Swing
     // במקום callback מ-thread הרשת; volatile כבר מבטיח קריאה בטוחה בין
     // threads (ר' onMessage), אז אין צורך בסנכרון נוסף כאן.
     public String latestMessage() {

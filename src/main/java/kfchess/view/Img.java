@@ -335,7 +335,7 @@ public class Img {
 
 /**
  * קובעת את כותרת חלון המשחק (שלב 6 - "לכתוב את ה-room id בראש המסך",
- * ר' NetworkGameWindowMain) - סטטית, כמו frame/label, כי כל ה-Img
+ * ר' NetworkGameWindow) - סטטית, כמו frame/label, כי כל ה-Img
  * "canvases" הזמניים ש-render() יוצר בכל טיק חולקים אותו חלון אחד.
  * אם frame כבר קיים - מעדכנת אותו ישירות (על ה-EDT); אחרת שומרת
  * ב-pendingTitle, ו-show() (למעלה) מיישמת אותה ברגע שהיא יוצרת את

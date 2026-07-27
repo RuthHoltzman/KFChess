@@ -1,6 +1,6 @@
 package texttests;
 
-import kfchess.server.server.CreateRoomResolver;
+import kfchess.server.CreateRoomResolver;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;

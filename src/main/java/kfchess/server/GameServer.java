@@ -1,15 +1,15 @@
-package kfchess.server.server;
+package kfchess.server;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 import kfchess.account.AccountRepository;
 import kfchess.account.SqliteAccountRepository;
 import kfchess.logging.FileLogger;
-import kfchess.server.ClientCommand;
-import kfchess.server.ClientRole;
-import kfchess.server.ErrorMessage;
-import kfchess.server.MatchmakingTimeoutMessage;
-import kfchess.server.RoleAssignedMessage;
+import kfchess.protocol.ClientCommand;
+import kfchess.model.ClientRole;
+import kfchess.protocol.ErrorMessage;
+import kfchess.protocol.MatchmakingTimeoutMessage;
+import kfchess.protocol.RoleAssignedMessage;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;

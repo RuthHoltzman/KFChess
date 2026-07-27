@@ -1,6 +1,6 @@
 package texttests;
 
-import kfchess.server.server.MatchmakingResolver;
+import kfchess.server.MatchmakingResolver;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;

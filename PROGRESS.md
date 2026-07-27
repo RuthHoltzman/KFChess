@@ -1382,3 +1382,83 @@ popup + סגירת החלון). **התאמת ה-ELO עצמה עדיין לא א�
   JDK/Maven מלאים בסביבת הכלים שלי - יש רק JRE 11, אין javac).
 - דגש חזק על קוד מסודר/לא-ארוך-מדי - מחלקות קטנות וממוקדות
   (single responsibility).
+
+## סבב ריפקטור מבנה תיקיות (בעקבות CR)
+
+בעקבות שאלה ב-CR ("מה זה תיקיית net?") רות ביקשה לשבת ולתכנן מבנה
+חבילות אידיאלי לפני שינוי, ואז ביצוע. הוסכם על השלד: `model` / `rules`
+/ `realtime` / `engine` / `bus` / `io` / `view` / `account` נשארים,
+ושכבת הרשת מתחלקת ל-3 חבילות ברורות בלי שמות עצמיים-מפנים-לעצמם:
+**`kfchess.protocol`** (ה-DTOs המשותפים, היום `kfchess.server` השטוח),
+**`kfchess.server`** (המימוש בפועל, היום `kfchess.server.server`),
+**`kfchess.client`** (היום `kfchess.server.client`). בנוסף: חבילת
+**`kfchess.app`** חדשה לשלושת מחלקות הכניסה של הלקוח.
+
+**הוחלט למחוק (לא להעביר) את מצב הקונסולה הישן**: `Main.java`,
+`ConsoleRunner.java`, `CommandRunner.java`, `input/Controller.java`,
+`io/BoardPrinter.java` - שרידים ממטלה קודמת, מקבילים לחלוטין ללקוח
+הרשתי האמיתי ולא בשימוש שלו. **אומת לפני המחיקה** (`grep` על השם של כל
+אחד מהם בכל `src/`) שאין שום קובץ - כולל טסטים - שמייבא או קורא להם.
+חשוב: `io/BoardParser.java` (הפרסינג, לא ההדפסה) **נשאר** - הוא בשימוש
+אמיתי ע"י `GameSession` (פיצ'ר Restart קורא ללוח דרכו), רק
+`BoardPrinter` (ההדפסה לקונסולה) נמחק.
+
+**בוצע בפועל**: מחיקת 5 הקבצים. לפני המחיקה מחיקה נכשלה עם
+"Operation not permitted" (התיקייה המחוברת חסומה למחיקה כברירת מחדל) -
+נדרש אישור מפורש (`allow_cowork_file_delete`) לכל קובץ, ואז המחיקה
+הצליחה. `grep` אחרי המחיקה מאשר: אין הפניה שנשארה לאף אחד מהשמות
+האלה באף קובץ.
+
+**הערה חשובה שהתגלתה בדרך**: כשבדקתי `git status` לפני ה-commit,
+מצאתי שינויים לא-קשורים ולא-שלי ב-15 קבצים נוספים (`pom.xml`,
+`.gitignore`, ועוד) - שילוב של שינויי סוף-שורה (CRLF/LF, ללא שינוי
+תוכן) ומחיקת הערות בעברית במספר קבצים (`Account.java`,
+`AccountRepository.java`, `UsernameTakenException.java`,
+`EloCalculator.java`, `PieceVisualState.java`, `GameClient.java`).
+שאלתי את רות - **היא ביצעה את מחיקת ההערות בעצמה במכוון**, אין צורך
+לשחזר. ה-commit המוצע כולל **רק** את 5 המחיקות של שלב זה - השאר נשאר
+פתוח ב-working tree לרות, בנפרד.
+
+**המשך הריפקטור - שלבים 18-21 (בוצעו, לא-commited עד סוף כל הסבב):**
+
+18. **שינוי שמות חבילות הרשת**: `kfchess.server` (9 ה-DTOs השטוחים) →
+    `kfchess.protocol`; `kfchess.server.server` (8 קבצים) → `kfchess.server`;
+    `kfchess.server.client` (5 קבצים) → `kfchess.client`. כדי למנוע
+    התנגשות (ששני השמות הישנים הם תת-מחרוזת של עצמם) - שיטת placeholder:
+    קודם `kfchess.server.server`→placeholder1, `kfchess.server.client`→
+    placeholder2, אז `kfchess.server` הנשאר→`kfchess.protocol`, ואז שני
+    ה-placeholders חזרה ל-`kfchess.server`/`kfchess.client` הסופיים.
+    הועברו קבצים בפועל (`mv`, לא `git mv`) והוחלפו כל ה-`package`/`import`
+    בהתאם, כולל ב-14 קבצי טסט.
+19. **הזזת `ClientRole`**: מ-`kfchess.protocol` (אחרי שלב 18) ל-
+    `kfchess.model` - כי הוא לא נשלח אף פעם כאובייקט בפרוטוקול (רק
+    `.name()` כמחרוזת בתוך `RoleAssignedMessage`), אלא מושג domain
+    משותף, לצד `PieceColor`. עודכנו 7 מקומות שמייבאים אותו. הוסר import
+    מיותר (`PieceColor` נהיה same-package).
+20. **`kfchess.app`**: נוצרה חבילה חדשה; `LoginScreenMain` (נשאר בשם הזה,
+    יש לו `main()` יחיד) הועבר לשם; `HomeScreenMain`→`HomeScreen` ו-
+    `NetworkGameWindowMain`→`NetworkGameWindow` הועברו ושונה שמם (גם
+    הקובץ וגם המחלקה) - כדי שלא יהיו שלוש מחלקות "...Main" כשרק לאחת יש
+    בפועל `main()`. כל ההפניות (imports + הערות פרוזה בעברית שמזכירות את
+    השמות האלה) עודכנו בכל הקוד. `HomeScreenMainTest.java`→
+    `HomeScreenTest.java` בהתאם.
+21. **`README.md`**: תוקן ה-ASCII tree (עדיין הציג `net/` הישן) וטבלת
+    ה-entry-points (עדיין הציגה `kfchess.Main` שנמחק) + הדיאגרמת mermaid
+    + הוראות ההרצה בעברית - הכל עודכן ל-`protocol`/`server`/`client`/`app`.
+
+**אימות שבוצע** (אין לי `javac`/`mvn` בסביבה - רק JRE 11): סקריפט
+Python בודק לכל קובץ ב-`src/main`+`src/test` שה-`package` תואם את הנתיב
+בדיסק, שכל `import kfchess.*` מפנה לקובץ שקיים בפועל, ושם המחלקה תואם
+לשם הקובץ, בנוסף לאיזון סוגריים - **נקי, 0 בעיות, 98 קבצים נבדקו**.
+`grep` מקיף מאשר: אין אף הפניה שנשארה לאף אחד מהשמות הישנים
+(`kfchess.server.server`, `kfchess.server.client`, `HomeScreenMain`,
+`NetworkGameWindowMain`, `kfchess.Main`, `ConsoleRunner`, `CommandRunner`,
+`BoardPrinter`) בשום קובץ. **`mvn clean test` בפועל - רות תריץ**.
+
+**הערת תהליך לעצמי (לסבבים עתידיים)**: רות ציינה בפועל שהעדיפה לעצור
+ולעשות commit בין משימה למשימה (17→18→19→20→21) ולא לרוץ ברצף אחד
+ולהציע commit יחיד בסוף. הפעם, כשנשאלה, היא בחרה להישאר עם commit אחד
+גדול לכל הסבב הזה (כי משימות 18+19 חופפות באותם קבצים בדיוק ופיצול
+אמיתי דורש `git add -p` שורה-שורה שהוערך כמסוכן יותר משהוא שווה) - אבל
+**בסבבי עבודה עתידיים יש לעצור ולהציע commit בסוף כל משימה בנפרד**,
+לא לצבור כמה משימות ואז להציע commit-מרוכז.

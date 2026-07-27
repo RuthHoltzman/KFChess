@@ -2,7 +2,7 @@ package kfchess.view;
 
 import kfchess.engine.snapshot.GameSnapshot;
 import kfchess.model.PieceColor;
-import kfchess.server.ClientRole;
+import kfchess.model.ClientRole;
 
 import java.awt.Color;
 import java.awt.Rectangle;
@@ -16,7 +16,7 @@ import java.util.List;
  * <p>
  * בכוונה, המחלקה הזו לא מחשבת שום גיאומטריה בעצמה יותר (לא היכן הלוח
  * מתחיל, לא כמה מקום נשאר) - כל המספרים (גודל הלוח, ה-offset שלו)
- * מגיעים כפרמטרים מוכנים מ-NetworkGameWindowMain, שהוא המקום היחיד שבאמת
+ * מגיעים כפרמטרים מוכנים מ-NetworkGameWindow, שהוא המקום היחיד שבאמת
  * יודע מה גודל החלון האמיתי כרגע. זה לקח משתי באגים קודמים: כל פעם
  * ששני מקומות שונים חישבו את אותו מספר בנפרד (במקום שאחד יחשב ויעביר
  * לשני), הם התבדרו זה מזה וזה יצר בדיוק את הבאגים של "קליק לא במקום".
@@ -68,7 +68,7 @@ public class GameSceneView {
     private static final int TOP_BANNER_FONT_SIZE = 20;
     // גובה פס שם-החדר הקבוע - נפרד בכוונה מ-TOP_BANNER_HEIGHT (אלה שני
     // סוגי-פס שונים לגמרי: זה קבוע ולרוחב מלא, האחרים תלויי-מצב ולרוחב
-    // הלוח בלבד). NetworkGameWindowMain *חייב* להשתמש באותו מספר בדיוק
+    // הלוח בלבד). NetworkGameWindow *חייב* להשתמש באותו מספר בדיוק
     // (ר' roomHeaderHeight() למטה) כשהוא מקטין את השטח הפנוי ללוח/פאנלים -
     // בדיוק העיקרון שכבר קיים ב-BoardLayoutCalculator ("חישוב במקום אחד,
     // לא בשני מקומות שיתבדרו זה מזה").
@@ -80,7 +80,7 @@ public class GameSceneView {
     // שלושת השדות הבאים (roomId/role/username) קבועים לכל אורך חיי החלון -
     // בניגוד לכל שאר המידע שמגיע ל-render() (GameSnapshot), הם *לא*
     // משתנים תוך כדי משחק (שם החדר/התפקיד/שם המשתמש נקבעים פעם אחת ברגע
-    // החיבור, ר' NetworkGameWindowMain.launch) - אז הם שדות של הבנאי, לא
+    // החיבור, ר' NetworkGameWindow.launch) - אז הם שדות של הבנאי, לא
     // פרמטרים חדשים ב-render() (שהיה משנה את החתימה שלה בלי צורך אמיתי).
     private final String roomId;
     private final ClientRole role;
@@ -109,7 +109,7 @@ public class GameSceneView {
     }
 
     // כמה מקום (בפיקסלים) צריך לשמור *מלכתחילה* בשביל פס שם-החדר, לפני
-    // שמחשבים איפה הלוח/פאנלים בכלל נכנסים - NetworkGameWindowMain קורא
+    // שמחשבים איפה הלוח/פאנלים בכלל נכנסים - NetworkGameWindow קורא
     // לזה לפני BoardLayoutCalculator.computeLayout (ר' תיעוד שם) כדי
     // שהלוח לא "יגלוש" מתחת לפס הזה. public+static בכוונה (בניגוד לשאר
     // הקבועים הפרטיים כאן) - זה המספר היחיד מהמחלקה הזו שגם קוד מבחוץ
@@ -154,7 +154,7 @@ public class GameSceneView {
         // מצב כמו הבאנרים למטה) - לרוחב *כל* הסצנה (כולל שני הפאנלים),
         // כי זה מידע כללי על המשחק, לא ספציפי ללוח. boardOffsetY שמתקבל
         // כפרמטר כבר "יודע" להזיז את הלוח למטה בגובה הזה בדיוק - ר' תיעוד
-        // roomHeaderHeight()/NetworkGameWindowMain.computeBoardLayout.
+        // roomHeaderHeight()/NetworkGameWindow.computeBoardLayout.
         drawRoomHeader(scene, sceneWidthPx);
 
         Img boardCanvas = boardView.render(snapshot, geometry);
@@ -275,7 +275,7 @@ public class GameSceneView {
      * שמצוירים רק על הלוח ורק בתנאים מסוימים) - בקשת רות: "שם חדר" תמיד
      * גלוי על המסך, לא רק בכותרת החלון (Img.setTitle, שנשארת גם היא ללא
      * שינוי - זה תוסף, לא תחליף). roomId==null (מקרה-קצה: ROLE_ASSIGNED
-     * לא הגיעה בזמן, ר' HomeScreenMain.waitForAssignedGameId) מוצג כ-"?"
+     * לא הגיעה בזמן, ר' HomeScreen.waitForAssignedGameId) מוצג כ-"?"
      * במקום לזרוק/להציג "null" מילולית.
      * <p>
      * תפקיד/שם המשתמש *לא* מוצגים כאן עבור WHITE/BLACK - אלה מופיעים

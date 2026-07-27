@@ -4,9 +4,9 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import kfchess.server.ClientCommand;
-import kfchess.server.ClientRole;
-import kfchess.server.server.GameSession;
+import kfchess.protocol.ClientCommand;
+import kfchess.model.ClientRole;
+import kfchess.server.GameSession;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;

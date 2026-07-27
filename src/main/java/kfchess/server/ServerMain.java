@@ -1,4 +1,4 @@
-package kfchess.server.server;
+package kfchess.server;
 
 /**
  * נקודת הכניסה להרצת השרת בפועל. פורט ברירת מחדל 8887, ניתן לשינוי

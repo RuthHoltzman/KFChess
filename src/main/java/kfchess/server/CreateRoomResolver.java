@@ -1,4 +1,4 @@
-package kfchess.server.server;
+package kfchess.server;
 
 /**
  * מזהה אם בקשת חיבור WebSocket היא בקשת "Create room" (כפתור Create
@@ -8,7 +8,7 @@ package kfchess.server.server;
  */
 public final class CreateRoomResolver {
 
-    // חייב להיות זהה בדיוק לטוקן שקבוע ב-HomeScreenMain.buildCreateRoomUri
+    // חייב להיות זהה בדיוק לטוקן שקבוע ב-HomeScreen.buildCreateRoomUri
     // בצד הלקוח - שני הקצוות מגדירים אותו בנפרד, אותו עיקרון בדיוק כמו
     // MATCHMAKING_PATH/"_play".
     private static final String CREATE_ROOM_PATH = "_create";

@@ -1,4 +1,4 @@
-package kfchess;
+package kfchess.app;
 
 import kfchess.account.Account;
 import kfchess.account.AccountRepository;
@@ -11,11 +11,11 @@ import java.util.Optional;
 
 /**
  * מסך login/register (שלב 4, "v1") - חלון Swing נפרד לפני מסך הבית
- * (HomeScreenMain), באותו סגנון פשוט בדיוק (BoxLayout, בלי עיצוב מיוחד).
+ * (HomeScreen), באותו סגנון פשוט בדיוק (BoxLayout, בלי עיצוב מיוחד).
  * Login ו-Register הם שני כפתורים נפרדים (לא auto-register) - מישהי
  * שמקלידה username שלא קיים ולוחצת Login מקבלת שגיאה, לא חשבון חדש
  * בלי כוונה. גישה לקובץ ה-DB היא סינכרונית (בניגוד ל-connect() ב-
- * HomeScreenMain) כי קריאה/כתיבה ל-SQLite מקומי מהירה מספיק שלא צריך
+ * HomeScreen) כי קריאה/כתיבה ל-SQLite מקומי מהירה מספיק שלא צריך
  * thread נפרד כדי לא להקפיא את ה-EDT.
  */
 public class LoginScreenMain {
@@ -27,7 +27,7 @@ public class LoginScreenMain {
 
     // בודקת שדות ריקים/רק-רווחים לפני שפונים בכלל ל-repository - פונקציה
     // טהורה ונפרדת מה-UI כדי שתהיה ניתנת לבדיקה בלי להרים חלון Swing
-    // (כמו buildUri ב-HomeScreenMain).
+    // (כמו buildUri ב-HomeScreen).
     public static Optional<String> validate(String username, String password) {
         if (username == null || username.trim().isEmpty()) {
             return Optional.of("Username is required");
@@ -78,7 +78,7 @@ public class LoginScreenMain {
 
     // מטפל בלחיצה על Login: מאמת שדות, ואז שואל את ה-repository אם
     // username+password תואמים לחשבון קיים - הצלחה סוגרת את מסך ה-login
-    // ופותחת את מסך הבית עם ה-Account שהתקבל (HomeScreenMain.launch).
+    // ופותחת את מסך הבית עם ה-Account שהתקבל (HomeScreen.launch).
     private static void handleLogin(JFrame frame, AccountRepository repository, JTextField usernameField,
                                      JPasswordField passwordField, JLabel statusLabel) {
         String username = usernameField.getText();
@@ -92,7 +92,7 @@ public class LoginScreenMain {
         Optional<Account> account = repository.login(username.trim(), password);
         if (account.isPresent()) {
             frame.dispose();
-            HomeScreenMain.launch(account.get());
+            HomeScreen.launch(account.get());
         } else {
             showFailure(statusLabel, "Invalid username or password");
         }
@@ -114,14 +114,14 @@ public class LoginScreenMain {
         try {
             Account account = repository.register(username.trim(), password);
             frame.dispose();
-            HomeScreenMain.launch(account);
+            HomeScreen.launch(account);
         } catch (UsernameTakenException usernameTaken) {
             showFailure(statusLabel, usernameTaken.getMessage());
         }
     }
 
     // מציגה הודעת כישלון בחלון ה-login עצמו (label קיים, בלי popup) - אותה
-    // גישה בדיוק כמו HomeScreenMain.showFailure.
+    // גישה בדיוק כמו HomeScreen.showFailure.
     private static void showFailure(JLabel statusLabel, String message) {
         statusLabel.setForeground(Color.RED);
         statusLabel.setText(message);

@@ -1,8 +1,8 @@
 package texttests;
 
 import com.google.gson.Gson;
-import kfchess.server.ClientCommand;
-import kfchess.server.ClientCommandType;
+import kfchess.protocol.ClientCommand;
+import kfchess.protocol.ClientCommandType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

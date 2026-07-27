@@ -1,7 +1,7 @@
-package kfchess;
+package kfchess.app;
 
 import kfchess.account.Account;
-import kfchess.server.client.GameClient;
+import kfchess.client.GameClient;
 
 import javax.swing.*;
 import java.awt.*;
@@ -19,7 +19,7 @@ import java.nio.charset.StandardCharsets;
  * החדש מכסה בדיוק את אותו שימוש (Join = הקלדת ID קיים), רק לפי
  * המפרט המדויק במקום UI מאולתר.
  * <p>
- * מאז שלב 4 יש authentication אמיתי לפני המסך הזה (kfchess.LoginScreenMain,
+ * מאז שלב 4 יש authentication אמיתי לפני המסך הזה (kfchess.app.LoginScreenMain,
  * המיין היחיד להרצת הלקוח) - הוא קורא ל-launch(Account) עם ה-Account
  * המחובר, ומוצג כאן כתווית "Logged in as". מאז שלב 4 Part B, ה-username
  * גם נשלח בפועל לשרת (כ-query parameter על ה-URI, ר' buildUri) - כדי
@@ -27,12 +27,12 @@ import java.nio.charset.StandardCharsets;
  * מקבל WHITE/BLACK/SPECTATOR - זה עדיין לפי סדר התחברות, ר' ClientRole).
  * אין כאן main() עצמאי בכוונה - ר' LoginScreenMain.
  */
-public class HomeScreenMain {
+public class HomeScreen {
 
     private static final String SERVER_HOST_AND_PORT = "ws://localhost:8887";
     private static final String DEFAULT_ROOM = "default";
     // חייב להיות זהה בדיוק לטוקנים המקבילים ב-MatchmakingResolver/
-    // CreateRoomResolver בצד השרת (kfchess.server.server) - כל קצה מגדיר
+    // CreateRoomResolver בצד השרת (kfchess.server) - כל קצה מגדיר
     // אותם בנפרד, אותו עיקרון בדיוק כמו ש-DEFAULT_ROOM כאן ו-DEFAULT_GAME_ID
     // ב-GameIdResolver כבר מוגדרים בנפרד היום, לא משותפים ע"י מחלקת קבועים אחת.
     private static final String MATCHMAKING_PATH = "_play";
@@ -50,17 +50,17 @@ public class HomeScreenMain {
         SwingUtilities.invokeLater(() -> buildAndShow(account));
     }
 
-    // חתימה ישנה, בלי username - נשארת כדי ש-HomeScreenMainTest הקיים
+    // חתימה ישנה, בלי username - נשארת כדי ש-HomeScreenTest הקיים
     // ימשיך לעבוד בלי שינוי; שקולה ל-buildUri(room, null) (בלי query
-    // string בכלל - זה בדיוק מה שקורה כשמריצים HomeScreenMain בלי login,
-    // למשל NetworkGameWindowMain.main() לבדיקות ישירות).
+    // string בכלל - זה בדיוק מה שקורה כשמריצים HomeScreen בלי login,
+    // למשל NetworkGameWindow.main() לבדיקות ישירות).
     public static String buildUri(String room) {
         return buildUri(room, null);
     }
 
     // בונה URI מלא לחיבור מתוך room id גולמי (Join בדיאלוג ה-Room) - ריק
     // (או רק רווחים) נופל ל-DEFAULT_ROOM, כדי שברירת המחדל תישאר זהה למה
-    // ש-NetworkGameWindowMain כבר עושה כשמריצים אותה בלי args בכלל (למשל
+    // ש-NetworkGameWindow כבר עושה כשמריצים אותה בלי args בכלל (למשל
     // בדיקות ישירות) - אבל showRoomDialog לא נותנת בפועל ל-Join לקרוא
     // לכאן עם תיבה ריקה (ר' שם), כדי שלא "יתגלגלו" בטעות לחדר default
     // המשותף. מופרדת מבניית ה-UI כדי שתהיה ניתנת לבדיקה בלי להרים חלון Swing.
@@ -198,7 +198,7 @@ public class HomeScreenMain {
     // buildCreateRoomUri) שנבנה לפני הקריאה. buttonsToToggle (varargs) -
     // כל כפתורי מסך הבית מושבתים יחד בזמן חיבור (לא רק זה שנלחץ), כדי
     // שלא אפשר לפתוח בטעות שני חיבורים במקביל. username מועבר בנפרד
-    // (לא נחלץ מ-uriText בחזרה) כדי ש-NetworkGameWindowMain יוכל להציג
+    // (לא נחלץ מ-uriText בחזרה) כדי ש-NetworkGameWindow יוכל להציג
     // אותו על המסך - הוא כבר "ידוע" כאן לפני שנבנה ה-uri עצמו.
     private static void connect(JFrame homeFrame, String uriText, String username, JLabel statusLabel,
                                  JButton... buttonsToToggle) {
@@ -225,7 +225,7 @@ public class HomeScreenMain {
                 String gameId = waitForAssignedGameId(finalClient);
                 SwingUtilities.invokeLater(() -> {
                     homeFrame.dispose();
-                    NetworkGameWindowMain.launch(finalClient, gameId, username);
+                    NetworkGameWindow.launch(finalClient, gameId, username);
                 });
             } else {
                 SwingUtilities.invokeLater(() -> showFailure(statusLabel, "failed to connect to " + uriText, buttonsToToggle));
@@ -237,7 +237,7 @@ public class HomeScreenMain {
     // עצמה) עד ש-GameClient.assignedGameId() יתמלא, או עד timeout. לרוב
     // חוזרת כמעט מיד (ROLE_ASSIGNED היא ההודעה הראשונה שהשרת שולח, מיד
     // אחרי onOpen) - אם בכל זאת timeout (תקלת רשת חריגה), מחזירה null,
-    // ו-NetworkGameWindowMain.launch פשוט תציג gameId=null בכותרת (לא קריטי,
+    // ו-NetworkGameWindow.launch פשוט תציג gameId=null בכותרת (לא קריטי,
     // לא חוסם את המשחק עצמו בכלל).
     private static String waitForAssignedGameId(GameClient client) {
         long deadline = System.currentTimeMillis() + GAME_ID_WAIT_TIMEOUT_MILLIS;

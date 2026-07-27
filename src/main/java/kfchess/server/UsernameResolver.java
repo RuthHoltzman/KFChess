@@ -1,4 +1,4 @@
-package kfchess.server.server;
+package kfchess.server;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;

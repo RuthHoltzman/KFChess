@@ -1,4 +1,4 @@
-package kfchess.server;
+package kfchess.protocol;
 
 import kfchess.engine.snapshot.CaptureEffect;
 import kfchess.model.Position;

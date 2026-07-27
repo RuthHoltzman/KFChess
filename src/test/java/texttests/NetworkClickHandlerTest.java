@@ -2,7 +2,7 @@ package texttests;
 
 import kfchess.input.BoardMapper;
 import kfchess.model.Position;
-import kfchess.server.client.NetworkClickHandler;
+import kfchess.client.NetworkClickHandler;
 import kfchess.view.BoardView;
 import kfchess.view.GameSceneView;
 import kfchess.view.layout.BoardLayoutCalculator.BoardLayout;

@@ -1,6 +1,6 @@
 package texttests;
 
-import kfchess.server.server.UsernameResolver;
+import kfchess.server.UsernameResolver;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;

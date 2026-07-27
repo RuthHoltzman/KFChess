@@ -1,4 +1,4 @@
-package kfchess.server.client;
+package kfchess.client;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -36,7 +36,7 @@ public final class IncomingMessageSummary {
     // true אם זו הודעת MATCHMAKING_TIMEOUT - תיקון "Play" לפי המפרט המדויק
     // (ר' MatchmakingTimeoutMessage/GameServer.checkMatchmakingTimeout):
     // נשלחת פעם אחת בלבד, כשעברה דקה בלי יריב/ה עם ELO תואם. GameClient
-    // שומר אותה כדי ש-NetworkGameWindowMain יציג popup ויסגור את החלון.
+    // שומר אותה כדי ש-NetworkGameWindow יציג popup ויסגור את החלון.
     public static boolean isMatchmakingTimeout(String json) {
         return "MATCHMAKING_TIMEOUT".equals(messageType(json));
     }

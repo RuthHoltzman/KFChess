@@ -1,6 +1,4 @@
-package kfchess.server;
-
-import kfchess.model.PieceColor;
+package kfchess.model;
 
 import java.util.Optional;
 

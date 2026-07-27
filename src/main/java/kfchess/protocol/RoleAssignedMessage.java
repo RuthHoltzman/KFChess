@@ -1,4 +1,4 @@
-package kfchess.server;
+package kfchess.protocol;
 
 /**
  * נשלח פעם אחת לכל חיבור, מיד אחרי onOpen: מודיע ללקוח באיזה תפקיד הוא

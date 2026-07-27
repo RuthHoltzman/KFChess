@@ -1,17 +1,17 @@
-package kfchess.server.server;
+package kfchess.server;
 
 /**
  * מזהה אם בקשת חיבור WebSocket היא בקשת matchmaking (כפתור "Skip" ב-
- * HomeScreenMain, שלב 5 חלק 2) ולא חיבור לחדר-בשם ספציפי - לפי נתיב
+ * HomeScreen, שלב 5 חלק 2) ולא חיבור לחדר-בשם ספציפי - לפי נתיב
  * שמור (MATCHMAKING_PATH). מחלקה טהורה ונפרדת (לא בדיקה inline בתוך
  * GameServer.onOpen), בדיוק מאותה סיבה ש-GameIdResolver כבר קיימת ככה:
  * אפשר לבדוק את הלוגיקה ביחידה בלי להרים שרת/handshake מזויף.
  */
 public final class MatchmakingResolver {
 
-    // הטוקן חייב להיות זהה בדיוק לזה שב-HomeScreenMain.buildMatchmakingUri
+    // הטוקן חייב להיות זהה בדיוק לזה שב-HomeScreen.buildMatchmakingUri
     // בצד הלקוח - שני הקצוות מגדירים אותו בנפרד (כמו ש-"default"/DEFAULT_ROOM
-    // כבר מוגדר בנפרד היום ב-GameIdResolver וב-HomeScreenMain), לא משותף
+    // כבר מוגדר בנפרד היום ב-GameIdResolver וב-HomeScreen), לא משותף
     // ע"י מחלקת קבועים אחת. מגבלה ידועה: מי שמקלידה "_play" כשם room ידני
     // "תתנגש" בטעות עם matchmaking - נדיר מספיק בפועל, לא טופל.
     private static final String MATCHMAKING_PATH = "_play";
