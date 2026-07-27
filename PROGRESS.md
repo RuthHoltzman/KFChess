@@ -1462,3 +1462,38 @@ Python בודק לכל קובץ ב-`src/main`+`src/test` שה-`package` תואם
 אמיתי דורש `git add -p` שורה-שורה שהוערך כמסוכן יותר משהוא שווה) - אבל
 **בסבבי עבודה עתידיים יש לעצור ולהציע commit בסוף כל משימה בנפרד**,
 לא לצבור כמה משימות ואז להציע commit-מרוכז.
+
+## פיצול תיקיית הטסטים (23)
+
+עד עכשיו כל 26 קבצי הטסט ישבו שטוח בחבילה אחת `texttests` שלא תאמה
+לשום חבילת `kfchess.*` אמיתית. רות ביקשה לפצל לכמה תיקיות. נשאלה
+ונבחרה **האפשרות הסטנדרטית**: להעביר כל טסט לחבילת ה-`kfchess.*`
+המתאימה למחלקה שהוא בודק (בדיוק כמו ב-`src/main`), ולא רק תת-תיקיות
+מתחת ל-`texttests`. **סיבה טכנית אמיתית לא רק סגנונית**: `GameEngine`
+(ודומיו) מכיל מתודות package-private (`tryMove`, `beginJump`,
+`isAvailableToAct`) - זו בדיוק הסיבה ש-`NetworkActions` יושב ב-
+`kfchess.engine` (כדי לגשת אליהן). טסט בחבילה `texttests` הנפרדת לא
+יכול לגשת לחברים כאלה בכלל; טסט באותה חבילה ממש - יכול.
+
+**מיפוי שבוצע** (`mv` + `sed` על שורת ה-`package`, עם הסרת ה-imports
+שהפכו מיותרים כי הם כעת אותה חבילה):
+`io/` (BoardParserTest), `protocol/` (ClientCommandTest, JumpDtoTest,
+MessageDtoTest, PieceDtoTest), `client/` (ClientSnapshotReconstructorTest,
+GameClientTest, IncomingMessageSummaryTest, NetworkClickHandlerTest,
+RecordingGameClient - עוזר טסט, לא טסט בעצמו), `server/`
+(CreateRoomResolverTest, GameIdResolverTest, GameSessionTest,
+MatchmakingResolverTest, RoomIdGeneratorTest, UsernameResolverTest,
+FakeWebSocket - עוזר טסט), `account/` (EloCalculatorTest,
+PasswordHasherTest, SqliteAccountRepositoryTest), `logging/`
+(FileLoggerTest), `engine/` (GameEngineTest), `view/`
+(GameSceneViewTest), `app/` (HomeScreenTest, LoginScreenMainTest),
+`rules/` (RuleEngineTest). תיקיית `texttests/` נמחקה (התרוקנה לגמרי).
+
+נבדק לפני הפיצול: `FakeWebSocket` בשימוש רק ע"י `GameSessionTest`
+(שניהם ל-`server`), `RecordingGameClient` בשימוש רק ע"י `GameClientTest`/
+`NetworkClickHandlerTest` (שלושתם ל-`client`) - אין צימוד חוצה-חבילה
+בין שני עוזרי הטסט האלה, כך שהמעבר לא יוצר צורך ב-import חדש ביניהם.
+
+**אימות**: אותו סקריפט Python (package↔נתיב, imports↔קבצים קיימים,
+איזון סוגריים) + בדיקת שמות-מחלקה כפולים בתוך אותה חבילה - **נקי, 0
+בעיות, 98 קבצים**. `mvn clean test` - רות תריץ.

@@ -1,6 +1,5 @@
-package texttests;
+package kfchess.client;
 
-import kfchess.client.IncomingMessageSummary;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

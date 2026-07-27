@@ -1,6 +1,5 @@
-package texttests;
+package kfchess.view;
 
-import kfchess.view.GameSceneView;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

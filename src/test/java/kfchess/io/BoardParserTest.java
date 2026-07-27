@@ -1,6 +1,5 @@
-package texttests;
+package kfchess.io;
 
-import kfchess.io.BoardParser;
 import kfchess.model.Board;
 import kfchess.model.Piece;
 import kfchess.model.PieceColor;

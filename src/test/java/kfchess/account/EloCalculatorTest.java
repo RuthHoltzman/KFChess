@@ -1,6 +1,5 @@
-package texttests;
+package kfchess.account;
 
-import kfchess.account.EloCalculator;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;

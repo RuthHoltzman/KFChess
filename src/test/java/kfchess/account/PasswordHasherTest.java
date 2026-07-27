@@ -1,6 +1,5 @@
-package texttests;
+package kfchess.account;
 
-import kfchess.account.PasswordHasher;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;

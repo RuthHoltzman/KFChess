@@ -1,9 +1,8 @@
-package texttests;
+package kfchess.client;
 
 import com.google.gson.Gson;
 import kfchess.model.ClientRole;
 import kfchess.protocol.RoleAssignedMessage;
-import kfchess.client.GameClient;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;

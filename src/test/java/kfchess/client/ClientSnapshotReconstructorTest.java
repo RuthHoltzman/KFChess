@@ -1,4 +1,4 @@
-package texttests;
+package kfchess.client;
 
 import com.google.gson.Gson;
 import kfchess.engine.snapshot.JumpVisual;
@@ -9,8 +9,6 @@ import kfchess.model.Position;
 import kfchess.protocol.JumpDto;
 import kfchess.protocol.PieceDto;
 import kfchess.protocol.SnapshotMessage;
-import kfchess.client.ClientSnapshotReconstructor;
-import kfchess.client.IncomingSnapshot;
 import kfchess.realtime.Motion;
 import org.junit.jupiter.api.Test;
 

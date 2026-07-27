@@ -1,6 +1,5 @@
-package texttests;
+package kfchess.logging;
 
-import kfchess.logging.FileLogger;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;

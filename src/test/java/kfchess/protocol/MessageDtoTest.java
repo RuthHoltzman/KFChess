@@ -1,10 +1,7 @@
-package texttests;
+package kfchess.protocol;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import kfchess.protocol.ErrorMessage;
-import kfchess.protocol.RoleAssignedMessage;
-import kfchess.protocol.SnapshotMessage;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

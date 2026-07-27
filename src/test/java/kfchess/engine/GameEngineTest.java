@@ -1,7 +1,6 @@
-package texttests;
+package kfchess.engine;
 
 import kfchess.bus.EventBus;
-import kfchess.engine.GameEngine;
 import kfchess.model.Board;
 import kfchess.model.Game;
 import kfchess.model.Piece;

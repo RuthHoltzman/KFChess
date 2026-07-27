@@ -1,11 +1,10 @@
-package texttests;
+package kfchess.rules;
 
 import kfchess.model.Board;
 import kfchess.model.Piece;
 import kfchess.model.PieceColor;
 import kfchess.model.PieceKind;
 import kfchess.model.Position;
-import kfchess.rules.RuleEngine;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;

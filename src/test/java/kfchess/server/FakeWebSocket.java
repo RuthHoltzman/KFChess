@@ -1,4 +1,4 @@
-package texttests;
+package kfchess.server;
 
 import org.java_websocket.WebSocket;
 import org.java_websocket.drafts.Draft;
