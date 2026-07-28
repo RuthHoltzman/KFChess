@@ -8,27 +8,27 @@ class HomeScreenTest {
 
     @Test
     void buildUri_normalRoom_appendsToServerAddress() {
-        assertEquals("ws://localhost:8887/room1", HomeScreen.buildUri("room1"));
+        assertEquals("ws://localhost:8887/room1", HomeScreen.buildUri("room1", null));
     }
 
     @Test
     void buildUri_emptyRoom_fallsBackToDefault() {
-        assertEquals("ws://localhost:8887/default", HomeScreen.buildUri(""));
+        assertEquals("ws://localhost:8887/default", HomeScreen.buildUri("", null));
     }
 
     @Test
     void buildUri_blankRoom_fallsBackToDefault() {
-        assertEquals("ws://localhost:8887/default", HomeScreen.buildUri("   "));
+        assertEquals("ws://localhost:8887/default", HomeScreen.buildUri("   ", null));
     }
 
     @Test
     void buildUri_nullRoom_fallsBackToDefault() {
-        assertEquals("ws://localhost:8887/default", HomeScreen.buildUri(null));
+        assertEquals("ws://localhost:8887/default", HomeScreen.buildUri(null, null));
     }
 
     @Test
     void buildUri_roomWithSurroundingWhitespace_isTrimmed() {
-        assertEquals("ws://localhost:8887/room1", HomeScreen.buildUri("  room1  "));
+        assertEquals("ws://localhost:8887/room1", HomeScreen.buildUri("  room1  ", null));
     }
 
     @Test
