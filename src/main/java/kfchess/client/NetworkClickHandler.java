@@ -8,26 +8,7 @@ import kfchess.view.layout.BoardLayoutCalculator.BoardLayout;
 import java.awt.Rectangle;
 import java.util.Optional;
 
-/**
- * מטפל בקליק/קליק-ימני על הלוח במצב רשת - הוצא מ-NetworkGameWindow
- * (היה שם כמתודה פרטית) כדי שחישוב "איפה בדיוק נלחץ" יהיה נגיש לבדיקה
- * בנפרד, בלי Swing/רשת אמיתיים. זו בדיוק הלוגיקה שההערה ב-
- * BoardLayoutCalculator מזהירה עליה כמקור לשני באגים קודמים ("קליק לא
- * במקום") - ומקביל למה ש-GameCommandController (kfchess.engine, הקונטרולר
- * המקביל בצד השרת) כבר עושה: מחלקה קטנה שרק מנתבת קליק, בלי לוגיקת משחק בעצמה.
- * <p>
- * שני תפקידים נפרדים בכוונה: resolvePosition() טהורה לגמרי (בלי Swing,
- * בלי רשת) - נבדקת ישירות ב-NetworkClickHandlerTest. handle() היא
- * השכבה הדקה שעוטפת אותה בבדיקת gameOver ובשליחה בפועל ל-GameClient -
- * לא נבדקת ישירות בהצלחה (תלויה בחיבור רשת אמיתי), באותה גישה בדיוק כמו
- * HomeScreen.connect()/LoginScreenMain.handleLogin() שלא נבדקות
- * ישירות בעוד buildUri()/validate() כן.
- * <p>
- * מחזיקה גם GameSceneView (רק לשם שאילת restartButtonBounds()) - לא
- * משוכפלים כאן המספרים של מיקום/גודל כפתור ה-Restart; GameSceneView
- * נשאר המקור היחיד לאמת עליהם (אותו עיקרון בדיוק שבגללו BoardLayoutCalculator
- * קיים בכלל).
- */
+/** The client's input controller: turns mouse clicks into CLICK/JUMP/RESTART commands sent to the server. */
 public class NetworkClickHandler {
 
     private final GameClient client;
@@ -40,9 +21,7 @@ public class NetworkClickHandler {
         this.sceneView = sceneView;
     }
 
-    // ממירה פיקסל מוחלט (יחסית לכל תוכן החלון) למיקום לוגי על הלוח, או
-    // Optional.empty() אם הקליק נפל מחוץ ללוח עצמו (בפאנל צד, או בשוליים
-    // הריקים סביב לוח ממורכז לא-ריבועי - ר' BoardLayoutCalculator).
+    /** Converts an absolute pixel to a board position, or empty if the click fell outside the board. */
     public Optional<Position> resolvePosition(int pixelX, int pixelY, BoardLayout layout) {
         int boardX = pixelX - layout.offsetX();
         int boardY = pixelY - layout.offsetY();
@@ -52,11 +31,8 @@ public class NetworkClickHandler {
         return Optional.of(boardMapper.pixelToPosition(boardX, boardY, layout.cellSize(), layout.cellSize()));
     }
 
-    // מטפל בקליק בפועל: כש-gameOver, הקליק היחיד שרלוונטי הוא על כפתור
-    // ה-Restart (ר' handleRestartClick) - שום קליק/קפיצה רגילים לא
-    // אמורים לקרות אז. אחרת, פותר את המיקום (resolvePosition) ושולח
-    // CLICK/JUMP לשרת. לא נוגע במנוע בכלל - אין GameEngine מקומי במצב
-    // רשת, השרת הוא היחיד שמחליט אם הפעולה חוקית.
+
+    /** Handles a click/right-click: routes to the Restart button when the game is over, else sends CLICK/JUMP. */
     public void handle(int pixelX, int pixelY, BoardLayout layout, boolean gameOver, boolean isJump) {
         if (gameOver) {
             handleRestartClick(pixelX, pixelY, layout);
@@ -71,11 +47,8 @@ public class NetworkClickHandler {
         });
     }
 
-    // בודקת אם קליק (בזמן gameOver) פגע בכפתור ה-Restart שמצויר על הלוח -
-    // ממירה לפיקסל יחסי-ללוח (כמו resolvePosition) ובודקת מול
-    // GameSceneView.restartButtonBounds() (שם היחיד שבאמת יודע איפה
-    // הכפתור). פגיעה => שולח RESTART לשרת; שני הצדדים צריכים לשלוח כדי
-    // שהלוח יתאפס בפועל (ר' GameSession.applyRestartVote).
+
+    /** Sends RESTART if the click landed on the Restart button drawn over the game-over overlay. */
     private void handleRestartClick(int pixelX, int pixelY, BoardLayout layout) {
         int boardX = pixelX - layout.offsetX();
         int boardY = pixelY - layout.offsetY();

@@ -14,46 +14,31 @@ import java.net.URI;
 import java.util.function.Consumer;
 
 
+/** WebSocket client: connects to the server, sends CLICK/JUMP/RESTART, and pushes incoming messages to a listener. */
 public class GameClient extends WebSocketClient {
 
     private final Gson gson = new Gson();
 
-    // Called from onMessage() for every incoming message - runs on the network
-    // thread, so the listener itself must hop onto the EDT (SwingUtilities.invokeLater)
-    // before touching any Swing state. Replaces the old polling-based latestMessage()
-    // so NetworkGameWindow can repaint only when there's actually something new,
-    // instead of redrawing the same frame on a fixed timer.
+    // Notified from onMessage() on the network thread - must hop onto the EDT before touching Swing.
     private volatile Consumer<String> messageListener;
 
     private volatile String assignedGameId;
     private volatile ClientRole assignedRole;
-    // תיקון "Play" לפי המפרט המדויק (ELO ±100 / timeout של דקה) - נחתך
-    // מתוך הודעת MATCHMAKING_TIMEOUT אם/כשמגיעה (ר' onMessage). null כל
-    // עוד לא הגיעה כזו הודעה - NetworkGameWindow קורא את זה מתוך
-    // messageListener ברגע שהודעה כזו מגיעה (ר' setMessageListener).
     private volatile String matchmakingTimeoutMessage;
-    // שלב 6 חלק 2 (בקשת המנחה): לוג טכני/תפעולי לקובץ טקסט - ר' תיעוד
-    // FileLogger וגם GameServer.fileLogger (אותו רעיון, בצד הלקוח הפעם).
-    // אחד לכל GameClient - כלומר אחד לכל ניסיון חיבור (ר' HomeScreen.connect,
-    // שיוצרת GameClient חדש בכל לחיצת Play/Room), בדיוק מה שרות ביקשה
-    // ("קובץ בכל הרצה").
     private final FileLogger fileLogger = new FileLogger("client");
 
     public GameClient(URI serverUri) {
         super(serverUri);
     }
 
-    // נקרא ע"י הספרייה ברגע שההתחברות הצליחה (handshake הושלם) - כאן רק מודיעים בקונסול.
+    /** Called once the WebSocket handshake succeeds. */
     @Override
     public void onOpen(ServerHandshake handshakedata) {
         System.out.println("connected to " + getURI());
         fileLogger.log("Connected to " + getURI());
     }
 
-    // נקרא לכל הודעה נכנסת מהשרת - תמיד נשמרת (ל-status), אבל מודפסת מיד רק אם היא לא SNAPSHOT
-    // (אלה מגיעות ברצף מהיר, ר' printLatestSnapshot להצגה לפי דרישה במקום הצפת מסוף).
-    // אותו כלל חל על הלוג לקובץ - SNAPSHOT לא נרשמת (30 פעם בשנייה זה
-    // הרבה מדי טקסט בלי תועלת), רק סוגי הודעות אחרים (ROLE_ASSIGNED/ERROR).
+    /** Called for every message from the server: updates internal state, then notifies the listener. */
     @Override
     public void onMessage(String message) {
         if (IncomingMessageSummary.isRoleAssigned(message)) {
@@ -70,8 +55,7 @@ public class GameClient extends WebSocketClient {
             System.out.println(summary);
             fileLogger.log("Received: " + summary);
         }
-        // Fire last, so the listener already sees the up-to-date assignedRole/
-        // matchmakingTimeoutMessage fields set above if it needs them.
+
         Consumer<String> listener = messageListener;
         if (listener != null) {
             listener.accept(message);
@@ -83,23 +67,18 @@ public class GameClient extends WebSocketClient {
         this.messageListener = listener;
     }
 
-    // ה-gameId בפועל שהשרת הקצה לחיבור הזה (ר' RoleAssignedMessage), או
-    // null אם ROLE_ASSIGNED עוד לא הגיעה. volatile כבר מבטיח קריאה בטוחה
-    // בין threads - HomeScreen קורא לזה מ-thread רקע אחרי connectBlocking
-    // (ר' waitForAssignedGameId).
+
+    /** The gameId the server assigned this connection, or null before ROLE_ASSIGNED arrives. */
     public String assignedGameId() {
         return assignedGameId;
     }
 
-    // התפקיד בפועל שהשרת הקצה לחיבור הזה (ר' RoleAssignedMessage), או
-    // null אם ROLE_ASSIGNED עוד לא הגיעה (volatile, בלי סנכרון נוסף).
+    /** The role (WHITE/BLACK/SPECTATOR) the server assigned this connection, or null before ROLE_ASSIGNED arrives. */
     public ClientRole assignedRole() {
         return assignedRole;
     }
 
-    // הטקסט מתוך MATCHMAKING_TIMEOUT (ר' MatchmakingTimeoutMessage), או
-    // null אם עוד לא התקבלה כזו הודעה. NetworkGameWindow קורא את זה מתוך
-    // messageListener כדי להציג popup ולסגור את החלון ברגע שההודעה מגיעה.
+    /** The MATCHMAKING_TIMEOUT text, or null if no such message has arrived. */
     public String matchmakingTimeoutMessage() {
         return matchmakingTimeoutMessage;
     }
@@ -116,20 +95,19 @@ public class GameClient extends WebSocketClient {
         fileLogger.log("ERROR: " + ex.getMessage());
     }
 
-    // בונה ClientCommand מסוג CLICK וממיר ל-JSON לפני שליחה - אותו DTO שהשרת מפענח, הפעם בכיוון ההפוך.
+    /** Sends a CLICK command for the given board position. */
     public void sendClick(int row, int col) {
         fileLogger.log("Sending CLICK row=" + row + " col=" + col);
         send(gson.toJson(new ClientCommand(ClientCommandType.CLICK, row, col)));
     }
 
-    // כנ"ל, עבור JUMP.
+    /** Sends a JUMP command for the given board position. */
     public void sendJump(int row, int col) {
         fileLogger.log("Sending JUMP row=" + row + " col=" + col);
         send(gson.toJson(new ClientCommand(ClientCommandType.JUMP, row, col)));
     }
 
-    // מבקש מהשרת לאתחל את הלוח (שני הצדדים צריכים לבקש - ר' GameSession.applyCommand).
-    // row/col הם "דמה" (0,0) - RESTART לא צריך מיקום בכלל, ר' ClientCommand.isValid().
+    /** Asks the server to restart the game (both sides must send this before it actually resets). */
     public void sendRestart() {
         fileLogger.log("Sending RESTART");
         send(gson.toJson(new ClientCommand(ClientCommandType.RESTART, 0, 0)));
