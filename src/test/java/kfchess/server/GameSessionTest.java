@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * בודק את GameSession: הקצאת תפקידים, ניתוב פקודות מהתור אל NetworkActions
+ * בודק את GameSession: הקצאת תפקידים, ניתוב פקודות מהתור אל GameCommandController
  * ב-tick, והתוכן של ה-snapshot שנבנה לכל צבע. ה-WebSocket משמש כאן רק
  * כמפתח-זהות (ר' FakeWebSocket) - אין חיבור רשת אמיתי בטסטים האלה.
  */

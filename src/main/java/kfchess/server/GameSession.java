@@ -4,30 +4,24 @@ import kfchess.account.AccountRepository;
 import kfchess.account.EloCalculator;
 import kfchess.bus.EventBus;
 import kfchess.bus.GameLifecycleEvent;
+import kfchess.engine.GameCommandController;
 import kfchess.engine.GameEngine;
-import kfchess.engine.NetworkActions;
-import kfchess.engine.snapshot.JumpVisual;
 import kfchess.io.BoardParser;
 import kfchess.model.Board;
 import kfchess.model.Game;
-import kfchess.model.Piece;
 import kfchess.model.PieceColor;
 import kfchess.model.Position;
 import kfchess.protocol.ClientCommand;
 import kfchess.protocol.ClientCommandType;
 import kfchess.model.ClientRole;
-import kfchess.protocol.JumpDto;
-import kfchess.protocol.PieceDto;
 import kfchess.protocol.SnapshotMessage;
 import kfchess.realtime.RaelTime;
 import kfchess.rules.RuleEngine;
 import org.java_websocket.WebSocket;
 
-import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
@@ -37,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * משחק בודד על השרת: עוטף Board+Game+GameEngine+NetworkActions משלו,
+ * משחק בודד על השרת: עוטף Board+Game+GameEngine+GameCommandController משלו,
  * ואת רשימת חיבורי ה-WebSocket שמשתתפים בו (לבן/שחור/צופים).
  * <p>
  * כל שינוי במצב המשחק (tick) חייב לקרות מ-thread אחד בלבד - זה מה
@@ -90,7 +84,10 @@ public class GameSession {
     // כי המשחק תמיד היה נבנה פעם אחת ולא מתאפס.
     private Board board;
     private GameEngine engine;
-    private NetworkActions networkActions;
+    // הקונטרולר שמנתב פקודות CLICK/JUMP לצבע הנכון (ר' GameCommandController) -
+    // שם השדה תואם בכוונה לשם המחלקה, כדי שיהיה ברור מהקוד עצמו (בלי לחפש
+    // בתיעוד) שזו שכבת ה-controller, לא עוד "מנוע" נוסף.
+    private GameCommandController commandController;
     private final EventBus bus = new EventBus();
     private final AccountRepository accountRepository;
     private final Map<WebSocket, ConnectedPlayer> connections = new ConcurrentHashMap<>();
@@ -108,6 +105,11 @@ public class GameSession {
     // (clear()) בכל resetGame(). Set ולא boolean יחיד לכל צד, כי צריך
     // לזהות "שני הצדדים ביקשו" (לא רק "מישהו ביקש") - ר' applyCommand.
     private final Set<ClientRole> restartVotes = EnumSet.noneOf(ClientRole.class);
+    // הופך board+engine למ-SnapshotMessage לשידור - הוצא ל-מחלקה נפרדת (ר'
+    // תיעוד SnapshotBuilder) כי זו אחריות שונה לגמרי מניהול session/חיבורים:
+    // "איך מתרגמים דומיין ל-DTO" מול "מי מחובר ומה מותר לו/ה". בלי state
+    // משלו - בטוח לשתף מופע אחד לאורך כל חיי ה-session (גם אחרי resetGame).
+    private final SnapshotBuilder snapshotBuilder = new SnapshotBuilder();
 
     // איזה טקסט-לוח resetGame() בונה ממנו - STARTING_BOARD_TEXT בכל
     // הבנאים הציבוריים (המשחק האמיתי); בנאי הבדיקה למטה יכול להחליף
@@ -125,7 +127,7 @@ public class GameSession {
     // בנאי: ה-bus נוצר *פעם אחת* לכל חיי ה-GameSession (לא בכל resetGame) -
     // כדי שההרשמה ל-GameLifecycleEvent(ENDED) (לעדכון ELO) תישאר תקפה גם
     // אחרי restart, בלי צורך להירשם מחדש בכל פעם. resetGame() עצמה בונה
-    // רק את הלוח/מנוע/networkActions מחדש, על אותו bus.
+    // רק את הלוח/מנוע/commandController מחדש, על אותו bus.
     public GameSession(AccountRepository accountRepository) {
         this(STARTING_BOARD_TEXT, accountRepository);
     }
@@ -153,7 +155,7 @@ public class GameSession {
         this.board = new BoardParser(new Scanner(boardText)).readBoard();
         Game game = new Game(board);
         this.engine = new GameEngine(game, new RuleEngine(), new RaelTime(), bus);
-        this.networkActions = new NetworkActions(engine);
+        this.commandController = new GameCommandController(engine);
         restartVotes.clear();
     }
 
@@ -316,8 +318,8 @@ public class GameSession {
         player.role().toPieceColor().ifPresent(color -> {
             Position target = new Position(pending.command().row(), pending.command().col());
             switch (pending.command().type()) {
-                case CLICK -> networkActions.handleClick(color, target);
-                case JUMP -> networkActions.handleJump(color, target);
+                case CLICK -> commandController.handleClick(color, target);
+                case JUMP -> commandController.handleJump(color, target);
             }
         });
     }
@@ -437,70 +439,17 @@ public class GameSession {
         return (int) Math.ceil(remainingMillis / 1000.0);
     }
 
-    /** תוצאת סריקת הלוח: הכלים לשידור + מיקום כל כלי (זהות, לא ערך) - דרוש כדי לאתר קפיצות (ר' collectJumps). */
-    private record BoardScan(List<PieceDto> pieces, Map<Piece, Position> positionByPiece) {
-    }
-
-    // בונה את הודעת המצב (snapshot) עבור צופה ספציפי - selected/legalMoves הם רק ביחס לצבע שלו.
-    // motions/jumps/captureEffects זהים לכל הצופים - זה בדיוק מה שה-UI המקומי מצייר כאנימציה.
+    // בונה את הודעת המצב (snapshot) עבור צופה ספציפי. תרגום board+engine ל-DTO
+    // עצמו הוצא ל-SnapshotBuilder (ר' תיעוד השדה snapshotBuilder למעלה) - מה
+    // שנשאר כאן הוא רק איסוף שלושת הפרטים ש*כן* שייכים ל-session (תלויים
+    // ב-connections/pendingDisconnects/restartVotes, לא בלוח עצמו).
     // synchronized (חדש, שלב 5): disconnectSecondsRemaining() קורא מ-pendingDisconnects,
     // שגם assignRole (thread הרשת) יכול לגעת בו בו-זמנית - אותו מנעול כמו tick()/assignRole.
     public synchronized SnapshotMessage snapshotFor(ClientRole viewerRole) {
-        BoardScan scan = scanBoard();
-        Optional<Position> selected = viewerRole.toPieceColor()
-                .flatMap(networkActions::selectedPositionFor);
-        List<Position> legalMoves = selected.map(engine::legalMovesFrom).orElse(List.of());
-        String winner = engine.winner().map(PieceColor::name).orElse(null);
         // רלוונטי רק כש-gameOver - "כבר ביקשתי RESTART, מחכה לצד השני" -
         // תמיד false לצופה (SPECTATOR), כי אין לו/ה בכלל הצבעה על restart.
         boolean restartRequestedByViewer = restartVotes.contains(viewerRole);
-
-        return new SnapshotMessage(board.width(), board.height(), scan.pieces(), selected.orElse(null), legalMoves,
-                scoresByName(), moveLogByName(), engine.isGameOver(), winner, engine.now(),
-                engine.activeMotions(), collectJumps(scan.positionByPiece()), engine.recentCaptureEffects(),
+        return snapshotBuilder.build(board, engine, commandController, viewerRole,
                 restartRequestedByViewer, disconnectSecondsRemaining(), isWaitingForOpponent());
-    }
-
-    // סורק את כל הלוח (row/col) פעם אחת - אוסף גם PieceDto לשידור וגם piece->position לצורך collectJumps.
-    private BoardScan scanBoard() {
-        List<PieceDto> pieces = new ArrayList<>();
-        Map<Piece, Position> positionByPiece = new HashMap<>();
-        for (int row = 0; row < board.height(); row++) {
-            for (int col = 0; col < board.width(); col++) {
-                Position position = new Position(row, col);
-                board.pieceAt(position).ifPresent(piece -> {
-                    pieces.add(PieceDto.from(piece, position));
-                    positionByPiece.put(piece, position);
-                });
-            }
-        }
-        return new BoardScan(pieces, positionByPiece);
-    }
-
-    // ממיר את כל הקפיצות הפעילות ל-DTO; JumpVisual לא יודע את מיקומו בעצמו, לכן משתמשים במפה מ-scanBoard.
-    // (motions/captureEffects לא צריכים המרה כזו - engine.activeMotions()/recentCaptureEffects() כבר משודרים ישירות.)
-    private List<JumpDto> collectJumps(Map<Piece, Position> positionByPiece) {
-        List<JumpDto> jumps = new ArrayList<>();
-        for (JumpVisual jump : engine.activeJumps()) {
-            Position position = positionByPiece.get(jump.piece());
-            if (position != null) {
-                jumps.add(JumpDto.from(jump, position));
-            }
-        }
-        return jumps;
-    }
-
-    // ממיר Map<PieceColor,Integer> של הניקוד ל-Map<String,Integer> לפי שם הצבע, לשידור ב-JSON.
-    private Map<String, Integer> scoresByName() {
-        Map<String, Integer> byName = new HashMap<>();
-        engine.scores().forEach((color, score) -> byName.put(color.name(), score));
-        return byName;
-    }
-
-    // ממיר Map<PieceColor,List<String>> של יומן המהלכים ל-Map<String,List<String>>, לשידור ב-JSON.
-    private Map<String, List<String>> moveLogByName() {
-        Map<String, List<String>> byName = new HashMap<>();
-        engine.moveLog().forEach((color, log) -> byName.put(color.name(), log));
-        return byName;
     }
 }

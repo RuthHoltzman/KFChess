@@ -9,10 +9,15 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * מנתב קלט מודע-צבע עבור GameEngine, לשימוש השרת: מאפשר לשני שחקנים
- * לפעול בו-זמנית ובאופן עצמאי על אותו GameEngine - כל צבע עם "בחירה
- * נוכחית" משלו, בלי שקליק של שחקן אחד יתפרש כהשלמת מהלך של השני
- * (מה שהיה קורה עם selectedPosition היחיד/משותף של GameEngine, שמתאים
+ * ה-Controller של שכבת הרשת בצד השרת (מקביל תפקידית ל-
+ * {@code kfchess.client.NetworkClickHandler} בצד הלקוח): מקבל "מה נלחץ,
+ * ע"י מי" ומנתב את זה ל-{@link GameEngine} - בלי לממש שום כלל משחק בעצמו.
+ * שמו הישן היה {@code NetworkActions}; שונה כדי שהתפקיד האדריכלי (קונטרולר)
+ * יהיה גלוי מהשם, לא רק מהתיעוד (ר' PROGRESS.md, "חבילת controller מפורשת").
+ * <p>
+ * מאפשר לשני שחקנים לפעול בו-זמנית ובאופן עצמאי על אותו GameEngine - כל
+ * צבע עם "בחירה נוכחית" משלו, בלי שקליק של שחקן אחד יתפרש כהשלמת מהלך של
+ * השני (מה שהיה קורה עם selectedPosition היחיד/משותף של GameEngine, שמתאים
  * למשחק מקומי חד-שחקן אבל לא לרשת).
  * <p>
  * חי באותה חבילה (kfchess.engine) כדי לראות את החברים package-private
@@ -20,12 +25,12 @@ import java.util.Optional;
  * כל לוגיקת חוקי המשחק עצמה נשארת אך ורק ב-GameEngine; המחלקה הזו רק
  * מנתבת קליק לשחקן הנכון ואוכפת שכל שחקן נוגע רק בכלים של עצמו.
  */
-public class NetworkActions {
+public class GameCommandController {
 
     private final GameEngine engine;
     private final Map<PieceColor, Position> selectedPositionByColor = new EnumMap<>(PieceColor.class);
 
-    public NetworkActions(GameEngine engine) {
+    public GameCommandController(GameEngine engine) {
         this.engine = engine;
     }
 

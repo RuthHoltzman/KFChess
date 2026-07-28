@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * בודק את פענוח פרוטוקול ההודעות הנכנסות מהלקוח (ר' ההחלטה ב-PROGRESS.md:
  * {"type":"CLICK","row":..,"col":..}) ואת בדיקת התקינות הבסיסית לפני
- * שהפקודה מנותבת ל-NetworkActions.
+ * שהפקודה מנותבת ל-GameCommandController.
  */
 class ClientCommandTest {
 
