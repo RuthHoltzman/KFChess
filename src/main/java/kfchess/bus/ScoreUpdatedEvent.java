@@ -2,6 +2,7 @@ package kfchess.bus;
 
 import kfchess.model.PieceColor;
 
-/** מתפרסם כל פעם שהניקוד של צבע מסוים משתנה (אחרי לכידה). */
+
+/** Fired whenever a color's score changes (e.g. after a capture). */
 public record ScoreUpdatedEvent(PieceColor color, int newScore) implements GameEvent {
 }

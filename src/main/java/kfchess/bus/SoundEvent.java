@@ -1,6 +1,7 @@
 package kfchess.bus;
 
-/** מתפרסם כדי לבקש מה-UI לנגן אפקט קול מתאים. */
+
+/** Fired to trigger a sound effect for a move/capture/illegal-action. */
 public record SoundEvent(Type type) implements GameEvent {
     public enum Type { MOVE, CAPTURE, ILLEGAL }
 }
