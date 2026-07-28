@@ -11,6 +11,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 
+/** Home screen: lets the player Play (matchmaking) or open the Room dialog (Create/Join). */
 public class HomeScreen {
 
     private static final String SERVER_HOST_AND_PORT = "ws://localhost:8887";
@@ -19,10 +20,13 @@ public class HomeScreen {
     private static final String CREATE_ROOM_PATH = "_create";
     private static final long GAME_ID_WAIT_TIMEOUT_MILLIS = 2000;
     private static final long GAME_ID_POLL_INTERVAL_MILLIS = 20;
+
+    /** Opens the home screen window for the given account (or anonymously, if null). */
     public static void launch(Account account) {
         SwingUtilities.invokeLater(() -> buildAndShow(account));
     }
 
+    /** Builds the server WebSocket URI for a specific room, with the username as an optional query parameter. */
     public static String buildUri(String room, String username) {
         String trimmed = room == null ? "" : room.trim();
         String resolvedRoom = trimmed.isEmpty() ? DEFAULT_ROOM : trimmed;
@@ -33,8 +37,8 @@ public class HomeScreen {
         return base + "?username=" + URLEncoder.encode(username, StandardCharsets.UTF_8);
     }
 
-    // בונה URI לבקשת matchmaking (כפתור "Play", שלב 5 חלק 2) - נתיב שמור
-    // (MATCHMAKING_PATH); אותה שיטת קידוד username בדיוק כמו buildUri.
+
+    /** Builds the server WebSocket URI for the Play/matchmaking endpoint. */
     public static String buildMatchmakingUri(String username) {
         String base = SERVER_HOST_AND_PORT + "/" + MATCHMAKING_PATH;
         if (username == null || username.isBlank()) {
@@ -43,9 +47,8 @@ public class HomeScreen {
         return base + "?username=" + URLEncoder.encode(username, StandardCharsets.UTF_8);
     }
 
-    // בונה URI לבקשת "Create room" (שלב 6, כפתור Create בדיאלוג Room) -
-    // נתיב שמור אחר (CREATE_ROOM_PATH) - מתעלם לגמרי משדה טקסט כלשהו,
-    // כי ה-gameId נוצר ע"י השרת (ר' GameServer.createNewRoomGameId), לא ע"י הלקוח.
+
+    /** Builds the server WebSocket URI for creating a brand-new room. */
     public static String buildCreateRoomUri(String username) {
         String base = SERVER_HOST_AND_PORT + "/" + CREATE_ROOM_PATH;
         if (username == null || username.isBlank()) {
@@ -54,11 +57,8 @@ public class HomeScreen {
         return base + "?username=" + URLEncoder.encode(username, StandardCharsets.UTF_8);
     }
 
-    // בונה את חלון הבית עצמו: כפתור "Play" (matchmaking, ר' buildMatchmakingUri)
-    // + כפתור "Room..." (פותח דיאלוג Create/Join/Cancel, ר' showRoomDialog)
-    // + label לסטטוס/שגיאות, ובנוסף שורת "Logged in as" אם הגיעה לכאן דרך
-    // launch(Account) אחרי login (account != null). רץ על ה-EDT (נקראת
-    // רק מתוך main()/launch() דרך invokeLater).
+
+    /** Builds and displays the home screen UI (Play button + Room... button). */
     private static void buildAndShow(Account account) {
         JFrame frame = new JFrame("KFChess - Home");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -91,11 +91,8 @@ public class HomeScreen {
         frame.setVisible(true);
     }
 
-    // דיאלוג "Room →" (שלב 6): תיבת טקסט + שלושה כפתורים בדיוק לפי המפרט -
-    // Create (מתעלם מהתיבה, מבקש מהשרת gameId חדש - ר' buildCreateRoomUri),
-    // Join (מתחבר לפי ה-ID שהוקלד - buildUri הרגילה), Cancel (סוגר בלי
-    // לעשות כלום). מודלי (modal, ר' הבנאי) כדי שאי אפשר ללחוץ בטעות על
-    // "Play" במסך הבית שמתחתיו כל עוד הדיאלוג פתוח.
+
+    /** Shows the Room dialog: text field + Create/Join/Cancel buttons. */
     private static void showRoomDialog(JFrame homeFrame, String username, JLabel homeStatusLabel,
                                         JButton playButton, JButton roomButton) {
         JDialog dialog = new JDialog(homeFrame, "Room", true);
@@ -125,10 +122,7 @@ public class HomeScreen {
             connect(homeFrame, buildCreateRoomUri(username), username, homeStatusLabel, playButton, roomButton);
         });
         joinButton.addActionListener(e -> {
-            // Join בלי ID מוקלד לא הגיוני (Join אמורה תמיד להתייחס לקוד
-            // שמישהי אחרת יצרה עם Create) - בניגוד ל-buildUri עצמה, שעדיין
-            // נופלת ל-DEFAULT_ROOM על קלט ריק (לשמירת תאימות טסטים קיימים) -
-            // כאן, בדיאלוג עצמו, פשוט לא מתחברים בכלל ומראים הודעה מקומית.
+
             if (roomIdField.getText().isBlank()) {
                 dialogStatusLabel.setForeground(Color.RED);
                 dialogStatusLabel.setText("Enter a room ID to join");
@@ -145,16 +139,8 @@ public class HomeScreen {
         dialog.setVisible(true);
     }
 
-    // מטפל בלחיצה על Play, Create או Join: מתחבר ב-thread נפרד, כי
-    // connectBlocking() חוסם - קריאה לו ישירות מה-EDT הייתה מקפיאה את
-    // החלון (ואת כל Swing) עד שההתחברות תצליח או תיכשל. מקבלת uriText
-    // **מוכן** במקום לבנות אותו כאן - כך שכל נתיבי ההתחברות קוראים
-    // לאותה מתודה בדיוק, רק עם URI שונה (buildUri/buildMatchmakingUri/
-    // buildCreateRoomUri) שנבנה לפני הקריאה. buttonsToToggle (varargs) -
-    // כל כפתורי מסך הבית מושבתים יחד בזמן חיבור (לא רק זה שנלחץ), כדי
-    // שלא אפשר לפתוח בטעות שני חיבורים במקביל. username מועבר בנפרד
-    // (לא נחלץ מ-uriText בחזרה) כדי ש-NetworkGameWindow יוכל להציג
-    // אותו על המסך - הוא כבר "ידוע" כאן לפני שנבנה ה-uri עצמו.
+
+    /** Connects to the server on a background thread, then opens the game window on success. */
     private static void connect(JFrame homeFrame, String uriText, String username, JLabel statusLabel,
                                  JButton... buttonsToToggle) {
         setButtonsEnabled(buttonsToToggle, false);
@@ -174,9 +160,6 @@ public class HomeScreen {
 
             GameClient finalClient = client;
             if (connected) {
-                // ROLE_ASSIGNED (כולל ה-gameId בפועל - חשוב במיוחד ל-Create,
-                // ר' waitForAssignedGameId) מגיעה כהודעת רשת נפרדת, קצת אחרי
-                // שה-handshake עצמו הסתיים - עדיין על thread הרקע, לפני שעוברים ל-EDT.
                 String gameId = waitForAssignedGameId(finalClient);
                 SwingUtilities.invokeLater(() -> {
                     homeFrame.dispose();
@@ -188,12 +171,8 @@ public class HomeScreen {
         }, "home-screen-connect").start();
     }
 
-    // ממתינה (על thread הרקע - חסימה כאן בסדר גמור, בדיוק כמו connectBlocking
-    // עצמה) עד ש-GameClient.assignedGameId() יתמלא, או עד timeout. לרוב
-    // חוזרת כמעט מיד (ROLE_ASSIGNED היא ההודעה הראשונה שהשרת שולח, מיד
-    // אחרי onOpen) - אם בכל זאת timeout (תקלת רשת חריגה), מחזירה null,
-    // ו-NetworkGameWindow.launch פשוט תציג gameId=null בכותרת (לא קריטי,
-    // לא חוסם את המשחק עצמו בכלל).
+
+    /** Polls the client until the server assigns a game id, or the timeout elapses. */
     private static String waitForAssignedGameId(GameClient client) {
         long deadline = System.currentTimeMillis() + GAME_ID_WAIT_TIMEOUT_MILLIS;
         while (client.assignedGameId() == null && System.currentTimeMillis() < deadline) {
@@ -207,14 +186,15 @@ public class HomeScreen {
         return client.assignedGameId();
     }
 
-    // מציגה הודעת כישלון בחלון הבית עצמו (label קיים, בלי popup) ומחזירה
-    // את כל הכפתורים למצב פעיל - כדי שאפשר יהיה לנסות שוב.
+
+    /** Shows a connection failure message and re-enables the buttons. */
     private static void showFailure(JLabel statusLabel, String message, JButton... buttonsToToggle) {
         statusLabel.setForeground(Color.RED);
         statusLabel.setText(message);
         setButtonsEnabled(buttonsToToggle, true);
     }
 
+    /** Enables or disables a set of buttons at once. */
     private static void setButtonsEnabled(JButton[] buttons, boolean enabled) {
         for (JButton button : buttons) {
             button.setEnabled(enabled);

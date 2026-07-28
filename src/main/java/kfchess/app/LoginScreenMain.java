@@ -9,25 +9,17 @@ import javax.swing.*;
 import java.awt.*;
 import java.util.Optional;
 
-/**
- * מסך login/register (שלב 4, "v1") - חלון Swing נפרד לפני מסך הבית
- * (HomeScreen), באותו סגנון פשוט בדיוק (BoxLayout, בלי עיצוב מיוחד).
- * Login ו-Register הם שני כפתורים נפרדים (לא auto-register) - מישהי
- * שמקלידה username שלא קיים ולוחצת Login מקבלת שגיאה, לא חשבון חדש
- * בלי כוונה. גישה לקובץ ה-DB היא סינכרונית (בניגוד ל-connect() ב-
- * HomeScreen) כי קריאה/כתיבה ל-SQLite מקומי מהירה מספיק שלא צריך
- * thread נפרד כדי לא להקפיא את ה-EDT.
- */
+
+/** Login/register screen: the only main() entry point for running the client. */
 public class LoginScreenMain {
 
+    /** Application entry point: opens the login/register screen. */
     public static void main(String[] args) {
         AccountRepository repository = new SqliteAccountRepository(SqliteAccountRepository.DEFAULT_DB_FILE);
         SwingUtilities.invokeLater(() -> buildAndShow(repository));
     }
 
-    // בודקת שדות ריקים/רק-רווחים לפני שפונים בכלל ל-repository - פונקציה
-    // טהורה ונפרדת מה-UI כדי שתהיה ניתנת לבדיקה בלי להרים חלון Swing
-    // (כמו buildUri ב-HomeScreen).
+    /** Checks that both username and password were actually entered. */
     public static Optional<String> validate(String username, String password) {
         if (username == null || username.trim().isEmpty()) {
             return Optional.of("Username is required");
@@ -38,6 +30,7 @@ public class LoginScreenMain {
         return Optional.empty();
     }
 
+    /** Builds and displays the login/register UI. */
     private static void buildAndShow(AccountRepository repository) {
         JFrame frame = new JFrame("KFChess - Login");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -76,9 +69,8 @@ public class LoginScreenMain {
         frame.setVisible(true);
     }
 
-    // מטפל בלחיצה על Login: מאמת שדות, ואז שואל את ה-repository אם
-    // username+password תואמים לחשבון קיים - הצלחה סוגרת את מסך ה-login
-    // ופותחת את מסך הבית עם ה-Account שהתקבל (HomeScreen.launch).
+
+    /** Handles the Login button: validates input, then authenticates against the repository. */
     private static void handleLogin(JFrame frame, AccountRepository repository, JTextField usernameField,
                                      JPasswordField passwordField, JLabel statusLabel) {
         String username = usernameField.getText();
@@ -98,9 +90,8 @@ public class LoginScreenMain {
         }
     }
 
-    // מטפל בלחיצה על Register: מאמת שדות, ואז מנסה ליצור חשבון חדש -
-    // UsernameTakenException (מ-SqliteAccountRepository) מוצגת כשגיאה
-    // רגילה ב-label, בדיוק כמו כל שגיאה אחרת כאן.
+
+    /** Handles the Register button: validates input, then creates a new account. */
     private static void handleRegister(JFrame frame, AccountRepository repository, JTextField usernameField,
                                         JPasswordField passwordField, JLabel statusLabel) {
         String username = usernameField.getText();
@@ -120,8 +111,8 @@ public class LoginScreenMain {
         }
     }
 
-    // מציגה הודעת כישלון בחלון ה-login עצמו (label קיים, בלי popup) - אותה
-    // גישה בדיוק כמו HomeScreen.showFailure.
+
+    /** Shows a validation or authentication error message. */
     private static void showFailure(JLabel statusLabel, String message) {
         statusLabel.setForeground(Color.RED);
         statusLabel.setText(message);

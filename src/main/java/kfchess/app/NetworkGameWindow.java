@@ -24,38 +24,27 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * חלון Swing במצב רשת - בלי GameEngine מקומי בכלל: כל מצב המשחק מגיע
- * מהשרת (ר' GameClient), עובר שחזור (ClientSnapshotReconstructor) חזרה
- * לאובייקטי תחום אמיתיים, ואז מצויר דרך SnapshotFactory/GameSceneView -
- * זו ההחלטה שתועדה מראש ב-PROGRESS.md ("קוד הציור נשאר משותף").
- * <p>
- * קליק/קליק-ימני לא נוגעים במנוע בכלל - הם רק שולחים CLICK/JUMP לשרת
- * (GameClient.sendClick/sendJump); השרת הוא היחיד שמחליט אם הפעולה
- * חוקית (כולל דחיית קליקים של צופה - ר' GameSession.applyCommand),
- * ולכן אין כאן שום כפילות של הבדיקה הזו בצד הלקוח.
+ * The game window itself, network-only: no local GameEngine at all. Game
+ * state always comes from the server, gets rebuilt into real domain
+ * objects by ClientSnapshotReconstructor, and is painted through the same
+ * SnapshotFactory/GameSceneView the local game used to use. Clicks never
+ * touch any engine - they only send CLICK/JUMP to the server, which is the
+ * sole authority on whether a move is legal.
  */
 public class NetworkGameWindow {
 
     private static final int INITIAL_CELL_SIZE = 100;
     private static final int SIDE_PANEL_WIDTH = 240;
-    // גודל לוח זמני, רק כדי שהחלון יוכל להיפתח *לפני* שמתקבל snapshot
-    // ראשון מהשרת - מוחלף מיד ברגע שמגיעה הודעה אמיתית (ר' boardWidthCells
-    // /boardHeightCells שכבר מגיעים ברשת, לא hard-code בפועל).
+    // Placeholder board size, only so the window can open before the first
+    // snapshot arrives - replaced immediately once a real message comes in.
     private static final int PLACEHOLDER_BOARD_SIZE = 8;
 
-    // פותחת את חלון המשחק עבור לקוח שכבר מחובר לשרת (connectBlocking() כבר
-    // הצליח) - נקראת מ-HomeScreen אחרי שהיא מחברת GameClient משלה
-    // (לפי room שהוזן במסך הבית), בלי לשכפל כאן את כל חיווט ה-Swing/Timer.
-    // אין כאן main() עצמאי בכוונה - kfchess.app.LoginScreenMain הוא המיין
-    // היחיד להרצת הלקוח (Login/Register → room → המסך הזה, בשרשרת אחת).
-    // gameId (שלב 6): נכתב "בראש המסך" (כותרת החלון, ר' Img.setTitle) -
-    // חשוב במיוחד ל"Create room", שם ה-HomeScreen לא ידע את ה-ID
-    // מראש בכלל (השרת המציא אותו) - ר' HomeScreen.waitForAssignedGameId.
-    // username (בקשת רות - להציג "שם שחקן" על המסך): מגיע כאן עכשיו גם
-    // הוא, מ-HomeScreen (שכבר ידעה אותו מה-Account, רק לא העבירה
-    // קודם). role - client.assignedRole() אמור להיות כבר מוכן בשלב הזה
-    // (מגיעה באותה הודעת ROLE_ASSIGNED בדיוק כמו gameId - ר' GameClient.onMessage,
-    // ו-HomeScreen.waitForAssignedGameId שכבר מחכה לה).
+    /**
+     * Opens the game window for a client that is already connected to the
+     * server. Called from HomeScreen after it connects its own GameClient.
+     * Has no standalone main() on purpose - kfchess.app.LoginScreenMain is
+     * the single entry point for running the client.
+     */
     public static void launch(GameClient client, String gameId, String username) {
         Img.setTitle("KFChess - Room: " + gameId);
         Gson gson = new Gson();
@@ -65,19 +54,17 @@ public class NetworkGameWindow {
         ClientRole role = client.assignedRole();
         BoardView boardView = new BoardView("src/main/resources/board.png");
         GameSceneView sceneView = new GameSceneView(boardView, SIDE_PANEL_WIDTH, gameId, role, username);
-        // sceneView צריך להיבנות לפני clickHandler - הוא נחוץ ל-NetworkClickHandler
-        // כדי לשאול restartButtonBounds() (ר' תיעוד שם) כשהמשחק נגמר.
+        // sceneView must be built before clickHandler - NetworkClickHandler needs
+        // it to ask restartButtonBounds() once the game is over.
         NetworkClickHandler clickHandler = new NetworkClickHandler(client, new BoardMapper(), sceneView);
         Img windowAnchor = new Img();
 
-        // "מצב אחרון ידוע" - מתחיל ריק (אין עדיין נתונים מהשרת), ומתעדכן
-        // בכל הודעת SNAPSHOT חדשה. מערך של איבר אחד - כדי שניתן יהיה
-        // לשנות אותו מתוך למבדה (קליק, Timer).
+        // "Latest known state" - starts empty, updated on every new SNAPSHOT
+        // message. Wrapped in a one-element array so lambdas (click, Timer) can mutate it.
         ClientSnapshotReconstructor.Reconstructed[] latest = { emptyReconstructedBeforeFirstSnapshot() };
         String[] lastProcessedMessage = { null };
 
-        // רינדור ראשון - עוד אין frame, אז BoardLayoutCalculator.currentContentSize
-        // נופלת חזרה לגודל התחלתי קבוע. זה גם מה שפותח את החלון בפועל (show()).
+        // First render - also what actually opens the window (show()).
         renderFrame(snapshotFactory, sceneView, windowAnchor, latest);
 
         javax.swing.SwingUtilities.invokeLater(() -> {
@@ -101,13 +88,7 @@ public class NetworkGameWindow {
         timer.start();
     }
 
-    // תיקון "Play" לפי המפרט המדויק - "pops up a message that can't find"
-    // (ר' MatchmakingTimeoutMessage/GameClient.matchmakingTimeoutMessage).
-    // אין כרגע מסלול "חזרה למסך הבית" בכלל (ברגע שנכנסים לחלון המשחק, אין
-    // back) - רות אישרה במפורש שסגירת התהליך היא ההתנהגות הרצויה כאן,
-    // בדיוק כמו סגירת החלון הרגילה (frame.setDefaultCloseOperation ב-Img
-    // כבר EXIT_ON_CLOSE ממילא). popup חוסם (showMessageDialog) לפני היציאה,
-    // כדי שהמשתמשת בהכרח תראה את ההודעה לפני שהחלון נעלם.
+    /** Shows a blocking popup when Play matchmaking times out, then exits the process. */
     private static void handleMatchmakingTimeout(String message) {
         javax.swing.SwingUtilities.invokeLater(() -> {
             JOptionPane.showMessageDialog(null, message, "KFChess", JOptionPane.INFORMATION_MESSAGE);
@@ -115,10 +96,7 @@ public class NetworkGameWindow {
         });
     }
 
-    // "מצב ריק" להצגה לפני שהתקבלה אפילו הודעה אחת מהשרת - כדי שהחלון
-    // ייפתח מיד עם ההתחברות, בלי לחכות ל-snapshot ראשון (שעלול לקחת
-    // כמה מילישניות). PLACEHOLDER_BOARD_SIZE משמש רק לפריסה ההתחלתית -
-    // מוחלף מיד במידות האמיתיות מהשרת ברגע שמגיעה הודעה.
+    /** Empty state shown before any server message has arrived, so the window opens immediately. */
     private static ClientSnapshotReconstructor.Reconstructed emptyReconstructedBeforeFirstSnapshot() {
         return new ClientSnapshotReconstructor.Reconstructed(
                 Board.createDefault(PLACEHOLDER_BOARD_SIZE, PLACEHOLDER_BOARD_SIZE),
@@ -126,11 +104,7 @@ public class NetworkGameWindow {
                 false);
     }
 
-    // נקרא בכל טיק של ה-Timer: קורא את ההודעה האחרונה שהתקבלה מ-GameClient
-    // (ר' GameClient.latestMessage) ומעדכן את latest[0] רק אם זו הודעת
-    // SNAPSHOT *חדשה* (לא ROLE_ASSIGNED/ERROR, ולא אותה הודעה שכבר עובדה) -
-    // כדי לא לפענח/לשחזר שוב את אותו JSON 60 פעם בשנייה כשמגיעות רק ~30
-    // הודעות SNAPSHOT בשנייה מהשרת.
+    /** Reads the latest message from the server and decodes it, only if it's a new SNAPSHOT. */
     private static void pollAndDecode(GameClient client, Gson gson, ClientSnapshotReconstructor reconstructor,
                                        String[] lastProcessedMessage,
                                        ClientSnapshotReconstructor.Reconstructed[] latest) {
@@ -143,11 +117,7 @@ public class NetworkGameWindow {
         latest[0] = reconstructor.reconstruct(incoming);
     }
 
-    // מטפל בקליק (רגיל/ימני) על הלוח: מחשב את ה-BoardLayout הנוכחי (תלוי
-    // בגודל החלון בפועל + מידות הלוח האחרונות שהתקבלו - לא ניתן להוציא
-    // מכאן, כי שניהם תלויים במצב חי של Swing/latest[0]) ומעביר אותו ל-
-    // NetworkClickHandler, שמטפל בהמרת פיקסל→מיקום ובשליחה לשרת (ר' תיעוד
-    // המחלקה שם - שם גם נבדקת הלוגיקה הזו בפועל, בלי Swing/רשת אמיתיים).
+    /** Routes a click/right-click on the board to NetworkClickHandler, with the current layout. */
     private static void handleClick(NetworkClickHandler clickHandler, Img windowAnchor,
                                      ClientSnapshotReconstructor.Reconstructed[] latest,
                                      int pixelX, int pixelY, boolean isJump) {
@@ -156,16 +126,7 @@ public class NetworkGameWindow {
         clickHandler.handle(pixelX, pixelY, layout, latest[0].gameOver(), isJump);
     }
 
-    // מרכזת את חישוב ה-BoardLayout במקום אחד, נקראת גם מ-handleClick וגם
-    // מ-renderFrame - בדיוק העיקרון שכתוב ב-BoardLayoutCalculator עצמה
-    // ("שני מקומות שמחשבים דבר דומה בנפרד מתבדרים זה מזה"). בקשת רות (פס
-    // שם-חדר קבוע, ר' GameSceneView.roomHeaderHeight): הלוח/פאנלים כבר לא
-    // מקבלים את כל שטח החלון - יש להחסיר מהשטח הפנוי-לחישוב את גובה הפס
-    // *לפני* קריאה ל-BoardLayoutCalculator.computeLayout (כדי שהלוח לא
-    // ייחשב גדול מדי ו"יגלוש" מתחת לפס, מה שהיה גם גורם ל-drawOn לזרוק
-    // IllegalArgumentException בתוך GameSceneView.render בפועל) - ואז
-    // להוסיף את אותו גובה בחזרה ל-offsetY המתקבל, כדי שהלוח יתחיל בפועל
-    // *מתחת* לפס, לא מוסתר תחתיו.
+    /** Computes the board's on-screen layout, reserving space for the room header strip at the top. */
     private static BoardLayout computeBoardLayout(Img windowAnchor, Board board) {
         Dimension fullContent = BoardLayoutCalculator.currentContentSize(windowAnchor, SIDE_PANEL_WIDTH, INITIAL_CELL_SIZE);
         int headerHeight = GameSceneView.roomHeaderHeight();
@@ -176,11 +137,7 @@ public class NetworkGameWindow {
                 layout.offsetY() + headerHeight);
     }
 
-    // מרכיב GameSnapshot מהמצב האחרון הידוע (latest[0]) ומצייר אותו - נקרא
-    // בכל טיק, גם כשלא הגיעה הודעה חדשה (כדי שהציור יגיב מיד לשינוי גודל
-    // חלון). הבנייה מחדש של ה-layout בכל קריאה (ולא שימוש ב-layout ששמור
-    // מרגע הפענוח) היא מה שמונע פיקסלים "תקועים" אם המשתמשת משנה גודל
-    // חלון בין שתי הודעות SNAPSHOT.
+    /** Builds a GameSnapshot from the latest known state and paints it; runs every timer tick. */
     private static void renderFrame(SnapshotFactory snapshotFactory, GameSceneView sceneView, Img windowAnchor,
                                      ClientSnapshotReconstructor.Reconstructed[] latest) {
         ClientSnapshotReconstructor.Reconstructed state = latest[0];
