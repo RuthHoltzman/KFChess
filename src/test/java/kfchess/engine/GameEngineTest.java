@@ -41,9 +41,8 @@ class GameEngineTest {
         board.placePiece(new Position(0, 1), defender);
         GameEngine engine = newEngine(board);
 
-        engine.handleJump(new Position(0, 1)); // defender starts jumping (1000ms)
-        engine.handleClick(new Position(0, 0)); // select attacker
-        engine.handleClick(new Position(0, 1)); // attacker moves onto the jumping defender (1 square, 1000ms travel)
+        engine.beginJump(defender); // defender starts jumping (1000ms)
+        engine.tryMove(attacker, new Position(0, 0), new Position(0, 1)); // attacker moves onto the jumping defender (1 square, 1000ms travel)
 
         engine.handleWait(1000); // arrival == jump end; arrivals resolve before jump-expiry (see engine comment)
 
@@ -60,9 +59,8 @@ class GameEngineTest {
         board.placePiece(new Position(0, 1), defender);
         GameEngine engine = newEngine(board);
 
-        engine.handleJump(new Position(0, 1));
-        engine.handleClick(new Position(0, 0));
-        engine.handleClick(new Position(0, 1));
+        engine.beginJump(defender);
+        engine.tryMove(attacker, new Position(0, 0), new Position(0, 1));
         engine.handleWait(1000);
 
         assertTrue(board.pieceAt(new Position(0, 0)).isEmpty());
@@ -80,8 +78,7 @@ class GameEngineTest {
         board.placePiece(new Position(0, 1), defender);
         GameEngine engine = newEngine(board);
 
-        engine.handleClick(new Position(0, 0));
-        engine.handleClick(new Position(0, 1));
+        engine.tryMove(attacker, new Position(0, 0), new Position(0, 1));
         engine.handleWait(1000);
 
         assertEquals(1, engine.scores().get(PieceColor.WHITE));
