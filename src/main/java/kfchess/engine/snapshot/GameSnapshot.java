@@ -5,6 +5,7 @@ import kfchess.model.Position;
 import java.util.List;
 import java.util.Map;
 
+/** Immutable wire/DTO form of the whole game state, sent to the client each tick. */
 public record GameSnapshot(
         int boardWidthCells,
         int boardHeightCells,
@@ -21,7 +22,7 @@ public record GameSnapshot(
         boolean waitingForOpponent
 ) {
     public GameSnapshot {
-        pieces = List.copyOf(pieces); // הגנה - אי אפשר לשנות את הרשימה אחרי היצירה
+        pieces = List.copyOf(pieces); // defensive copy - collections can't be mutated after construction
         captureEffects = List.copyOf(captureEffects);
         legalMoves = List.copyOf(legalMoves);
         scores = Map.copyOf(scores);

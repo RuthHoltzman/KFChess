@@ -6,15 +6,14 @@ import kfchess.model.PieceState;
 import java.util.HashMap;
 import java.util.Map;
 
+/** Derives each piece's visual state (idle/moving/jumping/resting) from its logical state over time. */
 public class PieceVisualStateTracker {
 
-    // משכי המנוחה עצמם (כמה זמן שעון החול נמשך) הם עכשיו מוגדרים במקום
-    // אחד בלבד - PieceTimers - כי הם גם קובעים בפועל כמה זמן הכלי חסום
-    // מפעולה (לא רק כמה זמן מציירים עליו אנימציה). כך אי אפשר להגיע
-    // למצב שבו הוויזואל והלוגיקה "מתפצלים" ומראים משכי זמן שונים.
+
     private static final long SHORT_REST_MS = PieceTimers.SHORT_REST_DURATION_MS;
     private static final long LONG_REST_MS = PieceTimers.LONG_REST_DURATION_MS;
 
+    /** Per-piece bookkeeping: last known logical state, current visual state, and when it started. */
     private static class Entry {
         PieceState lastKnownLogicalState;
         PieceVisualState visualState;
@@ -23,7 +22,7 @@ public class PieceVisualStateTracker {
 
     private final Map<Piece, Entry> entries = new HashMap<>();
 
-    // נקרא פעם בכל render tick, לכל כלי, עם "עכשיו" (אותו elapsedMillis שכבר יש לך)
+/** Updates and returns the piece's current visual state, transitioning it as its logical state changes. */
 public PieceVisualState resolve(Piece piece, long now) {
     Entry entry = entries.computeIfAbsent(piece, p -> {
         Entry e = new Entry();
@@ -67,17 +66,14 @@ public PieceVisualState resolve(Piece piece, long now) {
     return entry.visualState;
 }
 
-    // כמה זמן אנחנו כבר במצב הוויזואלי הנוכחי - נחוץ לחישוב frame index נכון (state-relative, לא global!)
+    /** How long the piece has been in its current visual state, in milliseconds. */
     public long elapsedInCurrentVisualState(Piece piece, long now) {
         Entry entry = entries.get(piece);
         return entry == null ? 0 : now - entry.visualStateEnteredAt;
     }
 
-    /**
-     * שבר ההתקדמות (0..1) בתוך מנוחה (SHORT_REST/LONG_REST).
-     * 0 = בדיוק נכנס למנוחה, 1 = המנוחה עומדת להסתיים.
-     * מחוץ למנוחה מחזיר 0 - שכבת ה-UI פשוט לא תצייר את אפקט "שעון החול".
-     */
+
+    /** How far through its rest cooldown the piece is, from 0.0 (just started) to 1.0 (done). */
     public double restProgress(Piece piece, long now) {
         Entry entry = entries.get(piece);
         if (entry == null) {

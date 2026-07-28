@@ -11,15 +11,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/** Builds an immutable GameSnapshot (DTO) from the engine's live, mutable game state. */
 public class SnapshotFactory {
 
-    // כמה גבוה (כשבר מגובה המשבצת) הכלי "עולה" בשיא הקפיצה - קבוע חזותי
-    // טהור, לא קשור ללוגיקת המשחק. 0.35 נבחר כי זה מספיק בולט לעין בלי
-    // שהכלי "יקפוץ" מחוץ למשבצת השכנה.
-    private static final double JUMP_HEIGHT_FRACTION = 0.35;
+
+    private static final double JUMP_HEIGHT_FRACTION = 0.5;
 
     private final PieceVisualStateTracker visualStateTracker = new PieceVisualStateTracker();
 
+    /** Assembles a full GameSnapshot: piece positions/visuals, capture effects, scores, and status flags. */
     public GameSnapshot createSnapshot(
             Board board,
             int cellWidth,
@@ -38,17 +38,13 @@ public class SnapshotFactory {
             Integer disconnectSecondsRemaining,
             boolean waitingForOpponent
     ) {
-        // מיפוי כלי -> Motion פעיל, כדי לדעת עבור כל כלי אם הוא "בדרך"
-        // כרגע ולחשב עבורו מיקום פיקסלים מתקדם (הליכה) ולא רק את המשבצת
-        // המקורית (מה שהיה נראה כמו "קפיצה" ליעד ברגע שהמהלך הסתיים).
+
         Map<Piece, Motion> motionByPiece = new HashMap<>();
         for (Motion motion : activeMotions) {
             motionByPiece.put(motion.piece(), motion);
         }
 
-        // מיפוי כלי -> קפיצה פעילה, כדי לחשב לכלים קופצים היסט אנכי
-        // (קשת עלייה-ירידה) בנוסף לאנימציית הספרייטים - כך שגם אם הפריימים
-        // עצמם דומים, רואים בבירור שהכלי "קפץ" ולא רק החליף פריים במקום.
+
         Map<Piece, JumpVisual> jumpByPiece = new HashMap<>();
         for (JumpVisual jump : activeJumps) {
             jumpByPiece.put(jump.piece(), jump);
@@ -79,10 +75,7 @@ public class SnapshotFactory {
                         pixelX = pos.col() * cellWidth;
                         pixelY = pos.row() * cellHeight;
 
-                        // כלי קופץ לא זז בין משבצות (הוא נשאר במקומו), ולכן
-                        // לא עובר דרך ה-Motion branch למעלה - כאן מוסיפים לו
-                        // היסט אנכי זמני לפי שבר ההתקדמות בתוך הקפיצה: עולה
-                        // עד מחצית הזמן (progress=0.5) ויורד בחזרה עד הנחיתה.
+
                         JumpVisual jump = jumpByPiece.get(piece);
                         if (jump != null) {
                             double progress = progressBetween(jump.startTime(), jump.endTime(), now);
@@ -106,7 +99,7 @@ public class SnapshotFactory {
             double progress = progressBetween(
                     effect.removedAt(), effect.removedAt() + CaptureEffectTracker.CAPTURE_EFFECT_DURATION_MS, now);
             if (progress >= 1.0) {
-                continue; // כבר דהה לגמרי - GameEngine ינקה אותו בטיק הבא, אין מה לצייר
+                continue; // already fully faded - GameEngine will purge it next tick, nothing to draw
             }
             double px = effect.at().col() * cellWidth;
             double py = effect.at().row() * cellHeight;
@@ -118,7 +111,6 @@ public class SnapshotFactory {
                 disconnectSecondsRemaining, waitingForOpponent);
     }
 
-    /** שבר התקדמות (0..1) בין start ל-end, לפי "עכשיו" נתון - זהה בעקרונו ל-Motion.progress. */
     private static double progressBetween(long start, long end, long now) {
         long duration = end - start;
         if (duration <= 0) {
