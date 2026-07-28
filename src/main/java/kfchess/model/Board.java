@@ -5,21 +5,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * Board הוא ה-abstraction המרכזי של מצב הלוח.
- * <p>
- * זהו ממשק (Interface) ולא מחלקה קונקרטית בכוונה: כל שאר המערכת
- * (Rules, Engine, IO, View) תלויה רק בחתימת הממשק הזה ולא במימוש הפנימי.
- * היום המימוש היחיד ({@link ArrayBoard}) שומר את הכלים ב-Map&lt;Position, Piece&gt;,
- * אבל בעתיד אפשר להוסיף מימוש חדש (למשל BinaryBoard מבוסס bitboards) שמממש
- * את אותו הממשק - בלי לשנות שורת קוד אחת ב-Rules/Engine/IO/View.
- */
+/** The board-state abstraction: an interface so Rules/Engine/IO/View depend only on this contract, not on ArrayBoard's internals. */
 public interface Board {
 
     int height();
 
     int width();
 
+    /** The piece at this position, if any. */
     Optional<Piece> pieceAt(Position pos);
 
     boolean isWithinBounds(Position pos);
@@ -36,31 +29,26 @@ public interface Board {
         return pieceAt(pos).map(p -> p.color() == movingColor).orElse(false);
     }
 
+    /** Every piece currently on the board. */
     List<Piece> allPieces();
 
+    /** Moves whatever piece is at "from" to "to"; throws if "from" is empty. */
     void movePieceTo(Position from, Position to);
 
     void removePieceAt(Position pos);
 
+    /** Overwrites whatever is at "pos" with a new piece (e.g. pawn promotion). */
     void replacePieceAt(Position pos, Piece newPiece);
 
     void placePiece(Position pos, Piece piece);
 
-    /**
-     * Factory method - נקודת ההרחבה היחידה שצריך לגעת בה כדי להחליף
-     * ייצוג בעתיד (למשל להחזיר BinaryBoard תחת דגל קונפיגורציה).
-     */
+    /** Factory method: the one place to touch to swap the default Board implementation. */
     static Board createDefault(int height, int width) {
         return new ArrayBoard(height, width);
     }
 }
 
-/**
- * מימוש טקסטואלי/אובייקטי של Board, מבוסס Map&lt;Position, Piece&gt;.
- * מוצהר כמחלקה חבילתית (package-private, ללא מילת מפתח public) בתוך
- * אותו הקובץ של הממשק - כדי לא ליצור קובץ חדש, ובו-זמנית לשמור
- * שהיא לא נגישה ישירות מחוץ לחבילת model (רק דרך הממשק Board).
- */
+/** Map-backed Board implementation; package-private so it's only reachable through the Board interface. */
 class ArrayBoard implements Board {
 
     private final int height;

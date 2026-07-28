@@ -1,22 +1,12 @@
 package kfchess.model;
 
-/**
- * ייצוג של כלי במשחק. שימו לב שהכלי "לא יודע" איפה הוא נמצא על הלוח -
- * המיקום הוא אחריות בלעדית של Board (Single Source of Truth אחד),
- * כדי שלא ייווצר מצב של שני מקורות אמת סותרים.
- * <p>
- * הכלי כן אחראי על המצב הפרטי שלו (IDLE / IN_TRANSIT / JUMPING),
- * ושומר על עצמו מפני מעברי מצב לא חוקיים (encapsulation אמיתי -
- * אף מחלקה אחרת לא "דוחפת" ערך לשדה state ישירות).
- */
+/** A game piece. It doesn't know its own board position (Board is the single source of truth for that), but it does own and guard its own state (IDLE/IN_TRANSIT/JUMPING). */
 public class Piece {
 
-    // מונה גלובלי - כל כלי מקבל מזהה עולה, פעם אחת, בבנאי. נחוץ כדי
-    // שהלקוח (ר' kfchess.net.client.ClientSnapshotReconstructor) יוכל לזהות
-    // "זה אותו כלי שהיה קודם" בין הודעות JSON נפרדות (שבהן זהות אובייקט
-    // Java רגילה הולכת לאיבוד בכל פענוח) - בלי מזהה יציב כזה, אין דרך
-    // אמינה להבחין בין "כלי המשיך לזוז" ל"כלי חדש נוצר באותו מיקום".
-    // לא משפיע על שום לוגיקת משחק מקומית - רק שדה מזהה נוסף.
+    // Global counter - each piece gets a stable, increasing id once, in the constructor.
+    // Needed so the client (ClientSnapshotReconstructor) can recognize "this is the same
+    // piece as before" across separate JSON messages, where plain Java object identity
+    // is lost on every decode. Has no effect on local game logic - just an id field.
     private static final java.util.concurrent.atomic.AtomicLong NEXT_ID =
             new java.util.concurrent.atomic.AtomicLong(1);
 
@@ -62,26 +52,31 @@ public class Piece {
         return other != null && this.color == other.color;
     }
 
+    /** Starts a move; fails if the piece isn't idle. */
     public void markInTransit() {
         requireState(PieceState.IDLE, "start a move");
         state = PieceState.IN_TRANSIT;
     }
 
+    /** Ends a move or jump, returning the piece to idle. */
     public void markArrived() {
         state = PieceState.IDLE;
     }
 
+    /** Starts a jump; fails if the piece isn't idle. */
     public void markJumping() {
         requireState(PieceState.IDLE, "start a jump");
         state = PieceState.JUMPING;
     }
 
+    /** Ends a jump early/expires it, returning the piece to idle - no-op if it wasn't jumping. */
     public void markJumpEnded() {
         if (state == PieceState.JUMPING) {
             state = PieceState.IDLE;
         }
     }
 
+    /** Guards a state transition: throws if the piece isn't currently in the required state. */
     private void requireState(PieceState expected, String action) {
         if (state != expected) {
             throw new IllegalStateException(

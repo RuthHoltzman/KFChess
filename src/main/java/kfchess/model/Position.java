@@ -2,6 +2,7 @@ package kfchess.model;
 
 import java.util.Objects;
 
+/** An immutable board coordinate (row, col). */
 public final class Position {
     private final int row;
     private final int col;
@@ -19,10 +20,12 @@ public final class Position {
         return col;
     }
 
+    /** A new position shifted by the given row/col delta. */
     public Position offset(int deltaRow, int deltaCol) {
         return new Position(row + deltaRow, col + deltaCol);
     }
 
+    /** Whether this position falls inside a board of the given size. */
     public boolean isWithinBounds(int height, int width) {
         return row >= 0 && row < height && col >= 0 && col < width;
     }
