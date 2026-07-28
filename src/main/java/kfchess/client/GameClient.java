@@ -11,19 +11,26 @@ import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
 import java.net.URI;
+import java.util.function.Consumer;
 
 
 public class GameClient extends WebSocketClient {
 
     private final Gson gson = new Gson();
-    private volatile String latestMessage;
+
+    // Called from onMessage() for every incoming message - runs on the network
+    // thread, so the listener itself must hop onto the EDT (SwingUtilities.invokeLater)
+    // before touching any Swing state. Replaces the old polling-based latestMessage()
+    // so NetworkGameWindow can repaint only when there's actually something new,
+    // instead of redrawing the same frame on a fixed timer.
+    private volatile Consumer<String> messageListener;
 
     private volatile String assignedGameId;
     private volatile ClientRole assignedRole;
     // תיקון "Play" לפי המפרט המדויק (ELO ±100 / timeout של דקה) - נחתך
     // מתוך הודעת MATCHMAKING_TIMEOUT אם/כשמגיעה (ר' onMessage). null כל
-    // עוד לא הגיעה כזו הודעה - NetworkGameWindow בודק את זה בכל טיק
-    // (בדיוק כמו assignedGameId/latestMessage, אותו דפוס polling).
+    // עוד לא הגיעה כזו הודעה - NetworkGameWindow קורא את זה מתוך
+    // messageListener ברגע שהודעה כזו מגיעה (ר' setMessageListener).
     private volatile String matchmakingTimeoutMessage;
     // שלב 6 חלק 2 (בקשת המנחה): לוג טכני/תפעולי לקובץ טקסט - ר' תיעוד
     // FileLogger וגם GameServer.fileLogger (אותו רעיון, בצד הלקוח הפעם).
@@ -49,7 +56,6 @@ public class GameClient extends WebSocketClient {
     // הרבה מדי טקסט בלי תועלת), רק סוגי הודעות אחרים (ROLE_ASSIGNED/ERROR).
     @Override
     public void onMessage(String message) {
-        latestMessage = message;
         if (IncomingMessageSummary.isRoleAssigned(message)) {
             JsonObject json = JsonParser.parseString(message).getAsJsonObject();
             assignedGameId = json.get("gameId").getAsString();
@@ -64,37 +70,38 @@ public class GameClient extends WebSocketClient {
             System.out.println(summary);
             fileLogger.log("Received: " + summary);
         }
+        // Fire last, so the listener already sees the up-to-date assignedRole/
+        // matchmakingTimeoutMessage fields set above if it needs them.
+        Consumer<String> listener = messageListener;
+        if (listener != null) {
+            listener.accept(message);
+        }
+    }
+
+    /** Registers the callback invoked for every incoming message (see the field doc above). */
+    public void setMessageListener(Consumer<String> listener) {
+        this.messageListener = listener;
     }
 
     // ה-gameId בפועל שהשרת הקצה לחיבור הזה (ר' RoleAssignedMessage), או
     // null אם ROLE_ASSIGNED עוד לא הגיעה. volatile כבר מבטיח קריאה בטוחה
-    // בין threads (בדיוק כמו latestMessage למעלה) - HomeScreen קורא
-    // לזה מ-thread רקע אחרי connectBlocking (ר' waitForAssignedGameId).
+    // בין threads - HomeScreen קורא לזה מ-thread רקע אחרי connectBlocking
+    // (ר' waitForAssignedGameId).
     public String assignedGameId() {
         return assignedGameId;
     }
 
     // התפקיד בפועל שהשרת הקצה לחיבור הזה (ר' RoleAssignedMessage), או
-    // null אם ROLE_ASSIGNED עוד לא הגיעה - אותו דפוס polling בדיוק כמו
-    // assignedGameId ממש למעלה (volatile, בלי סנכרון נוסף).
+    // null אם ROLE_ASSIGNED עוד לא הגיעה (volatile, בלי סנכרון נוסף).
     public ClientRole assignedRole() {
         return assignedRole;
     }
 
     // הטקסט מתוך MATCHMAKING_TIMEOUT (ר' MatchmakingTimeoutMessage), או
-    // null אם עוד לא התקבלה כזו הודעה. NetworkGameWindow בודק את
-    // זה בכל טיק (בדיוק כמו assignedGameId למעלה) כדי להציג popup ולסגור
-    // את החלון ברגע שהיא מגיעה.
+    // null אם עוד לא התקבלה כזו הודעה. NetworkGameWindow קורא את זה מתוך
+    // messageListener כדי להציג popup ולסגור את החלון ברגע שההודעה מגיעה.
     public String matchmakingTimeoutMessage() {
         return matchmakingTimeoutMessage;
-    }
-
-    // JSON הגולמי של ההודעה האחרונה שהתקבלה (או null אם עוד לא התקבל כלום) -
-    // צריך ל-NetworkGameWindow כדי "לסקור" (polling) מ-Timer של Swing
-    // במקום callback מ-thread הרשת; volatile כבר מבטיח קריאה בטוחה בין
-    // threads (ר' onMessage), אז אין צורך בסנכרון נוסף כאן.
-    public String latestMessage() {
-        return latestMessage;
     }
 
     @Override

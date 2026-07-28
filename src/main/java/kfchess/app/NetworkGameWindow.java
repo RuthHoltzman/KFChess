@@ -18,7 +18,6 @@ import kfchess.view.layout.BoardLayoutCalculator;
 import kfchess.view.layout.BoardLayoutCalculator.BoardLayout;
 
 import javax.swing.JOptionPane;
-import javax.swing.Timer;
 import java.awt.Dimension;
 import java.util.List;
 import java.util.Map;
@@ -60,9 +59,9 @@ public class NetworkGameWindow {
         Img windowAnchor = new Img();
 
         // "Latest known state" - starts empty, updated on every new SNAPSHOT
-        // message. Wrapped in a one-element array so lambdas (click, Timer) can mutate it.
+        // message. Wrapped in a one-element array so lambdas (click, resize,
+        // server message) can mutate it.
         ClientSnapshotReconstructor.Reconstructed[] latest = { emptyReconstructedBeforeFirstSnapshot() };
-        String[] lastProcessedMessage = { null };
 
         // First render - also what actually opens the window (show()).
         renderFrame(snapshotFactory, sceneView, windowAnchor, latest);
@@ -72,28 +71,39 @@ public class NetworkGameWindow {
                     handleClick(clickHandler, windowAnchor, latest, pixelX, pixelY, false));
             windowAnchor.onRightClick((pixelX, pixelY) ->
                     handleClick(clickHandler, windowAnchor, latest, pixelX, pixelY, true));
+            // Repaint immediately on window resize - the layout depends on the
+            // live window size, not just on the game state.
+            windowAnchor.onResize((width, height) -> renderFrame(snapshotFactory, sceneView, windowAnchor, latest));
         });
 
-        Timer[] timerRef = new Timer[1];
-        Timer timer = new Timer(16, e -> {
-            if (client.matchmakingTimeoutMessage() != null) {
-                timerRef[0].stop();
-                handleMatchmakingTimeout(client.matchmakingTimeoutMessage());
-                return;
-            }
-            pollAndDecode(client, gson, reconstructor, lastProcessedMessage, latest);
-            renderFrame(snapshotFactory, sceneView, windowAnchor, latest);
-        });
-        timerRef[0] = timer;
-        timer.start();
+        // Runs on the network thread (GameClient.onMessage) - hop onto the EDT
+        // before touching Swing/latest[0]. Replaces the old fixed-rate Timer:
+        // we now repaint only when the server actually sent something new.
+        client.setMessageListener(message -> javax.swing.SwingUtilities.invokeLater(() ->
+                handleServerMessage(message, client, gson, reconstructor, snapshotFactory, sceneView, windowAnchor, latest)));
     }
 
-    /** Shows a blocking popup when Play matchmaking times out, then exits the process. */
+    /** Decodes a new snapshot and repaints, or handles a matchmaking timeout; always runs on the EDT. */
+    private static void handleServerMessage(String message, GameClient client, Gson gson,
+                                             ClientSnapshotReconstructor reconstructor, SnapshotFactory snapshotFactory,
+                                             GameSceneView sceneView, Img windowAnchor,
+                                             ClientSnapshotReconstructor.Reconstructed[] latest) {
+        if (IncomingMessageSummary.isMatchmakingTimeout(message)) {
+            handleMatchmakingTimeout(client.matchmakingTimeoutMessage());
+            return;
+        }
+        if (!IncomingMessageSummary.isSnapshot(message)) {
+            return;
+        }
+        IncomingSnapshot incoming = gson.fromJson(message, IncomingSnapshot.class);
+        latest[0] = reconstructor.reconstruct(incoming);
+        renderFrame(snapshotFactory, sceneView, windowAnchor, latest);
+    }
+
+    /** Shows a blocking popup when Play matchmaking times out, then exits the process. Must run on the EDT. */
     private static void handleMatchmakingTimeout(String message) {
-        javax.swing.SwingUtilities.invokeLater(() -> {
-            JOptionPane.showMessageDialog(null, message, "KFChess", JOptionPane.INFORMATION_MESSAGE);
-            System.exit(0);
-        });
+        JOptionPane.showMessageDialog(null, message, "KFChess", JOptionPane.INFORMATION_MESSAGE);
+        System.exit(0);
     }
 
     /** Empty state shown before any server message has arrived, so the window opens immediately. */
@@ -102,19 +112,6 @@ public class NetworkGameWindow {
                 Board.createDefault(PLACEHOLDER_BOARD_SIZE, PLACEHOLDER_BOARD_SIZE),
                 List.of(), List.of(), List.of(), null, List.of(), false, null, 0L, Map.of(), Map.of(), false, null,
                 false);
-    }
-
-    /** Reads the latest message from the server and decodes it, only if it's a new SNAPSHOT. */
-    private static void pollAndDecode(GameClient client, Gson gson, ClientSnapshotReconstructor reconstructor,
-                                       String[] lastProcessedMessage,
-                                       ClientSnapshotReconstructor.Reconstructed[] latest) {
-        String message = client.latestMessage();
-        if (message == null || message.equals(lastProcessedMessage[0]) || !IncomingMessageSummary.isSnapshot(message)) {
-            return;
-        }
-        lastProcessedMessage[0] = message;
-        IncomingSnapshot incoming = gson.fromJson(message, IncomingSnapshot.class);
-        latest[0] = reconstructor.reconstruct(incoming);
     }
 
     /** Routes a click/right-click on the board to NetworkClickHandler, with the current layout. */
@@ -137,7 +134,7 @@ public class NetworkGameWindow {
                 layout.offsetY() + headerHeight);
     }
 
-    /** Builds a GameSnapshot from the latest known state and paints it; runs every timer tick. */
+    /** Builds a GameSnapshot from the latest known state and paints it; called on new data or a resize. */
     private static void renderFrame(SnapshotFactory snapshotFactory, GameSceneView sceneView, Img windowAnchor,
                                      ClientSnapshotReconstructor.Reconstructed[] latest) {
         ClientSnapshotReconstructor.Reconstructed state = latest[0];
