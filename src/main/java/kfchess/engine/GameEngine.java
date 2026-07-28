@@ -120,10 +120,10 @@ public class GameEngine {
         });
     }
 
-    // שתי המתודות הבאות package-private (לא private) כי NetworkActions
+    // שתי המתודות הבאות package-private (לא private) כי GameCommandController
     // צריך בדיוק אותה התנהגות בשביל המשחק הרשתי - בלי לשכפל אותה, ובלי
-    // ש-NetworkActions יצטרך להכיר את PieceTimers בכלל (הוא מכיר רק
-    // את GameEngine - ר' NetworkActions.java).
+    // ש-GameCommandController יצטרך להכיר את PieceTimers בכלל (הוא מכיר רק
+    // את GameEngine - ר' GameCommandController.java).
 
     /** מתחיל קפיצה עבור כלי: מסמן אותו כ-JUMPING ורושם את זמני ההתחלה/סיום. */
     void beginJump(Piece piece) {
@@ -167,7 +167,7 @@ public class GameEngine {
         selectedPosition = null;
     }
 
-    // package-private (לא private) כדי ש-NetworkActions יוכל לבצע מהלך
+    // package-private (לא private) כדי ש-GameCommandController יוכל לבצע מהלך
     // אחרי שהוא כבר וידא בעלות/זמינות - אותה בדיוק לוגיקת חוקיות/שרשור.
     void tryMove(Piece piece, Position from, Position to) {
         if (!isAvailableToAct(piece)) {
@@ -204,7 +204,7 @@ public class GameEngine {
         return distance * MILLISECONDS_PER_SQUARE;
     }
 
-    // package-private כדי ש-NetworkActions יוכל "לקדם" את שעון המשחק
+    // package-private כדי ש-GameCommandController יוכל "לקדם" את שעון המשחק
     // לפני שהוא מטפל בקליק, בדיוק כמו handleClick/handleWait/handleJump.
     void advanceGameState() {
         // הסדר כאן קריטי: אם כלי מגן מסיים קפיצה בדיוק באותה מילישנייה
@@ -244,7 +244,7 @@ public class GameEngine {
         Optional<Piece> defender = board().pieceAt(motion.to());
 
         if (defender.isPresent() && defender.get().isJumping()) {
-            captureFailsAgainstJumpingDefender(motion, movingPiece);
+            captureFailsAgainstJumpingDefender(motion, movingPiece, defender.get());
             chainFinalTarget.remove(movingPiece);
             chainOriginalFrom.remove(movingPiece);
             return;
@@ -306,10 +306,15 @@ public class GameEngine {
 
     /**
      * "לכידה באוויר": אם כלי מגן נמצא במצב קפיצה במשבצת היעד, הכלי
-     * התוקף "מתאדה" (נעלם מהמקור) והמגן נשאר מוגן במקומו.
+     * התוקף "מתאדה" (נעלם מהמקור) והמגן נשאר מוגן במקומו. בקשת רות
+     * (באג ניקוד שדיווחה): מנקודת המבט של המגן/ת, זו תפיסה אמיתית -
+     * הוא/היא "קפץ/ה ואכל/ה" את התוקף/ת - אז המגן/ת צריך/ה לקבל נקודות
+     * (בדיוק כמו תפיסה רגילה), לא רק "המהלך של התוקף נכשל בלי השלכות".
+     * defendingPiece מועבר עכשיו (לא רק movingPiece כמו קודם) כדי
+     * ש-MoveHistory.recordCounterCapture תדע *למי* לזקוף את הניקוד.
      */
-    private void captureFailsAgainstJumpingDefender(Motion motion, Piece movingPiece) {
-        history.recordFailedCapture(movingPiece, motion.from(), motion.to());
+    private void captureFailsAgainstJumpingDefender(Motion motion, Piece movingPiece, Piece defendingPiece) {
+        history.recordCounterCapture(defendingPiece, movingPiece, motion.from(), motion.to());
         captureEffects.register(movingPiece, motion.from(), clock.now());
         board().removePieceAt(motion.from());
         movingPiece.markArrived();

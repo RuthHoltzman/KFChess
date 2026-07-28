@@ -53,12 +53,29 @@ public class MoveHistory {
         bus.publish(new SoundEvent(isCapture ? SoundEvent.Type.CAPTURE : SoundEvent.Type.MOVE));
     }
 
-    /** מהלך תקיפה שנכשל מול כלי קופץ - מתועד ברשימת המהלכים בלי שינוי ניקוד. */
-    public void recordFailedCapture(Piece movingPiece, Position from, Position to) {
-        String notation = movingPiece.kind().code() + squareName(from) + "x" + squareName(to) + "?!";
-        moveLog.get(movingPiece.color()).add(notation);
-        bus.publish(new MoveLoggedEvent(movingPiece.color(), notation));
-        bus.publish(new SoundEvent(SoundEvent.Type.ILLEGAL));
+    /**
+     * מהלך תקיפה שנכשל מול כלי קופץ ("לכידה באוויר", ר' GameEngine.
+     * captureFailsAgainstJumpingDefender) - אבל בפועל **המגן/ת** תפס/ה
+     * את התוקף/ת (בקשת רות - תיקון באג ניקוד: קודם זה לא זיקף נקודות
+     * לאף אחד בכלל, "כאילו לא קרה כלום" - אבל התוקף/ת באמת נמחק/ת
+     * מהלוח, אז זו תפיסה אמיתית, רק בכיוון ההפוך מהרגיל). שתי שורות
+     * ביומן: אחת לתוקף (המהלך *שלו/ה* נכשל, "?!" בדיוק כמו קודם) ואחת
+     * למגן (תפיסה-נגדית מוצלחת, "(jump)") - ורק המגן/ת מקבל/ת נקודות,
+     * בדיוק כמו ב-recordMove הרגילה (scores.merge לפי ערך הכלי שנתפס).
+     */
+    public void recordCounterCapture(Piece defender, Piece attacker, Position from, Position to) {
+        String attackerNotation = attacker.kind().code() + squareName(from) + "x" + squareName(to) + "?!";
+        moveLog.get(attacker.color()).add(attackerNotation);
+        bus.publish(new MoveLoggedEvent(attacker.color(), attackerNotation));
+
+        scores.merge(defender.color(), attacker.kind().value(), Integer::sum);
+        bus.publish(new ScoreUpdatedEvent(defender.color(), scores.get(defender.color())));
+
+        String defenderNotation = defender.kind().code() + squareName(to) + "x" + squareName(from) + " (jump)";
+        moveLog.get(defender.color()).add(defenderNotation);
+        bus.publish(new MoveLoggedEvent(defender.color(), defenderNotation));
+
+        bus.publish(new SoundEvent(SoundEvent.Type.CAPTURE));
     }
 
     /** מהלך שנעצר כי כלי ידידותי היה במשבצת הבאה - "כמעט התנגשות". */

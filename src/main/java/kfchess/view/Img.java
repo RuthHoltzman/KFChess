@@ -21,6 +21,10 @@ public class Img {
     private BufferedImage img;
     private static JFrame frame;
     static JLabel label;
+    // כותרת חלון "ממתינה" (שלב 6, ר' setTitle) - נחוצה כי show() יוצרת
+    // את ה-frame באיחור (בתוך invokeLater משלה, בפעם הראשונה בלבד) - אם
+    // setTitle נקראת *לפני* שזה קרה, אין frame קיים לעדכן עדיין.
+    private static String pendingTitle;
 
     /* ----------- load & optional resize ----------- */
     public Img read(String path,
@@ -214,6 +218,22 @@ public class Img {
         g.dispose();
     }
 
+    /**
+     * כמו fillRect, אבל עם פינות מעוגלות - נוסף לבקשת רות (עיצוב "פילה"
+     * לתג "You" בפאנל הצד, ר' SidePanelView) - fillRect/drawRect הקיימות
+     * נשארות ללא שינוי (עדיין רלוונטיות למקומות שבאמת רוצים פינות
+     * חדות - למשל גבול הלוח/הפאנלים עצמם). arcWidth/arcHeight - קוטר
+     * העיגול בכל פינה (לא רדיוס), בדיוק כמו Graphics2D.fillRoundRect עצמה.
+     */
+    public void fillRoundRect(int x, int y, int w, int h, int arcWidth, int arcHeight, Color color) {
+        if (img == null) throw new IllegalStateException("Image not loaded.");
+        Graphics2D g = img.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setColor(color);
+        g.fillRoundRect(x, y, w, h, arcWidth, arcHeight);
+        g.dispose();
+    }
+
     /* ----------- draw a rectangle outline (e.g. selection border) ----------- */
     public void drawRect(int x, int y, int w, int h, Color color, int thickness) {
         if (img == null) throw new IllegalStateException("Image not loaded.");
@@ -259,7 +279,7 @@ public class Img {
         // ההתחלתי (לפי גודל התמונה הראשונה) - אחרי זה setResizable
         // משאיר למשתמשת לגרור ולשנות גודל בעצמה.
         SwingUtilities.invokeLater(() -> {
-            frame = new JFrame("Image");
+            frame = new JFrame(pendingTitle != null ? pendingTitle : "Image");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setResizable(true);
             label = new JLabel(new ImageIcon(img));
@@ -312,6 +332,21 @@ public class Img {
         }
         return frame.getContentPane().getSize();
     }
+
+/**
+ * קובעת את כותרת חלון המשחק (שלב 6 - "לכתוב את ה-room id בראש המסך",
+ * ר' NetworkGameWindow) - סטטית, כמו frame/label, כי כל ה-Img
+ * "canvases" הזמניים ש-render() יוצר בכל טיק חולקים אותו חלון אחד.
+ * אם frame כבר קיים - מעדכנת אותו ישירות (על ה-EDT); אחרת שומרת
+ * ב-pendingTitle, ו-show() (למעלה) מיישמת אותה ברגע שהיא יוצרת את
+ * ה-frame בפעם הראשונה.
+ */
+public static void setTitle(String title) {
+    pendingTitle = title;
+    if (frame != null) {
+        SwingUtilities.invokeLater(() -> frame.setTitle(title));
+    }
+}
 
 public void onClick(java.util.function.BiConsumer<Integer, Integer> handler) {
     if (label == null) {

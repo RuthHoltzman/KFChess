@@ -1,11 +1,7 @@
 package kfchess.account;
 
-/**
- * נזרקת מ-AccountRepository.register כשמנסים ליצור חשבון עם username
- * שכבר קיים. checked בכוונה (לא RuntimeException) - זו לא שגיאת תכנות
- * אלא תרחיש עסקי צפוי לגמרי (מישהי בחרה שם שכבר תפוס), בדיוק כמו
- * שחלון ה-Register אמור להציג הודעה ולתת לנסות שם אחר, לא לקרוס.
- */
+
+/** Thrown by {@link AccountRepository#register} when the chosen username is already registered. */
 public class UsernameTakenException extends Exception {
 
     public UsernameTakenException(String username) {

@@ -2,10 +2,8 @@ package kfchess.bus;
 
 import kfchess.model.PieceColor;
 
-/**
- * מתפרסם בתחילת/סוף משחק - ה-UI יכול להאזין כדי להריץ אנימציית
- * פתיחה/סיום. winner הוא null כש-phase == STARTED.
- */
+
+/** Fired once when a game starts or ends (e.g. king capture); ENDED carries the winner. */
 public record GameLifecycleEvent(Phase phase, PieceColor winner) implements GameEvent {
     public enum Phase { STARTED, ENDED }
 }

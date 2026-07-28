@@ -6,21 +6,18 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
-/**
- * Event bus גנרי: אפשר להירשם (subscribe) לפי *סוג* אירוע ספציפי,
- * ולפרסם (publish) אירוע - כל המאזינים הרשומים לאותו סוג בדיוק מקבלים
- * אותו. thread-safe: ConcurrentHashMap + CopyOnWriteArrayList, כי
- * בהמשך (שרת) כמה חוטי לקוחות יכולים לפרסם/להירשם בו-זמנית.
- */
+/** Generic publish/subscribe hub: lets GameEngine announce events without knowing who's listening. */
 public class EventBus {
 
     private final Map<Class<? extends GameEvent>, List<Consumer<? extends GameEvent>>> listeners =
             new ConcurrentHashMap<>();
 
+    /** Registers a listener for one specific event type. */
     public <T extends GameEvent> void subscribe(Class<T> eventType, Consumer<T> listener) {
         listeners.computeIfAbsent(eventType, type -> new CopyOnWriteArrayList<>()).add(listener);
     }
 
+    /** Delivers an event to every listener subscribed to its exact type. */
     @SuppressWarnings("unchecked")
     public void publish(GameEvent event) {
         List<Consumer<? extends GameEvent>> subscribers = listeners.get(event.getClass());

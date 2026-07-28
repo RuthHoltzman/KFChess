@@ -35,7 +35,8 @@ public class SnapshotFactory {
             Map<PieceColor, Integer> scores,
             Map<PieceColor, List<String>> moveLog,
             boolean restartRequestedByViewer,
-            Integer disconnectSecondsRemaining
+            Integer disconnectSecondsRemaining,
+            boolean waitingForOpponent
     ) {
         // מיפוי כלי -> Motion פעיל, כדי לדעת עבור כל כלי אם הוא "בדרך"
         // כרגע ולחשב עבורו מיקום פיקסלים מתקדם (הליכה) ולא רק את המשבצת
@@ -114,7 +115,7 @@ public class SnapshotFactory {
 
         return new GameSnapshot(board.width(), board.height(), pieceSnapshots, captureEffectSnapshots,
                 selectedPosition, legalMoves, gameOver, winner, scores, moveLog, restartRequestedByViewer,
-                disconnectSecondsRemaining);
+                disconnectSecondsRemaining, waitingForOpponent);
     }
 
     /** שבר התקדמות (0..1) בין start ל-end, לפי "עכשיו" נתון - זהה בעקרונו ל-Motion.progress. */

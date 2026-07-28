@@ -7,27 +7,17 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Optional;
 
-/**
- * מימוש AccountRepository על גבי קובץ SQLite אחד (טבלה יחידה `accounts`).
- * פותחת חיבור JDBC חדש בכל קריאה (register/login) ולא מחזיקה חיבור
- * פתוח קבוע - קובץ SQLite מקומי נפתח/נסגר מהר מספיק, וכך נמנעים
- * מבעיות concurrency סביב חיבור משותף בין threads בלי לסבך את המחלקה
- * בפול (pool) שלא צריך בסדר גודל הזה.
- */
+
+/** SQLite-backed {@link AccountRepository} - one row per username, password hash + ELO. */
 public class SqliteAccountRepository implements AccountRepository {
 
     private static final int STARTING_ELO = 1200;
 
-    // קובץ ברירת המחדל - קבוע ציבורי אחד ולא שכפול של המחרוזת בכל מקום
-    // שיוצר repository (LoginScreenMain, GameServer): שני הצדדים צריכים
-    // להצביע על אותו קובץ DB בפועל.
     public static final String DEFAULT_DB_FILE = "kfchess.db";
 
     private final String jdbcUrl;
 
-    // dbFilePath, למשל "kfchess.db" - נוצר כקובץ יחסי לתיקיית ההרצה. יוצר
-    // את הטבלה מיד אם היא לא קיימת עדיין, כדי שכל שאר המחלקה תוכל להניח
-    // בבטחה שהיא כבר שם.
+    /** Opens (and creates if missing) the accounts table in the given SQLite file. */
     public SqliteAccountRepository(String dbFilePath) {
         this.jdbcUrl = "jdbc:sqlite:" + dbFilePath;
         createTableIfMissing();
@@ -46,6 +36,7 @@ public class SqliteAccountRepository implements AccountRepository {
         }
     }
 
+    /** Inserts a new account at the starting ELO; throws if the username already exists. */
     @Override
     public Account register(String username, String rawPassword) throws UsernameTakenException {
         String hash = PasswordHasher.hash(rawPassword);
@@ -58,9 +49,6 @@ public class SqliteAccountRepository implements AccountRepository {
             statement.executeUpdate();
             return new Account(username, STARTING_ELO);
         } catch (SQLException insertFailed) {
-            // PRIMARY KEY על username - הדרך הסטנדרטית לזהות "כבר קיים" היא
-            // לתפוס את הכשלון מה-DB עצמו (constraint violation) במקום
-            // SELECT-then-INSERT נפרד, שיש בו חלון race בין שני threads.
             if (isUniqueConstraintViolation(insertFailed)) {
                 throw new UsernameTakenException(username);
             }
@@ -68,6 +56,7 @@ public class SqliteAccountRepository implements AccountRepository {
         }
     }
 
+    /** Looks up the account and checks the password hash. */
     @Override
     public Optional<Account> login(String username, String rawPassword) {
         String sql = "SELECT password_hash, elo FROM accounts WHERE username = ?";
@@ -89,9 +78,8 @@ public class SqliteAccountRepository implements AccountRepository {
         }
     }
 
-    // מזהה "username כבר קיים" לפי קוד השגיאה הסטנדרטי של SQLite ל-UNIQUE/
-    // PRIMARY KEY constraint (SQLITE_CONSTRAINT = 19), בלי להסתמך על טקסט
-    // הודעת השגיאה (שיכול להשתנות בין גרסאות דרייבר).
+
+    /** True if the SQL failure was a duplicate-primary-key error (SQLite error code 19). */
     private boolean isUniqueConstraintViolation(SQLException ex) {
         return ex.getErrorCode() == 19;
     }
@@ -113,6 +101,7 @@ public class SqliteAccountRepository implements AccountRepository {
         }
     }
 
+    /** Overwrites the stored ELO for an existing account. */
     @Override
     public void updateElo(String username, int newElo) {
         String sql = "UPDATE accounts SET elo = ? WHERE username = ?";
