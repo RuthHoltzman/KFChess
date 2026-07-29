@@ -11,9 +11,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// @TempDir נותן קובץ/תיקייה זמניים לכל טסט - כדי שהטסטים ירוצו על קובץ
-// SQLite נפרד לגמרי מ-kfchess.db האמיתי (זה שנוצר כשמריצים את המשחק),
-// וכדי שטסטים לא ישפיעו אחד על השני.
+// @TempDir gives each test its own temporary file, so tests run against a SQLite file
+// completely separate from the real kfchess.db and never affect each other.
 class SqliteAccountRepositoryTest {
 
     private SqliteAccountRepository repository;

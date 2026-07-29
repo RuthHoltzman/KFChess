@@ -11,9 +11,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * מדגימה שני דברים: (1) שאפשר לבדוק חוקי תנועה בבידוד מוחלט, בלי
- * GameEngine ובלי IO בכלל - רק Board + RuleEngine. (2) שאפשר להזריק
- * חוק תנועה מותאם אישית בזמן ריצה (דרישה 6ב') ולבדוק שהוא באמת נאכף.
+ * Shows two things: (1) movement rules can be tested in complete isolation - just Board and
+ * RuleEngine, no GameEngine and no IO; (2) a custom movement rule can be injected at runtime
+ * and is genuinely enforced.
  */
 class RuleEngineTest {
 
@@ -48,8 +48,8 @@ class RuleEngineTest {
         board.placePiece(new Position(1, 1), customPiece);
 
         RuleEngine ruleEngine = new RuleEngine();
-        // חוק דמה: הכלי יכול "לזוז" רק לתא (0,0) - בדיוק כדוגמה לחוק
-        // דינמי שיוזרק בעתיד ע"י המשתמש עבור כלי מותאם אישית.
+        // Dummy rule: the piece may only move to (0,0) - an example of a rule
+        // a user could inject at runtime for a custom piece.
         ruleEngine.registerCustomRule(PieceKind.KNIGHT,
                 (b, from, to) -> to.equals(new Position(0, 0)));
 

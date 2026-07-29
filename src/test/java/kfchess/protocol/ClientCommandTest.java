@@ -8,9 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * בודק את פענוח פרוטוקול ההודעות הנכנסות מהלקוח (ר' ההחלטה ב-PROGRESS.md:
- * {"type":"CLICK","row":..,"col":..}) ואת בדיקת התקינות הבסיסית לפני
- * שהפקודה מנותבת ל-GameCommandController.
+ * Covers decoding incoming client messages ({"type":"CLICK","row":..,"col":..}) and the basic
+ * validity check applied before a command is routed to GameCommandController.
  */
 class ClientCommandTest {
 
@@ -50,7 +49,7 @@ class ClientCommandTest {
 
     @Test
     void fromJson_restartCommandWithoutRowOrCol_isValid() {
-        // RESTART אין לו מיקום על הלוח בכלל - פטור מ-row/col (ר' ClientCommand.isValid()).
+        // RESTART has no board position at all, so row/col are not required.
         ClientCommand command = gson.fromJson("{\"type\":\"RESTART\"}", ClientCommand.class);
 
         assertEquals(ClientCommandType.RESTART, command.type());
@@ -59,7 +58,7 @@ class ClientCommandTest {
 
     @Test
     void fromJson_restartCommandWithDummyRowAndCol_isValid() {
-        // ככה GameClient.sendRestart() בפועל שולח אותו (0,0 דמה) - גם זה תקין.
+        // This is how GameClient.sendRestart() actually sends it (dummy 0,0) - also valid.
         ClientCommand command = gson.fromJson("{\"type\":\"RESTART\",\"row\":0,\"col\":0}", ClientCommand.class);
 
         assertTrue(command.isValid());

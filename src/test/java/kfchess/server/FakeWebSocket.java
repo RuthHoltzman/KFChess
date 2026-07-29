@@ -13,10 +13,9 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 
 /**
- * "חיבור" מזויף למימוש הממשק החיצוני WebSocket (ספריית Java-WebSocket),
- * לשימוש בטסטים בלבד: GameSession משתמש ב-WebSocket רק כמפתח-זהות
- * במפת connections ובתור הפקודות הממתינות - אף אחת מהמתודות כאן לא
- * באמת נקראת ע"י GameSession, ולכן כולן stub מינימלי בלי לוגיקה אמיתית.
+ * A fake WebSocket for tests only. GameSession uses a WebSocket purely as an identity key in the
+ * connections map and the pending-command queue, so none of these methods are ever really called -
+ * they are all minimal stubs with no behavior.
  */
 class FakeWebSocket implements WebSocket {
 

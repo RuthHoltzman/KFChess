@@ -29,7 +29,7 @@ class CreateRoomResolverTest {
 
     @Test
     void isCreateRoomRequest_matchmakingPath_returnsFalse() {
-        // חייב להישאר עצמאי מ-MatchmakingResolver - שני נתיבים שמורים שונים.
+        // Must stay independent of MatchmakingResolver - two different reserved paths.
         assertFalse(CreateRoomResolver.isCreateRoomRequest("/_play"));
     }
 

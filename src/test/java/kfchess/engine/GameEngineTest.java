@@ -15,16 +15,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * רות דיווחה: "כשכלי בא לאכול כלי אחר ובסוף הכלי המותקף קופץ ואוכל את
- * התוקף הוא לא מקבל נקודות" - כלומר תרחיש "לכידה באוויר" (ר' GameEngine.
- * captureFailsAgainstJumpingDefender): כלי א' זז לתפוס את כלי ב', אבל
- * ב' נמצא במצב JUMPING - א' "מתאדה" (נמחק) ו-ב' נשאר שלם. לפני התיקון:
- * אף אחד לא קיבל נקודות. אחרי התיקון: ב' (המגן/ת שבפועל תפס/ה) מקבל/ת
- * את ערך הכלי של א'.
+ * Covers the "capture in mid-air" case (see GameEngine.captureFailsAgainstJumpingDefender):
+ * piece A moves to capture piece B, but B is JUMPING - so A vanishes and B survives intact.
+ * The reported bug was that nobody scored; now the defender who effectively did the capturing
+ * is credited with the attacker's piece value.
  * <p>
- * בונה GameEngine ישירות (בלי GameSession/רשת בכלל, ר' RuleEngineTest
- * לאותה גישה) - עם RaelTime מדומה כדי "לקפוץ" בזמן בלי Thread.sleep
- * אמיתי, בדיוק כמו ש-GameSessionTest עושה עם tick().
+ * Builds a GameEngine directly, with no GameSession or network, using a simulated clock so time
+ * can be advanced without a real Thread.sleep.
  */
 class GameEngineTest {
 
@@ -69,8 +66,8 @@ class GameEngineTest {
 
     @Test
     void tick_normalCaptureWithoutJumping_stillCreditsTheMovingSideAsBefore() {
-        // רגרסיה: תפיסה רגילה (המגן/ת *לא* קופץ/ת) לא אמורה להשתנות בכלל -
-        // עדיין התוקף/ת מקבל/ת נקודות, בדיוק כמו לפני התיקון.
+        // Regression: an ordinary capture (defender not jumping) must be unaffected -
+        // the attacker still scores, exactly as before the fix.
         Board board = Board.createDefault(3, 3);
         Piece attacker = new Piece(PieceColor.WHITE, PieceKind.ROOK);
         Piece defender = new Piece(PieceColor.BLACK, PieceKind.PAWN);

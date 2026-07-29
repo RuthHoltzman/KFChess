@@ -16,16 +16,15 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * בודק את GameSession: הקצאת תפקידים, ניתוב פקודות מהתור אל GameCommandController
- * ב-tick, והתוכן של ה-snapshot שנבנה לכל צבע. ה-WebSocket משמש כאן רק
- * כמפתח-זהות (ר' FakeWebSocket) - אין חיבור רשת אמיתי בטסטים האלה.
+ * Covers GameSession: role assignment, routing queued commands to GameCommandController on tick,
+ * and the contents of the snapshot built for each color. The WebSocket is only an identity key
+ * here (see FakeWebSocket) - these tests open no real network connection.
  */
 class GameSessionTest {
 
-    // לוח מזערי - מלך שחור ב-(0,0), צריח לבן ב-(1,0), צעד אחד ישר ביניהם
-    // (מהלך צריח חוקי לגמרי) - כדי שלכידת מלך תהיה מהלך אחד בודד בטסט,
-    // בלי לשחק משחק שלם על לוח הפתיחה הסטנדרטי (32 כלים). ר' הבנאי
-    // GameSession(String, AccountRepository) - הוזרק בדיוק בשביל זה.
+    // Minimal board - black king at (0,0), white rook at (1,0), one straight step apart (a
+    // perfectly legal rook move) - so capturing the king takes a single move instead of playing
+    // a full 32-piece game. This is exactly what the injectable-board constructor is for.
     private static final String ONE_MOVE_FROM_CAPTURE_BOARD = """
             Board:
             bK .  .  .  .  .  .  .
@@ -48,16 +47,15 @@ class GameSessionTest {
         return gson.fromJson("{\"type\":\"RESTART\"}", ClientCommand.class);
     }
 
-    // בונה session על הלוח המזערי, מזיז את הצריח הלבן על המלך השחור, ומקדם
-    // את השעון מספיק (1000ms/משבצת, ר' GameEngine.MILLISECONDS_PER_SQUARE)
-    // כדי שהמהלך יסתיים בפועל ולכידת המלך תתרחש - אחרי הקריאה הזו
-    // engine.isGameOver()==true בוודאות.
+    // Builds a session on the minimal board, moves the white rook onto the black king, and
+    // advances the clock far enough (1000ms per square) for the move to actually complete.
+    // After this call the game is guaranteed to be over.
     private GameSession sessionAfterKingCapture(FakeWebSocket white, FakeWebSocket black) {
         GameSession session = new GameSession(ONE_MOVE_FROM_CAPTURE_BOARD, null);
         session.assignRole(white);
         session.assignRole(black);
-        session.enqueueCommand(white, click(1, 0)); // בחירת הצריח הלבן
-        session.enqueueCommand(white, click(0, 0)); // צעד אחד למעלה - לכידת המלך השחור
+        session.enqueueCommand(white, click(1, 0)); // select the white rook
+        session.enqueueCommand(white, click(0, 0)); // one step up - captures the black king
         session.tick(1500);
         return session;
     }
@@ -90,7 +88,7 @@ class GameSessionTest {
         session.assignRole(white);
         session.assignRole(black);
 
-        session.enqueueCommand(white, click(6, 4)); // חייל לבן בשורת הפתיחה
+        session.enqueueCommand(white, click(6, 4)); // a white pawn on its starting rank
         session.tick(0);
 
         JsonObject whiteView = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
@@ -99,7 +97,7 @@ class GameSessionTest {
         assertEquals(4, selected.get("col").getAsInt());
 
         JsonObject blackView = gson.toJsonTree(session.snapshotFor(ClientRole.BLACK)).getAsJsonObject();
-        assertFalse(blackView.has("selected")); // הבחירה של הלבן לא "דולפת" לצבע אחר
+        assertFalse(blackView.has("selected")); // white's selection must not leak to the other color
     }
 
     @Test
@@ -107,10 +105,10 @@ class GameSessionTest {
         GameSession session = new GameSession();
         FakeWebSocket white = new FakeWebSocket();
         session.assignRole(white);
-        session.assignRole(new FakeWebSocket()); // BLACK - בלי זה הקליק היה נחסם (ר' isWaitingForOpponent, בקשת רות)
+        session.assignRole(new FakeWebSocket()); // BLACK - without this the click would be blocked (isWaitingForOpponent)
 
-        session.enqueueCommand(white, click(6, 4)); // בחירה
-        session.enqueueCommand(white, click(5, 4)); // צעד אחד קדימה - חוקי
+        session.enqueueCommand(white, click(6, 4)); // select
+        session.enqueueCommand(white, click(5, 4)); // one step forward - legal
         session.tick(0);
 
         JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
@@ -133,7 +131,7 @@ class GameSessionTest {
         GameSession session = new GameSession();
         FakeWebSocket white = new FakeWebSocket();
         session.assignRole(white);
-        session.assignRole(new FakeWebSocket()); // BLACK - בלי זה הקליק היה נחסם (ר' isWaitingForOpponent, בקשת רות)
+        session.assignRole(new FakeWebSocket()); // BLACK - without this the click would be blocked (isWaitingForOpponent)
 
         session.enqueueCommand(white, click(6, 4));
         session.enqueueCommand(white, click(5, 4));
@@ -166,7 +164,7 @@ class GameSessionTest {
     @Test
     void tick_commandFromUnknownConnection_doesNotThrow() {
         GameSession session = new GameSession();
-        FakeWebSocket unregistered = new FakeWebSocket(); // מעולם לא עבר assignRole
+        FakeWebSocket unregistered = new FakeWebSocket(); // never went through assignRole
 
         session.enqueueCommand(unregistered, click(6, 4));
 
@@ -198,19 +196,19 @@ class GameSessionTest {
         session.assignRole(white);
         session.assignRole(black);
 
-        // מהלך רגיל (חייל צעד אחד קדימה) - לא מסיים את המשחק בכלל.
+        // An ordinary move (pawn one step forward) - does not end the game.
         session.enqueueCommand(white, click(6, 4));
         session.enqueueCommand(white, click(5, 4));
         session.tick(1500);
 
-        // שני הצדדים "מבקשים" RESTART בזמן שהמשחק עוד באמצע - אמור להתעלם לגמרי.
+        // Both sides ask for RESTART while the game is still running - must be ignored entirely.
         session.enqueueCommand(white, restart());
         session.enqueueCommand(black, restart());
         session.tick(0);
 
         JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
         assertFalse(snapshot.get("gameOver").getAsBoolean());
-        // אם ה-restart היה מתבצע בטעות, החייל היה חוזר ל-(6,4) - ולא נשאר ב-32 כלים באותם מיקומים.
+        // Had the restart wrongly gone through, the pawn would be back at (6,4).
         assertEquals(32, snapshot.getAsJsonArray("pieces").size());
     }
 
@@ -224,8 +222,8 @@ class GameSessionTest {
         session.tick(0);
 
         JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
-        assertTrue(snapshot.get("gameOver").getAsBoolean()); // עדיין נגמר - לא התאפס
-        assertEquals(1, snapshot.getAsJsonArray("pieces").size()); // רק הצריח הלבן נשאר (המלך נלכד)
+        assertTrue(snapshot.get("gameOver").getAsBoolean()); // still over - not reset
+        assertEquals(1, snapshot.getAsJsonArray("pieces").size()); // only the white rook is left
     }
 
     @Test
@@ -240,7 +238,7 @@ class GameSessionTest {
 
         JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
         assertFalse(snapshot.get("gameOver").getAsBoolean());
-        assertEquals(2, snapshot.getAsJsonArray("pieces").size()); // הלוח המזערי חזר למצבו המקורי (bK + wR)
+        assertEquals(2, snapshot.getAsJsonArray("pieces").size()); // minimal board restored (bK + wR)
     }
 
     @Test
@@ -251,20 +249,20 @@ class GameSessionTest {
         FakeWebSocket spectator = new FakeWebSocket();
         assertEquals(ClientRole.SPECTATOR, session.assignRole(spectator));
 
-        // רק לבן + צופה מבקשים - שחור (הצד השני שבאמת נדרש) לא ביקש בכלל.
+        // Only white and a spectator ask - black, the side that actually matters, never did.
         session.enqueueCommand(white, restart());
         session.enqueueCommand(spectator, restart());
         session.tick(0);
 
         JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
-        assertTrue(snapshot.get("gameOver").getAsBoolean()); // עדיין לא התאפס
+        assertTrue(snapshot.get("gameOver").getAsBoolean()); // still not reset
         assertEquals(1, snapshot.getAsJsonArray("pieces").size());
     }
 
-    // --- שלב 5, חלק 1: ניתוק/auto-resign עם חלון חסד (ר' GameSession.processDisconnections/
-    // resolveExpiredDisconnects/DISCONNECT_GRACE_MILLIS). כל הטסטים כאן משתמשים ב-tick()
-    // כדי "לקפוץ" בזמן, בדיוק כמו הטסטים הקיימים - הדדליין נמדד לפי engine.now()
-    // (שעון המשחק, מוזרק כ-RaelTime), לא שעון-קיר אמיתי, בדיוק בשביל זה.
+    // --- Disconnect / auto-resign with a grace window (see GameSession.processDisconnections,
+    // resolveExpiredDisconnects, DISCONNECT_GRACE_MILLIS). These tests use tick() to jump forward
+    // in time: the deadline is measured on the injected game clock, not on real wall-clock time,
+    // which is precisely why it's injectable.
 
     @Test
     void disconnect_duringActiveGame_opensGracePeriodInsteadOfImmediateLoss() {
@@ -275,11 +273,11 @@ class GameSessionTest {
         session.assignRole(black, "dani");
 
         session.handleDisconnect(white);
-        session.tick(0); // מעבד את הניתוק (processDisconnections) - עדיין הרבה לפני 20 שניות
+        session.tick(0); // processes the disconnect - still well before 40 seconds
 
-        assertFalse(session.connections().containsKey(white)); // החיבור המת כן הוסר...
+        assertFalse(session.connections().containsKey(white)); // the dead connection is removed...
         JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.BLACK)).getAsJsonObject();
-        assertFalse(snapshot.get("gameOver").getAsBoolean()); // ...אבל היריב עדיין לא זכה - בתוך חלון החסד
+        assertFalse(snapshot.get("gameOver").getAsBoolean()); // ...but the opponent has not won yet
     }
 
     @Test
@@ -291,12 +289,12 @@ class GameSessionTest {
         session.assignRole(black, "dani");
 
         session.handleDisconnect(white);
-        session.tick(0); // פותח את חלון החסד (דדליין = engine.now() + 20000)
-        session.tick(25_000); // מקדם את שעון המשחק מעבר לדדליין - חלון החסד פג
+        session.tick(0); // opens the grace window (deadline = now + DISCONNECT_GRACE_MILLIS)
+        session.tick(45_000); // advances past the 40-second deadline - the grace window expires
 
         JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.BLACK)).getAsJsonObject();
         assertTrue(snapshot.get("gameOver").getAsBoolean());
-        assertEquals("BLACK", snapshot.get("winner").getAsString()); // מי שנשאר (שחור) ניצח, לא מי שהתנתק
+        assertEquals("BLACK", snapshot.get("winner").getAsString()); // whoever stayed wins, not the leaver
     }
 
     @Test
@@ -312,9 +310,9 @@ class GameSessionTest {
 
         FakeWebSocket whiteReconnected = new FakeWebSocket();
         ClientRole role = session.assignRole(whiteReconnected, "ruth");
-        assertEquals(ClientRole.WHITE, role); // אותו תפקיד בדיוק בחזרה
+        assertEquals(ClientRole.WHITE, role); // exactly the same role back
 
-        session.tick(30_000); // הרבה מעבר ל-20 שניות המקוריות - אבל חלון החסד כבר בוטל
+        session.tick(45_000); // well past 40 seconds - but the reconnect already cancelled the window
         JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.BLACK)).getAsJsonObject();
         assertFalse(snapshot.get("gameOver").getAsBoolean());
     }
@@ -333,7 +331,7 @@ class GameSessionTest {
         FakeWebSocket newcomer = new FakeWebSocket();
         ClientRole role = session.assignRole(newcomer, "someone-else");
 
-        assertEquals(ClientRole.SPECTATOR, role); // WHITE עדיין שמור לרות, לא נגנב
+        assertEquals(ClientRole.SPECTATOR, role); // WHITE is still reserved, not stolen
     }
 
     @Test
@@ -354,24 +352,24 @@ class GameSessionTest {
     void disconnect_afterGameAlreadyOver_isRemovedImmediatelyWithoutOpeningNewGracePeriod() {
         FakeWebSocket white = new FakeWebSocket();
         FakeWebSocket black = new FakeWebSocket();
-        GameSession session = sessionAfterKingCapture(white, black); // המשחק כבר נגמר (לכידת מלך)
+        GameSession session = sessionAfterKingCapture(white, black); // game already over (king captured)
 
-        session.handleDisconnect(black); // הצד שהפסיד מתנתק אחרי סוף המשחק
+        session.handleDisconnect(black); // the losing side leaves after the game ended
         session.tick(0);
 
         assertFalse(session.connections().containsKey(black));
         JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
         assertTrue(snapshot.get("gameOver").getAsBoolean());
-        assertEquals("WHITE", snapshot.get("winner").getAsString()); // עדיין המנצח המקורי, לא שונה בגלל הניתוק
+        assertEquals("WHITE", snapshot.get("winner").getAsString()); // still the original winner
     }
 
-    // --- שלב 5, חלק 2: matchmaking (ר' GameSession.isWaitingForOpponent, נקראת
-    // מ-GameServer.resolveMatchmakingGameId כדי לדעת אם לצרף שחקן/ית חדש/ה לכאן).
+    // --- Matchmaking: isWaitingForOpponent is called from GameServer.resolveMatchmakingGameId
+    // to decide whether a new player can be placed into this session.
 
     @Test
     void isWaitingForOpponent_onlyWhiteConnected_returnsTrue() {
         GameSession session = new GameSession();
-        session.assignRole(new FakeWebSocket()); // WHITE, אף אחד עדיין לא BLACK
+        session.assignRole(new FakeWebSocket()); // WHITE; nobody is BLACK yet
 
         assertTrue(session.isWaitingForOpponent());
     }
@@ -380,7 +378,7 @@ class GameSessionTest {
     void isWaitingForOpponent_noOneConnectedYet_returnsFalse() {
         GameSession session = new GameSession();
 
-        assertFalse(session.isWaitingForOpponent()); // אין אף אחד לצרף אליו - לא "ממתין", פשוט ריק
+        assertFalse(session.isWaitingForOpponent()); // nobody to join - not waiting, just empty
     }
 
     @Test
@@ -400,11 +398,11 @@ class GameSessionTest {
         session.assignRole(white, "ruth");
         session.assignRole(black, "dani");
 
-        session.handleDisconnect(black); // שחור מתנתק באמצע משחק פעיל - נכנס לחלון חסד
+        session.handleDisconnect(black); // black drops mid-game - enters the grace window
         session.tick(0);
 
-        // WHITE לבד מחובר עכשיו, אבל BLACK "שמור" ל-dani (לא באמת פנוי) -
-        // matchmaking אסור לצרף כאן מישהו/י אקראי/ת במקום dani.
+        // Only WHITE is connected now, but BLACK is reserved for dani and is not really free -
+        // matchmaking must not drop a random player into dani's seat.
         assertFalse(session.isWaitingForOpponent());
     }
 
@@ -413,26 +411,25 @@ class GameSessionTest {
         FakeWebSocket white = new FakeWebSocket();
         FakeWebSocket black = new FakeWebSocket();
         GameSession session = sessionAfterKingCapture(white, black);
-        session.removeConnection(black); // רק לבן (המנצח) עדיין מחובר
+        session.removeConnection(black); // only white, the winner, is still connected
 
-        assertFalse(session.isWaitingForOpponent()); // המשחק נגמר - אין טעם לצרף אליו יריב/ה חדש/ה
+        assertFalse(session.isWaitingForOpponent()); // game is over - no point adding an opponent
     }
 
-    // --- בקשת רות (הסבב הזה): כל עוד ממתינים ליריב (isWaitingForOpponent),
-    // הצד היחיד שכבר מחובר לא יכול "להתחיל לשחק" - CLICK/JUMP מתעלמים
-    // בשקט (ר' GameSession.applyCommand).
+    // --- While waiting for an opponent, the single connected side cannot start playing:
+    // CLICK/JUMP are silently ignored (see GameSession.applyCommand).
 
     @Test
     void tick_clickWhileWaitingForOpponent_isIgnored() {
         GameSession session = new GameSession();
         FakeWebSocket white = new FakeWebSocket();
-        session.assignRole(white); // רק WHITE מחובר - אין BLACK בכלל עדיין
+        session.assignRole(white); // only WHITE is connected - there is no BLACK yet
 
         session.enqueueCommand(white, click(6, 4));
         session.tick(0);
 
         JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
-        assertFalse(snapshot.has("selected")); // הקליק לא בוצע בכלל - עדיין ממתינים ליריב
+        assertFalse(snapshot.has("selected")); // the click never applied - still waiting for an opponent
     }
 
     @Test
@@ -441,11 +438,11 @@ class GameSessionTest {
         FakeWebSocket white = new FakeWebSocket();
         session.assignRole(white);
 
-        session.enqueueCommand(white, click(6, 4)); // לפני שהצטרף/ה יריב - יתעלם
+        session.enqueueCommand(white, click(6, 4)); // before an opponent joined - ignored
         session.tick(0);
 
-        session.assignRole(new FakeWebSocket()); // BLACK מצטרף עכשיו - אין יותר המתנה
-        session.enqueueCommand(white, click(6, 4)); // אותו קליק בדיוק, הפעם אמור לעבוד
+        session.assignRole(new FakeWebSocket()); // BLACK joins now - no longer waiting
+        session.enqueueCommand(white, click(6, 4)); // the exact same click, now it should work
         session.tick(0);
 
         JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
@@ -454,14 +451,13 @@ class GameSessionTest {
         assertEquals(4, selected.get("col").getAsInt());
     }
 
-    // --- בקשת רות (הסבב הזה): שדה waitingForOpponent ב-snapshot עצמו
-    // (בנוסף לחסימת הקליקים למעלה) - כדי שהלקוח יידע לצייר באנר "Waiting
-    // for an opponent..." (ר' GameSceneView.drawWaitingForOpponentBanner).
+    // --- The waitingForOpponent field in the snapshot itself (on top of blocking clicks above),
+    // so the client knows to draw the "Waiting for an opponent..." banner.
 
     @Test
     void snapshotFor_onlyWhiteConnected_reportsWaitingForOpponentTrue() {
         GameSession session = new GameSession();
-        session.assignRole(new FakeWebSocket()); // רק WHITE, אין BLACK
+        session.assignRole(new FakeWebSocket()); // WHITE only, no BLACK
 
         JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
         assertTrue(snapshot.get("waitingForOpponent").getAsBoolean());
@@ -477,14 +473,13 @@ class GameSessionTest {
         assertFalse(snapshot.get("waitingForOpponent").getAsBoolean());
     }
 
-    // --- תיקון "Play" לפי המפרט המדויק (ELO ±100 / timeout של דקה, הסבב
-    // הזה): waitingPlayerUsername() - נחוץ ל-GameServer.resolveMatchmakingGameId
-    // כדי לדעת של מי ה-ELO לבדוק מול המחפש/ת החדש/ה.
+    // --- waitingPlayerUsername() is needed by GameServer.resolveMatchmakingGameId to know
+    // whose ELO to compare against a new player searching for a match.
 
     @Test
     void waitingPlayerUsername_onlyOneSideConnectedWithUsername_returnsThatUsername() {
         GameSession session = new GameSession();
-        session.assignRole(new FakeWebSocket(), "ruth"); // רק WHITE, אין BLACK
+        session.assignRole(new FakeWebSocket(), "ruth"); // WHITE only, no BLACK
 
         assertEquals(Optional.of("ruth"), session.waitingPlayerUsername());
     }
@@ -508,7 +503,7 @@ class GameSessionTest {
     @Test
     void waitingPlayerUsername_waitingSideConnectedWithoutLogin_returnsEmpty() {
         GameSession session = new GameSession();
-        session.assignRole(new FakeWebSocket()); // בלי username (חיבור אנונימי)
+        session.assignRole(new FakeWebSocket()); // no username (anonymous connection)
 
         assertEquals(Optional.empty(), session.waitingPlayerUsername());
     }

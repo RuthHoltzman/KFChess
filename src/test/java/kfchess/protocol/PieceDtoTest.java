@@ -11,8 +11,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * PieceDto רק מצמיד piece+position (Piece לא יודע את מיקומו בעצמו) -
- * Gson מסריאלז את שניהם ישירות, אז הטסט בודק את הצורה המקוננת שיוצאת.
+ * PieceDto only pairs a piece with its position, since Piece doesn't know where it is.
+ * Gson serializes both directly, so this test checks the nested shape that comes out.
  */
 class PieceDtoTest {
 

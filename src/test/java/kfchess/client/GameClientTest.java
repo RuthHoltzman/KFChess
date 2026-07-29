@@ -12,11 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
- * onMessage() עצמה לא נוגעת ברשת בכלל (רק מפענחת JSON ושומרת בשדות) - אז
- * אפשר לבנות GameClient עם URI דמה (בלי connectBlocking(), בדיוק כמו
- * RecordingGameClient הקיים) ולקרוא לה ישירות, בלי שרת אמיתי. מתמקד
- * ב-assignedRole() (חדש, בקשת רות - "צבע שחקן או צופה" על המסך) - עד
- * עכשיו הודעת ROLE_ASSIGNED נפרסה רק לגבי gameId, ה-role שלה הוזנח.
+ * onMessage() never touches the network - it only decodes JSON into fields - so the client can be
+ * built with a dummy URI (no connectBlocking()) and called directly, with no real server.
+ * These tests focus on assignedRole(), which ROLE_ASSIGNED parsing originally ignored.
  */
 class GameClientTest {
 
