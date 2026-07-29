@@ -15,7 +15,7 @@ import java.util.function.Consumer;
 
 
 /** WebSocket client: connects to the server, sends CLICK/JUMP/RESTART, and pushes incoming messages to a listener. */
-public class GameClient extends WebSocketClient {
+public class PlayClient extends WebSocketClient {
 
     private final Gson gson = new Gson();
 
@@ -27,7 +27,7 @@ public class GameClient extends WebSocketClient {
     private volatile String matchmakingTimeoutMessage;
     private final FileLogger fileLogger = new FileLogger("client");
 
-    public GameClient(URI serverUri) {
+    public PlayClient(URI serverUri) {
         super(serverUri);
     }
 

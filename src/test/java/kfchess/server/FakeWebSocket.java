@@ -13,7 +13,7 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 
 /**
- * A fake WebSocket for tests only. GameSession uses a WebSocket purely as an identity key in the
+ * A fake WebSocket for tests only. PlaySession uses a WebSocket purely as an identity key in the
  * connections map and the pending-command queue, so none of these methods are ever really called -
  * they are all minimal stubs with no behavior.
  */

@@ -34,13 +34,13 @@ Two players = two separate client JVMs. In IntelliJ, enable "Allow multiple inst
 Dependencies point **downward only**. Nothing lower ever imports something higher.
 
 ```
-app                    entry points, window wiring          (LoginScreenMain, HomeScreen, NetworkGameWindow)
- |-- server            WebSocket server, sessions           (GameServer, GameSession, SnapshotBuilder, *Resolver)
- |-- client            WebSocket client, snapshot decoding  (GameClient, ClientSnapshotReconstructor, NetworkClickHandler)
- |-- view              rendering                            (Img, BoardView, GameSceneView, SidePanelView, view.layout)
+app                    entry points, window wiring          (LoginScreenMain, HomeScreen, NetworkPlayWindow)
+ |-- server            WebSocket server, sessions           (PlayServer, PlaySession, SnapshotBuilder, *Resolver)
+ |-- client            WebSocket client, snapshot decoding  (PlayClient, ClientSnapshotReconstructor, NetworkClickHandler)
+ |-- view              rendering                            (Img, BoardView, PlaySceneView, SidePanelView, view.layout)
  |-- protocol          the client/server contract (DTOs)    (ClientCommand, SnapshotMessage, ConnectionPaths, ...)
- |-- engine            game orchestration                   (GameEngine, GameCommandController, PieceTimers, MoveHistory)
- |    \-- engine.snapshot  domain state -> render DTO       (SnapshotFactory, GameSnapshot, PieceVisualState, ...)
+ |-- engine            game orchestration                   (PlayEngine, PlayCommandController, PieceTimers, MoveHistory)
+ |    \-- engine.snapshot  domain state -> render DTO       (SnapshotFactory, PlaySnapshot, PieceVisualState, ...)
  |-- rules             move legality                        (RuleEngine, PieceRules)
  |-- realtime          game clock and in-flight motion      (RaelTime, Motion)
  |-- bus               in-process pub/sub                   (EventBus, *Event)
@@ -54,16 +54,16 @@ app                    entry points, window wiring          (LoginScreenMain, Ho
 ### Request flow
 
 ```
-click -> NetworkClickHandler -> GameClient --JSON--> GameServer.onMessage
+click -> NetworkClickHandler -> PlayClient --JSON--> PlayServer.onMessage
                                                           | (queues only)
                                                           v
-                                                GameSession.tick()   <- single tick thread, ~30/s
+                                                PlaySession.tick()   <- single tick thread, ~30/s
                                                           |
-                                        GameCommandController -> GameEngine -> rules / timers / bus
+                                        PlayCommandController -> PlayEngine -> rules / timers / bus
                                                           |
                                                 SnapshotBuilder -> SnapshotMessage
                                                           |
-GameSceneView <- SnapshotFactory <- ClientSnapshotReconstructor <--JSON-- broadcast
+PlaySceneView <- SnapshotFactory <- ClientSnapshotReconstructor <--JSON-- broadcast
 ```
 
 ---
@@ -71,23 +71,23 @@ GameSceneView <- SnapshotFactory <- ClientSnapshotReconstructor <--JSON-- broadc
 ## 3. Invariants - do not break these
 
 1. **One thread mutates game state.** Network threads (`onOpen`/`onMessage`/`onClose`) only enqueue
-   into `pendingCommands` / `pendingDisconnections`. Only `GameSession.tick()`, on the single tick
-   thread, touches a `GameEngine`. Violating this reintroduces races that are very hard to find.
+   into `pendingCommands` / `pendingDisconnections`. Only `PlaySession.tick()`, on the single tick
+   thread, touches a `PlayEngine`. Violating this reintroduces races that are very hard to find.
 
 2. **Swing only on the EDT.** Anything reaching Swing from a network thread must go through
-   `SwingUtilities.invokeLater`. `GameClient`'s message listener already does this.
+   `SwingUtilities.invokeLater`. `PlayClient`'s message listener already does this.
 
 3. **Dependencies point downward.** See the map above. In particular `model`, `rules` and `realtime`
    know nothing about networking, Swing or persistence, which is what keeps them unit-testable.
 
-4. **`GameCommandController` lives in `engine`, deliberately.** It needs package-private access to
-   `GameEngine` (`tryMove`, `beginJump`, `isAvailableToAct`, `advanceGameState`). Moving it into
+4. **`PlayCommandController` lives in `engine`, deliberately.** It needs package-private access to
+   `PlayEngine` (`tryMove`, `beginJump`, `isAvailableToAct`, `advanceGameState`). Moving it into
    `server` would force those methods public and break the engine's encapsulation. This trade was
    made consciously: slightly less obvious package naming, in exchange for a smaller public surface.
 
 5. **The game clock is injected** (`RaelTime`), never `System.currentTimeMillis()` inside the engine.
    That is what lets tests jump 45 seconds forward in one `tick(45_000)` call with no sleeping.
-   Exception: `GameServer` matchmaking deadlines and `GameSession`'s empty-session timer use wall
+   Exception: `PlayServer` matchmaking deadlines and `PlaySession`'s empty-session timer use wall
    clock on purpose - they are server lifecycle, not game logic.
 
 6. **Piece identity survives the network.** `Piece.id()` (AtomicLong) is how
@@ -118,10 +118,10 @@ All six assignment stages are implemented, manually verified, and committed:
 Recent maintenance work, already done:
 
 - All Hebrew comments across `src/main` and `src/test` replaced with short English ones.
-- Dead code removed: `GameEngine.handleClick/handleJump/selectedPosition`, `IncomingSnapshot.type()`,
+- Dead code removed: `PlayEngine.handleClick/handleJump/selectedPosition`, `IncomingSnapshot.type()`,
   `HomeScreen.buildUri(String)`, an unused 14-arg `SnapshotMessage` constructor,
   `AnimationClip.frameCount()`.
-- `NetworkActions` renamed to `GameCommandController`; `SnapshotBuilder` extracted from `GameSession`.
+- `NetworkActions` renamed to `PlayCommandController`; `SnapshotBuilder` extracted from `PlaySession`.
 - Client rendering switched from a fixed 60fps Swing `Timer` to event-driven - a server message or a
   window resize triggers the repaint.
 - Abandoned sessions are now discarded: previously every room ever created stayed in memory and kept
@@ -143,10 +143,10 @@ games can be sharded across processes without touching game logic.
 
 | # | Limit | Where | Note |
 |---|---|---|---|
-| 1 | One tick thread advances *all* sessions sequentially | `GameServer.tickAllSessions` | The main bottleneck. Current ceiling is roughly a few hundred concurrent games. Easy to fix precisely because sessions are independent - partition them across a thread pool. |
-| 2 | Full snapshot broadcast to every connection every tick | `GameServer.broadcast` | Sent even when nothing changed. At scale this is the bandwidth killer. Fix: deltas, and only when state actually changed. |
-| 3 | Matchmaking is an O(n) scan under a global lock | `GameServer.resolveMatchmakingGameId` | Stalls every new connection once there are many rooms. Fix: an ELO-bucketed waiting queue. |
-| 4 | Single JVM; `sessions` is an in-memory map | `GameServer` | No horizontal scaling. Needs sharding by gameId plus a routing layer. This is the Docker conversation. |
+| 1 | One tick thread advances *all* sessions sequentially | `PlayServer.tickAllSessions` | The main bottleneck. Current ceiling is roughly a few hundred concurrent games. Easy to fix precisely because sessions are independent - partition them across a thread pool. |
+| 2 | Full snapshot broadcast to every connection every tick | `PlayServer.broadcast` | Sent even when nothing changed. At scale this is the bandwidth killer. Fix: deltas, and only when state actually changed. |
+| 3 | Matchmaking is an O(n) scan under a global lock | `PlayServer.resolveMatchmakingGameId` | Stalls every new connection once there are many rooms. Fix: an ELO-bucketed waiting queue. |
+| 4 | Single JVM; `sessions` is an in-memory map | `PlayServer` | No horizontal scaling. Needs sharding by gameId plus a routing layer. This is the Docker conversation. |
 | 5 | SQLite, single-writer file | `SqliteAccountRepository` | Fine for one process, breaks with several servers. Would need Postgres or similar. |
 | 6 | Hardcoded deployment config | see below | Blocks Docker directly. |
 
@@ -160,8 +160,8 @@ games can be sharded across processes without touching game logic.
 
 The client address is the blocking one: today the client can only ever reach `localhost`.
 
-**Also open, from code review:** extracting a `ConnectionController` out of `GameServer`.
-`GameServer` currently mixes transport (extending `WebSocketServer`, the tick loop) with dispatch
+**Also open, from code review:** extracting a `ConnectionController` out of `PlayServer`.
+`PlayServer` currently mixes transport (extending `WebSocketServer`, the tick loop) with dispatch
 (choosing Create/Play/Join, routing messages). The dispatch half is untestable as a result - `onOpen`
 needs a real handshake. The `*Resolver` classes are already this pattern; what remains unextracted is
 the orchestration between them. A real improvement in testability, not urgent.

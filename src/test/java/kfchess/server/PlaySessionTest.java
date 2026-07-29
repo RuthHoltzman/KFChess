@@ -16,11 +16,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Covers GameSession: role assignment, routing queued commands to GameCommandController on tick,
+ * Covers PlaySession: role assignment, routing queued commands to PlayCommandController on tick,
  * and the contents of the snapshot built for each color. The WebSocket is only an identity key
  * here (see FakeWebSocket) - these tests open no real network connection.
  */
-class GameSessionTest {
+class PlaySessionTest {
 
     // Minimal board - black king at (0,0), white rook at (1,0), one straight step apart (a
     // perfectly legal rook move) - so capturing the king takes a single move instead of playing
@@ -50,8 +50,8 @@ class GameSessionTest {
     // Builds a session on the minimal board, moves the white rook onto the black king, and
     // advances the clock far enough (1000ms per square) for the move to actually complete.
     // After this call the game is guaranteed to be over.
-    private GameSession sessionAfterKingCapture(FakeWebSocket white, FakeWebSocket black) {
-        GameSession session = new GameSession(ONE_MOVE_FROM_CAPTURE_BOARD, null);
+    private PlaySession sessionAfterKingCapture(FakeWebSocket white, FakeWebSocket black) {
+        PlaySession session = new PlaySession(ONE_MOVE_FROM_CAPTURE_BOARD, null);
         session.assignRole(white);
         session.assignRole(black);
         session.enqueueCommand(white, click(1, 0)); // select the white rook
@@ -62,7 +62,7 @@ class GameSessionTest {
 
     @Test
     void assignRole_firstConnectionIsWhite_secondIsBlack_restAreSpectators() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
 
         assertEquals(ClientRole.WHITE, session.assignRole(new FakeWebSocket()));
         assertEquals(ClientRole.BLACK, session.assignRole(new FakeWebSocket()));
@@ -71,7 +71,7 @@ class GameSessionTest {
 
     @Test
     void removeConnection_removesItFromConnectionsMap() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         FakeWebSocket connection = new FakeWebSocket();
         session.assignRole(connection);
 
@@ -82,7 +82,7 @@ class GameSessionTest {
 
     @Test
     void tick_clickOnOwnPiece_selectsItForThatColorOnly() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         FakeWebSocket white = new FakeWebSocket();
         FakeWebSocket black = new FakeWebSocket();
         session.assignRole(white);
@@ -102,7 +102,7 @@ class GameSessionTest {
 
     @Test
     void tick_clickThenLegalTarget_movesPieceIntoTransit() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         FakeWebSocket white = new FakeWebSocket();
         session.assignRole(white);
         session.assignRole(new FakeWebSocket()); // BLACK - without this the click would be blocked (isWaitingForOpponent)
@@ -128,7 +128,7 @@ class GameSessionTest {
 
     @Test
     void tick_clickThenLegalTarget_snapshotIncludesMatchingMotion() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         FakeWebSocket white = new FakeWebSocket();
         session.assignRole(white);
         session.assignRole(new FakeWebSocket()); // BLACK - without this the click would be blocked (isWaitingForOpponent)
@@ -148,7 +148,7 @@ class GameSessionTest {
 
     @Test
     void tick_spectatorCommand_isIgnored() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         session.assignRole(new FakeWebSocket()); // WHITE
         session.assignRole(new FakeWebSocket()); // BLACK
         FakeWebSocket spectator = new FakeWebSocket();
@@ -163,7 +163,7 @@ class GameSessionTest {
 
     @Test
     void tick_commandFromUnknownConnection_doesNotThrow() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         FakeWebSocket unregistered = new FakeWebSocket(); // never went through assignRole
 
         session.enqueueCommand(unregistered, click(6, 4));
@@ -173,7 +173,7 @@ class GameSessionTest {
 
     @Test
     void snapshotFor_initialBoard_hasThirtyTwoPiecesAndZeroScores() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
 
         JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.SPECTATOR)).getAsJsonObject();
 
@@ -190,7 +190,7 @@ class GameSessionTest {
 
     @Test
     void restart_beforeGameOver_isIgnoredAndDoesNotRevertTheMove() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         FakeWebSocket white = new FakeWebSocket();
         FakeWebSocket black = new FakeWebSocket();
         session.assignRole(white);
@@ -216,7 +216,7 @@ class GameSessionTest {
     void restart_onlyOneSideRequests_doesNotResetBoard() {
         FakeWebSocket white = new FakeWebSocket();
         FakeWebSocket black = new FakeWebSocket();
-        GameSession session = sessionAfterKingCapture(white, black);
+        PlaySession session = sessionAfterKingCapture(white, black);
 
         session.enqueueCommand(white, restart());
         session.tick(0);
@@ -230,7 +230,7 @@ class GameSessionTest {
     void restart_bothSidesRequest_resetsBoardAndClearsGameOver() {
         FakeWebSocket white = new FakeWebSocket();
         FakeWebSocket black = new FakeWebSocket();
-        GameSession session = sessionAfterKingCapture(white, black);
+        PlaySession session = sessionAfterKingCapture(white, black);
 
         session.enqueueCommand(white, restart());
         session.enqueueCommand(black, restart());
@@ -245,7 +245,7 @@ class GameSessionTest {
     void restart_spectatorVoteDoesNotCountTowardsTheTwoSidesNeeded() {
         FakeWebSocket white = new FakeWebSocket();
         FakeWebSocket black = new FakeWebSocket();
-        GameSession session = sessionAfterKingCapture(white, black);
+        PlaySession session = sessionAfterKingCapture(white, black);
         FakeWebSocket spectator = new FakeWebSocket();
         assertEquals(ClientRole.SPECTATOR, session.assignRole(spectator));
 
@@ -259,14 +259,14 @@ class GameSessionTest {
         assertEquals(1, snapshot.getAsJsonArray("pieces").size());
     }
 
-    // --- Disconnect / auto-resign with a grace window (see GameSession.processDisconnections,
+    // --- Disconnect / auto-resign with a grace window (see PlaySession.processDisconnections,
     // resolveExpiredDisconnects, DISCONNECT_GRACE_MILLIS). These tests use tick() to jump forward
     // in time: the deadline is measured on the injected game clock, not on real wall-clock time,
     // which is precisely why it's injectable.
 
     @Test
     void disconnect_duringActiveGame_opensGracePeriodInsteadOfImmediateLoss() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         FakeWebSocket white = new FakeWebSocket();
         FakeWebSocket black = new FakeWebSocket();
         session.assignRole(white, "ruth");
@@ -282,7 +282,7 @@ class GameSessionTest {
 
     @Test
     void disconnect_graceWindowExpires_opponentIsDeclaredWinner() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         FakeWebSocket white = new FakeWebSocket();
         FakeWebSocket black = new FakeWebSocket();
         session.assignRole(white, "ruth");
@@ -299,7 +299,7 @@ class GameSessionTest {
 
     @Test
     void disconnect_thenReconnectWithSameUsername_cancelsGraceAndRestoresRole() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         FakeWebSocket white = new FakeWebSocket();
         FakeWebSocket black = new FakeWebSocket();
         session.assignRole(white, "ruth");
@@ -319,7 +319,7 @@ class GameSessionTest {
 
     @Test
     void disconnect_duringGrace_reservedRoleCannotBeTakenByUnrelatedConnection() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         FakeWebSocket white = new FakeWebSocket();
         FakeWebSocket black = new FakeWebSocket();
         session.assignRole(white, "ruth");
@@ -336,7 +336,7 @@ class GameSessionTest {
 
     @Test
     void disconnect_spectator_isRemovedImmediatelyWithoutGracePeriod() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         session.assignRole(new FakeWebSocket()); // WHITE
         session.assignRole(new FakeWebSocket()); // BLACK
         FakeWebSocket spectator = new FakeWebSocket();
@@ -352,7 +352,7 @@ class GameSessionTest {
     void disconnect_afterGameAlreadyOver_isRemovedImmediatelyWithoutOpeningNewGracePeriod() {
         FakeWebSocket white = new FakeWebSocket();
         FakeWebSocket black = new FakeWebSocket();
-        GameSession session = sessionAfterKingCapture(white, black); // game already over (king captured)
+        PlaySession session = sessionAfterKingCapture(white, black); // game already over (king captured)
 
         session.handleDisconnect(black); // the losing side leaves after the game ended
         session.tick(0);
@@ -363,12 +363,12 @@ class GameSessionTest {
         assertEquals("WHITE", snapshot.get("winner").getAsString()); // still the original winner
     }
 
-    // --- Matchmaking: isWaitingForOpponent is called from GameServer.resolveMatchmakingGameId
+    // --- Matchmaking: isWaitingForOpponent is called from PlayServer.resolveMatchmakingGameId
     // to decide whether a new player can be placed into this session.
 
     @Test
     void isWaitingForOpponent_onlyWhiteConnected_returnsTrue() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         session.assignRole(new FakeWebSocket()); // WHITE; nobody is BLACK yet
 
         assertTrue(session.isWaitingForOpponent());
@@ -376,14 +376,14 @@ class GameSessionTest {
 
     @Test
     void isWaitingForOpponent_noOneConnectedYet_returnsFalse() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
 
         assertFalse(session.isWaitingForOpponent()); // nobody to join - not waiting, just empty
     }
 
     @Test
     void isWaitingForOpponent_bothSidesConnected_returnsFalse() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         session.assignRole(new FakeWebSocket()); // WHITE
         session.assignRole(new FakeWebSocket()); // BLACK
 
@@ -392,7 +392,7 @@ class GameSessionTest {
 
     @Test
     void isWaitingForOpponent_otherSideReservedByDisconnectGrace_returnsFalse() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         FakeWebSocket white = new FakeWebSocket();
         FakeWebSocket black = new FakeWebSocket();
         session.assignRole(white, "ruth");
@@ -410,18 +410,18 @@ class GameSessionTest {
     void isWaitingForOpponent_gameAlreadyOver_returnsFalse() {
         FakeWebSocket white = new FakeWebSocket();
         FakeWebSocket black = new FakeWebSocket();
-        GameSession session = sessionAfterKingCapture(white, black);
+        PlaySession session = sessionAfterKingCapture(white, black);
         session.removeConnection(black); // only white, the winner, is still connected
 
         assertFalse(session.isWaitingForOpponent()); // game is over - no point adding an opponent
     }
 
     // --- While waiting for an opponent, the single connected side cannot start playing:
-    // CLICK/JUMP are silently ignored (see GameSession.applyCommand).
+    // CLICK/JUMP are silently ignored (see PlaySession.applyCommand).
 
     @Test
     void tick_clickWhileWaitingForOpponent_isIgnored() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         FakeWebSocket white = new FakeWebSocket();
         session.assignRole(white); // only WHITE is connected - there is no BLACK yet
 
@@ -434,7 +434,7 @@ class GameSessionTest {
 
     @Test
     void tick_clickAfterOpponentJoins_isProcessedNormally() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         FakeWebSocket white = new FakeWebSocket();
         session.assignRole(white);
 
@@ -456,7 +456,7 @@ class GameSessionTest {
 
     @Test
     void snapshotFor_onlyWhiteConnected_reportsWaitingForOpponentTrue() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         session.assignRole(new FakeWebSocket()); // WHITE only, no BLACK
 
         JsonObject snapshot = gson.toJsonTree(session.snapshotFor(ClientRole.WHITE)).getAsJsonObject();
@@ -465,7 +465,7 @@ class GameSessionTest {
 
     @Test
     void snapshotFor_bothSidesConnected_reportsWaitingForOpponentFalse() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         session.assignRole(new FakeWebSocket()); // WHITE
         session.assignRole(new FakeWebSocket()); // BLACK
 
@@ -473,12 +473,12 @@ class GameSessionTest {
         assertFalse(snapshot.get("waitingForOpponent").getAsBoolean());
     }
 
-    // --- waitingPlayerUsername() is needed by GameServer.resolveMatchmakingGameId to know
+    // --- waitingPlayerUsername() is needed by PlayServer.resolveMatchmakingGameId to know
     // whose ELO to compare against a new player searching for a match.
 
     @Test
     void waitingPlayerUsername_onlyOneSideConnectedWithUsername_returnsThatUsername() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         session.assignRole(new FakeWebSocket(), "ruth"); // WHITE only, no BLACK
 
         assertEquals(Optional.of("ruth"), session.waitingPlayerUsername());
@@ -486,7 +486,7 @@ class GameSessionTest {
 
     @Test
     void waitingPlayerUsername_bothSidesConnected_returnsEmpty() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         session.assignRole(new FakeWebSocket(), "ruth");
         session.assignRole(new FakeWebSocket(), "dani");
 
@@ -495,14 +495,14 @@ class GameSessionTest {
 
     @Test
     void waitingPlayerUsername_noOneConnectedYet_returnsEmpty() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
 
         assertEquals(Optional.empty(), session.waitingPlayerUsername());
     }
 
     @Test
     void waitingPlayerUsername_waitingSideConnectedWithoutLogin_returnsEmpty() {
-        GameSession session = new GameSession();
+        PlaySession session = new PlaySession();
         session.assignRole(new FakeWebSocket()); // no username (anonymous connection)
 
         assertEquals(Optional.empty(), session.waitingPlayerUsername());

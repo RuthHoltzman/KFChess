@@ -16,17 +16,17 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  * built with a dummy URI (no connectBlocking()) and called directly, with no real server.
  * These tests focus on assignedRole(), which ROLE_ASSIGNED parsing originally ignored.
  */
-class GameClientTest {
+class PlayClientTest {
 
     private final Gson gson = new Gson();
 
-    private static GameClient newClient() throws URISyntaxException {
-        return new GameClient(new URI("ws://localhost:1"));
+    private static PlayClient newClient() throws URISyntaxException {
+        return new PlayClient(new URI("ws://localhost:1"));
     }
 
     @Test
     void onMessage_roleAssignedWhite_setsAssignedRoleAndGameId() throws URISyntaxException {
-        GameClient client = newClient();
+        PlayClient client = newClient();
         client.onMessage(gson.toJson(new RoleAssignedMessage("WHITE", "room1")));
 
         assertEquals(ClientRole.WHITE, client.assignedRole());
@@ -35,7 +35,7 @@ class GameClientTest {
 
     @Test
     void onMessage_roleAssignedSpectator_setsAssignedRoleToSpectator() throws URISyntaxException {
-        GameClient client = newClient();
+        PlayClient client = newClient();
         client.onMessage(gson.toJson(new RoleAssignedMessage("SPECTATOR", "room2")));
 
         assertEquals(ClientRole.SPECTATOR, client.assignedRole());
@@ -43,7 +43,7 @@ class GameClientTest {
 
     @Test
     void assignedRole_beforeAnyMessage_isNull() throws URISyntaxException {
-        GameClient client = newClient();
+        PlayClient client = newClient();
 
         assertNull(client.assignedRole());
     }

@@ -3,7 +3,7 @@ package kfchess.client;
 import kfchess.input.BoardMapper;
 import kfchess.model.Position;
 import kfchess.view.BoardView;
-import kfchess.view.GameSceneView;
+import kfchess.view.PlaySceneView;
 import kfchess.view.layout.BoardLayoutCalculator.BoardLayout;
 import org.junit.jupiter.api.Test;
 
@@ -20,14 +20,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 // that return *before* the client is used (a click outside the board, or a click during gameOver
 // that misses the Restart button), so no NPE can occur.
 // sceneView does have to be real, because handle() asks it for restartButtonBounds() on every
-// gameOver click even when the click ultimately misses. Constructing a GameSceneView touches no
+// gameOver click even when the click ultimately misses. Constructing a PlaySceneView touches no
 // files - the constructor only stores a path string; only render() would read one, and no test
 // here calls render().
 class NetworkClickHandlerTest {
 
     private static final BoardLayout LAYOUT = new BoardLayout(50, 400, 240, 0);
 
-    private final GameSceneView sceneView = new GameSceneView(new BoardView("unused"), 240);
+    private final PlaySceneView sceneView = new PlaySceneView(new BoardView("unused"), 240);
     private final NetworkClickHandler handler = new NetworkClickHandler(null, new BoardMapper(), sceneView);
 
     @Test
@@ -74,13 +74,13 @@ class NetworkClickHandlerTest {
 
     @Test
     void handle_gameOverAndClickHitsRestartButton_sendsRestartToServer() throws URISyntaxException {
-        // A separate handler with a real RecordingGameClient: here we do expect
+        // A separate handler with a real RecordingPlayClient: here we do expect
         // sendRestart() to be called, so we need a spy that records it.
-        RecordingGameClient client = new RecordingGameClient();
+        RecordingPlayClient client = new RecordingPlayClient();
         NetworkClickHandler handlerWithClient = new NetworkClickHandler(client, new BoardMapper(), sceneView);
 
         // The pixel is derived from the actual restartButtonBounds() rather than a magic
-        // number, so the test doesn't break if GameSceneView's internal button size changes.
+        // number, so the test doesn't break if PlaySceneView's internal button size changes.
         Rectangle button = sceneView.restartButtonBounds();
         int pixelX = LAYOUT.offsetX() + button.x + button.width / 2;
         int pixelY = LAYOUT.offsetY() + button.y + button.height / 2;

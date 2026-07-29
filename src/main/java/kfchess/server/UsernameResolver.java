@@ -8,7 +8,7 @@ import java.util.Optional;
  * Extracts the username query parameter from a connection path ("/room1?username=ruth" -&gt; "ruth"),
  * so the session knows whose ELO to update when the game ends.
  * <p>
- * Kept separate from GameIdResolver because this is a query parameter, not part of the room path.
+ * Kept separate from PlayIdResolver because this is a query parameter, not part of the room path.
  * A connection with no username at all is fully supported - it returns empty, not an error.
  */
 public final class UsernameResolver {

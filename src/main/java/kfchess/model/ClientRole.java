@@ -2,7 +2,7 @@ package kfchess.model;
 
 import java.util.Optional;
 
-/** A connected client's role in a GameSession - wider than PieceColor since a spectator has no color at all. */
+/** A connected client's role in a PlaySession - wider than PieceColor since a spectator has no color at all. */
 public enum ClientRole {
     WHITE,
     BLACK,

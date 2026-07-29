@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Shows two things: (1) movement rules can be tested in complete isolation - just Board and
- * RuleEngine, no GameEngine and no IO; (2) a custom movement rule can be injected at runtime
+ * RuleEngine, no PlayEngine and no IO; (2) a custom movement rule can be injected at runtime
  * and is genuinely enforced.
  */
 class RuleEngineTest {

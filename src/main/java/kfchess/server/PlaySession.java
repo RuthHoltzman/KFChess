@@ -3,12 +3,12 @@ package kfchess.server;
 import kfchess.account.AccountRepository;
 import kfchess.account.EloCalculator;
 import kfchess.bus.EventBus;
-import kfchess.bus.GameLifecycleEvent;
-import kfchess.engine.GameCommandController;
-import kfchess.engine.GameEngine;
+import kfchess.bus.PlayLifecycleEvent;
+import kfchess.engine.PlayCommandController;
+import kfchess.engine.PlayEngine;
 import kfchess.io.BoardParser;
 import kfchess.model.Board;
-import kfchess.model.Game;
+import kfchess.model.PlayState;
 import kfchess.model.PieceColor;
 import kfchess.model.Position;
 import kfchess.protocol.ClientCommand;
@@ -31,13 +31,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * One game on the server: owns its own Board, GameEngine and GameCommandController, plus the
+ * One game on the server: owns its own Board, PlayEngine and PlayCommandController, plus the
  * WebSocket connections taking part in it (white, black, spectators).
  * <p>
  * All game state changes happen on a single thread. Commands arriving on network threads are only
  * queued; the tick thread drains the queue and applies them - the standard real-time game server pattern.
  */
-public class GameSession {
+public class PlaySession {
 
     private static final String STARTING_BOARD_TEXT = """
             Board:
@@ -76,10 +76,10 @@ public class GameSession {
 
 
     private Board board;
-    private GameEngine engine;
+    private PlayEngine engine;
     // Routes CLICK/JUMP to the right color. Named after its class so it's obvious from the code
     // that this is the controller layer, not another engine.
-    private GameCommandController commandController;
+    private PlayCommandController commandController;
     private final EventBus bus = new EventBus();
     private final AccountRepository accountRepository;
     private final Map<WebSocket, ConnectedPlayer> connections = new ConcurrentHashMap<>();
@@ -104,12 +104,12 @@ public class GameSession {
     private Long emptySinceMillis = System.currentTimeMillis();
 
     /** Convenience constructor with no account repository - a game without ELO updates, used by tests. */
-    public GameSession() {
+    public PlaySession() {
         this(null);
     }
 
     /** Standard constructor: the real starting board, with ELO updates enabled. */
-    public GameSession(AccountRepository accountRepository) {
+    public PlaySession(AccountRepository accountRepository) {
         this(STARTING_BOARD_TEXT, accountRepository);
     }
 
@@ -117,10 +117,10 @@ public class GameSession {
      * Full constructor, mainly for tests: injects the board text like the other collaborators.
      * The bus is created once per session (not per game) so the ELO subscription survives a restart.
      */
-    public GameSession(String boardText, AccountRepository accountRepository) {
+    public PlaySession(String boardText, AccountRepository accountRepository) {
         this.boardText = boardText;
         this.accountRepository = accountRepository;
-        bus.subscribe(GameLifecycleEvent.class, this::onGameLifecycleEvent);
+        bus.subscribe(PlayLifecycleEvent.class, this::onGameLifecycleEvent);
         resetGame();
     }
 
@@ -130,9 +130,9 @@ public class GameSession {
      */
     private void resetGame() {
         this.board = new BoardParser(new Scanner(boardText)).readBoard();
-        Game game = new Game(board);
-        this.engine = new GameEngine(game, new RuleEngine(), new RaelTime(), bus);
-        this.commandController = new GameCommandController(engine);
+        PlayState game = new PlayState(board);
+        this.engine = new PlayEngine(game, new RuleEngine(), new RaelTime(), bus);
+        this.commandController = new PlayCommandController(engine);
         restartVotes.clear();
     }
 
@@ -330,7 +330,7 @@ public class GameSession {
         return connections.values().stream().findFirst().map(ConnectedPlayer::username);
     }
 
-    /** Defensive copy of the live connections and their roles - all GameServer needs in order to broadcast. */
+    /** Defensive copy of the live connections and their roles - all PlayServer needs in order to broadcast. */
     public Map<WebSocket, ClientRole> connections() {
         Map<WebSocket, ClientRole> roles = new HashMap<>();
         connections.forEach((connection, player) -> roles.put(connection, player.role()));
@@ -342,8 +342,8 @@ public class GameSession {
      * Skips silently when no meaningful rating can be computed: no repository, an unidentified side,
      * or both sides logged in as the same user.
      */
-    private void onGameLifecycleEvent(GameLifecycleEvent event) {
-        if (accountRepository == null || event.phase() != GameLifecycleEvent.Phase.ENDED) {
+    private void onGameLifecycleEvent(PlayLifecycleEvent event) {
+        if (accountRepository == null || event.phase() != PlayLifecycleEvent.Phase.ENDED) {
             return;
         }
         ClientRole winnerRole = event.winner() == PieceColor.WHITE ? ClientRole.WHITE : ClientRole.BLACK;

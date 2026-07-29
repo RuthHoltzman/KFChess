@@ -8,13 +8,13 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.Optional;
 
-/** The server-side controller: routes a per-color CLICK/JUMP to GameEngine, one independent selection per color. */
-public class GameCommandController {
+/** The server-side controller: routes a per-color CLICK/JUMP to PlayEngine, one independent selection per color. */
+public class PlayCommandController {
 
-    private final GameEngine engine;
+    private final PlayEngine engine;
     private final Map<PieceColor, Position> selectedPositionByColor = new EnumMap<>(PieceColor.class);
 
-    public GameCommandController(GameEngine engine) {
+    public PlayCommandController(PlayEngine engine) {
         this.engine = engine;
     }
 

@@ -25,13 +25,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * The network entry point: holds one GameSession per gameId and runs the single tick thread that
+ * The network entry point: holds one PlaySession per gameId and runs the single tick thread that
  * advances and broadcasts every game.
  * <p>
  * onOpen/onMessage/onClose run on the library's network threads and only file commands or update
- * connection maps - they never touch a GameEngine directly.
+ * connection maps - they never touch a PlayEngine directly.
  */
-public class GameServer extends WebSocketServer {
+public class PlayServer extends WebSocketServer {
 
     private static final long TICK_INTERVAL_MILLIS = 33; // ~30 updates per second
     private static final int ELO_MATCH_RANGE = 100;
@@ -42,7 +42,7 @@ public class GameServer extends WebSocketServer {
     // because these are the same accounts.
     private final AccountRepository accountRepository =
             new SqliteAccountRepository(SqliteAccountRepository.DEFAULT_DB_FILE);
-    private final Map<String, GameSession> sessions = new ConcurrentHashMap<>();
+    private final Map<String, PlaySession> sessions = new ConcurrentHashMap<>();
     private final Map<WebSocket, String> gameIdByConnection = new ConcurrentHashMap<>();
     // Sessions created through Play. Without this, matchmaking could steal a session that is waiting
     // for a specific friend to Join a private room - Play must only match other Play players.
@@ -58,7 +58,7 @@ public class GameServer extends WebSocketServer {
     private final FileLogger fileLogger = new FileLogger("server");
     private long lastTickNanos = System.nanoTime();
 
-    public GameServer(int port) {
+    public PlayServer(int port) {
         super(new InetSocketAddress(port));
     }
 
@@ -67,8 +67,8 @@ public class GameServer extends WebSocketServer {
     public void onStart() {
         lastTickNanos = System.nanoTime();
         tickExecutor.scheduleAtFixedRate(this::tickAllSessions, 0, TICK_INTERVAL_MILLIS, TimeUnit.MILLISECONDS);
-        System.out.println("GameServer started on port " + getPort());
-        fileLogger.log("GameServer started on port " + getPort());
+        System.out.println("PlayServer started on port " + getPort());
+        fileLogger.log("PlayServer started on port " + getPort());
     }
 
     /**
@@ -89,10 +89,10 @@ public class GameServer extends WebSocketServer {
             gameId = resolveMatchmakingGameId(username);
             connectionMethod = "Play";
         } else {
-            gameId = GameIdResolver.resolve(path);
+            gameId = PlayIdResolver.resolve(path);
             connectionMethod = "Join";
         }
-        GameSession session = sessions.computeIfAbsent(gameId, id -> new GameSession(accountRepository));
+        PlaySession session = sessions.computeIfAbsent(gameId, id -> new PlaySession(accountRepository));
         gameIdByConnection.put(conn, gameId);
         ClientRole role = session.assignRole(conn, username);
         fileLogger.log("Connection opened via " + connectionMethod + ": gameId=" + gameId
@@ -110,8 +110,8 @@ public class GameServer extends WebSocketServer {
     private String resolveMatchmakingGameId(String searcherUsername) {
         Integer searcherElo = eloFor(searcherUsername).orElse(null);
         synchronized (sessionAllocationLock) {
-            for (Map.Entry<String, GameSession> entry : sessions.entrySet()) {
-                GameSession candidate = entry.getValue();
+            for (Map.Entry<String, PlaySession> entry : sessions.entrySet()) {
+                PlaySession candidate = entry.getValue();
                 if (!matchmakingSessionIds.contains(entry.getKey()) || !candidate.isWaitingForOpponent()) {
                     continue;
                 }
@@ -124,7 +124,7 @@ public class GameServer extends WebSocketServer {
             String newGameId = "match-" + UUID.randomUUID();
             matchmakingSessionIds.add(newGameId);
             matchmakingDeadlines.put(newGameId, System.currentTimeMillis() + MATCHMAKING_TIMEOUT_MILLIS);
-            sessions.computeIfAbsent(newGameId, id -> new GameSession(accountRepository));
+            sessions.computeIfAbsent(newGameId, id -> new PlaySession(accountRepository));
             return newGameId;
         }
     }
@@ -149,7 +149,7 @@ public class GameServer extends WebSocketServer {
      * Called each tick for sessions with a registered deadline: clears the entry if someone joined,
      * otherwise sends MATCHMAKING_TIMEOUT once to the lone waiting connection.
      */
-    private void checkMatchmakingTimeout(String gameId, GameSession session) {
+    private void checkMatchmakingTimeout(String gameId, PlaySession session) {
         Long deadline = matchmakingDeadlines.get(gameId);
         if (deadline == null) {
             return;
@@ -178,17 +178,17 @@ public class GameServer extends WebSocketServer {
             do {
                 newGameId = RoomIdGenerator.generate();
             } while (sessions.containsKey(newGameId));
-            sessions.computeIfAbsent(newGameId, id -> new GameSession(accountRepository));
+            sessions.computeIfAbsent(newGameId, id -> new PlaySession(accountRepository));
             return newGameId;
         }
     }
 
-    /** Disconnect: handed to GameSession, which gives an active player a grace window to reconnect. */
+    /** Disconnect: handed to PlaySession, which gives an active player a grace window to reconnect. */
     @Override
     public void onClose(WebSocket conn, int code, String reason, boolean remote) {
         String gameId = gameIdByConnection.remove(conn);
         fileLogger.log("Connection closed: gameId=" + gameId + ", code=" + code + ", reason=" + reason);
-        GameSession session = gameId == null ? null : sessions.get(gameId);
+        PlaySession session = gameId == null ? null : sessions.get(gameId);
         if (session != null) {
             session.handleDisconnect(conn);
         }
@@ -197,7 +197,7 @@ public class GameServer extends WebSocketServer {
     /** Incoming message: only decodes and queues it - the command is actually applied on the tick thread. */
     @Override
     public void onMessage(WebSocket conn, String message) {
-        GameSession session = sessions.get(gameIdByConnection.get(conn));
+        PlaySession session = sessions.get(gameIdByConnection.get(conn));
         if (session == null) {
             return;
         }
@@ -216,7 +216,7 @@ public class GameServer extends WebSocketServer {
     /** Network error - logged only; a dropped connection is handled separately by onClose. */
     @Override
     public void onError(WebSocket conn, Exception ex) {
-        System.err.println("GameServer error: " + ex.getMessage());
+        System.err.println("PlayServer error: " + ex.getMessage());
         fileLogger.log("ERROR: " + ex.getMessage());
     }
 
@@ -226,8 +226,8 @@ public class GameServer extends WebSocketServer {
         long elapsedMillis = (now - lastTickNanos) / 1_000_000;
         lastTickNanos = now;
 
-        for (Map.Entry<String, GameSession> entry : sessions.entrySet()) {
-            GameSession session = entry.getValue();
+        for (Map.Entry<String, PlaySession> entry : sessions.entrySet()) {
+            PlaySession session = entry.getValue();
             session.tick(elapsedMillis);
             if (!matchmakingDeadlines.isEmpty()) {
                 checkMatchmakingTimeout(entry.getKey(), session);
@@ -243,7 +243,7 @@ public class GameServer extends WebSocketServer {
      * The removal is re-checked inside computeIfPresent, which holds the same per-key lock as the
      * computeIfAbsent in onOpen - so a session cannot be discarded while a new connection is claiming it.
      */
-    private void removeIfAbandoned(String gameId, GameSession session) {
+    private void removeIfAbandoned(String gameId, PlaySession session) {
         if (!session.isAbandoned()) {
             return;
         }
@@ -256,7 +256,7 @@ public class GameServer extends WebSocketServer {
     }
 
     /** Sends each connection a snapshot tailored to its role; a already-closed connection is skipped. */
-    private void broadcast(GameSession session) {
+    private void broadcast(PlaySession session) {
         session.connections().forEach((conn, role) -> {
             try {
                 conn.send(gson.toJson(session.snapshotFor(role)));

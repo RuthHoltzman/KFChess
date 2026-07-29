@@ -1,7 +1,7 @@
 package kfchess.app;
 
 import kfchess.account.Account;
-import kfchess.client.GameClient;
+import kfchess.client.PlayClient;
 import kfchess.protocol.ConnectionPaths;
 
 import javax.swing.*;
@@ -146,22 +146,22 @@ public class HomeScreen {
         statusLabel.setText("Connecting...");
 
         new Thread(() -> {
-            GameClient client;
+            PlayClient client;
             boolean connected;
             try {
-                client = new GameClient(new URI(uriText));
+                client = new PlayClient(new URI(uriText));
                 connected = client.connectBlocking();
             } catch (URISyntaxException | InterruptedException ex) {
                 SwingUtilities.invokeLater(() -> showFailure(statusLabel, ex.getMessage(), buttonsToToggle));
                 return;
             }
 
-            GameClient finalClient = client;
+            PlayClient finalClient = client;
             if (connected) {
                 String gameId = waitForAssignedGameId(finalClient);
                 SwingUtilities.invokeLater(() -> {
                     homeFrame.dispose();
-                    NetworkGameWindow.launch(finalClient, gameId, username);
+                    NetworkPlayWindow.launch(finalClient, gameId, username);
                 });
             } else {
                 SwingUtilities.invokeLater(() -> showFailure(statusLabel, "failed to connect to " + uriText, buttonsToToggle));
@@ -171,7 +171,7 @@ public class HomeScreen {
 
 
     /** Polls the client until the server assigns a game id, or the timeout elapses. */
-    private static String waitForAssignedGameId(GameClient client) {
+    private static String waitForAssignedGameId(PlayClient client) {
         long deadline = System.currentTimeMillis() + GAME_ID_WAIT_TIMEOUT_MILLIS;
         while (client.assignedGameId() == null && System.currentTimeMillis() < deadline) {
             try {

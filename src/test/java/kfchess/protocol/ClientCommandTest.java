@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Covers decoding incoming client messages ({"type":"CLICK","row":..,"col":..}) and the basic
- * validity check applied before a command is routed to GameCommandController.
+ * validity check applied before a command is routed to PlayCommandController.
  */
 class ClientCommandTest {
 
@@ -58,7 +58,7 @@ class ClientCommandTest {
 
     @Test
     void fromJson_restartCommandWithDummyRowAndCol_isValid() {
-        // This is how GameClient.sendRestart() actually sends it (dummy 0,0) - also valid.
+        // This is how PlayClient.sendRestart() actually sends it (dummy 0,0) - also valid.
         ClientCommand command = gson.fromJson("{\"type\":\"RESTART\",\"row\":0,\"col\":0}", ClientCommand.class);
 
         assertTrue(command.isValid());

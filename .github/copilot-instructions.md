@@ -12,7 +12,7 @@ Project-specific guidance:
 
 - Keep the design flexible for future binary board and piece representation changes.
 - Prefer configurable custom games and rule definitions over hard-coded behavior. When adding movement or game rules, look for existing extension points in [src/main/java/kfchess/rules/RuleEngine.java](src/main/java/kfchess/rules/RuleEngine.java) rather than introducing special-case logic.
-- Keep the engine stateful per game instance instead of relying on global/shared state; follow the pattern in [src/main/java/kfchess/engine/GameEngine.java](src/main/java/kfchess/engine/GameEngine.java).
+- Keep the engine stateful per game instance instead of relying on global/shared state; follow the pattern in [src/main/java/kfchess/engine/PlayEngine.java](src/main/java/kfchess/engine/PlayEngine.java).
 - Separate rules and UI concerns. Keep move legality/state transitions in the rules and engine layers, and avoid leaking board or game logic into the view layer.
 - Avoid code smells by following DRY, SRP, and strong encapsulation principles.
 - Keep constants and configuration values out of business logic whenever possible.
@@ -24,6 +24,6 @@ For startup context, read these files first in order:
 
 1. [pom.xml](pom.xml)
 2. [src/main/java/kfchess/Main.java](src/main/java/kfchess/Main.java)
-3. [src/main/java/kfchess/engine/GameEngine.java](src/main/java/kfchess/engine/GameEngine.java)
+3. [src/main/java/kfchess/engine/PlayEngine.java](src/main/java/kfchess/engine/PlayEngine.java)
 4. [src/main/java/kfchess/rules/RuleEngine.java](src/main/java/kfchess/rules/RuleEngine.java)
 5. [README.md](README.md)

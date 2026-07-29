@@ -11,7 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Builds an immutable GameSnapshot (DTO) from the engine's live, mutable game state. */
+/** Builds an immutable PlaySnapshot (DTO) from the engine's live, mutable game state. */
 public class SnapshotFactory {
 
 
@@ -19,8 +19,8 @@ public class SnapshotFactory {
 
     private final PieceVisualStateTracker visualStateTracker = new PieceVisualStateTracker();
 
-    /** Assembles a full GameSnapshot: piece positions/visuals, capture effects, scores, and status flags. */
-    public GameSnapshot createSnapshot(
+    /** Assembles a full PlaySnapshot: piece positions/visuals, capture effects, scores, and status flags. */
+    public PlaySnapshot createSnapshot(
             Board board,
             int cellWidth,
             int cellHeight,
@@ -99,14 +99,14 @@ public class SnapshotFactory {
             double progress = progressBetween(
                     effect.removedAt(), effect.removedAt() + CaptureEffectTracker.CAPTURE_EFFECT_DURATION_MS, now);
             if (progress >= 1.0) {
-                continue; // already fully faded - GameEngine will purge it next tick, nothing to draw
+                continue; // already fully faded - PlayEngine will purge it next tick, nothing to draw
             }
             double px = effect.at().col() * cellWidth;
             double py = effect.at().row() * cellHeight;
             captureEffectSnapshots.add(new CaptureEffectSnapshot(effect.kind(), effect.color(), px, py, progress));
         }
 
-        return new GameSnapshot(board.width(), board.height(), pieceSnapshots, captureEffectSnapshots,
+        return new PlaySnapshot(board.width(), board.height(), pieceSnapshots, captureEffectSnapshots,
                 selectedPosition, legalMoves, gameOver, winner, scores, moveLog, restartRequestedByViewer,
                 disconnectSecondsRemaining, waitingForOpponent);
     }

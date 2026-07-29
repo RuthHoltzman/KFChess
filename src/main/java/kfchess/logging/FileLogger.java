@@ -56,7 +56,7 @@ public class FileLogger {
     }
 
     /**
-     * For an orderly shutdown. Not currently called by GameServer or GameClient - autoFlush already
+     * For an orderly shutdown. Not currently called by PlayServer or PlayClient - autoFlush already
      * writes each line to disk immediately, so nothing is lost without an explicit close.
      */
     public void close() {

@@ -5,6 +5,6 @@ package kfchess.protocol;
 public enum ClientCommandType {
     CLICK,
     JUMP,
-    /** Asks to reset the board - GameSession only honors it after the game ends and both sides request it. */
+    /** Asks to reset the board - PlaySession only honors it after the game ends and both sides request it. */
     RESTART
 }

@@ -3,9 +3,9 @@ package kfchess.server;
 import kfchess.protocol.ConnectionPaths;
 
 /** Turns the WebSocket connection path into a gameId. A separate class so it's unit-testable without a real server. */
-public final class GameIdResolver {
+public final class PlayIdResolver {
 
-    private GameIdResolver() {
+    private PlayIdResolver() {
     }
 
     /** "/room1?username=ruth" -&gt; "room1"; the root path (or null) falls back to the default room. */
