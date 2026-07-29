@@ -12,11 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * בודק את FileLogger - שלב 6 חלק 2 (לוגים טכניים/תפעוליים, לא קשור
- * ל-moveLog). קבצי הבדיקה נכתבים בפועל ל-logs/ (כמו בייצור) עם קידומת
- * ייחודית לכל טסט, כדי לא להתנגש בין הטסטים - *.log כבר ב-.gitignore,
- * אז הם לא נכנסים לגיט בטעות (וגם logs/ לא נשמרת ריקה - git לא עוקב
- * אחרי תיקיות ריקות ממילא).
+ * Covers FileLogger (the operational log, unrelated to the chess move log).
+ * These tests really do write into logs/, like production, each with its own prefix so they can't
+ * collide. *.log is already gitignored, so nothing lands in git by accident.
  */
 class FileLoggerTest {
 
@@ -31,7 +29,7 @@ class FileLoggerTest {
 
         assertEquals(1, lines.size());
         assertTrue(lines.get(0).endsWith("hello world"));
-        assertTrue(lines.get(0).startsWith("[")); // חותמת זמן בתחילת השורה
+        assertTrue(lines.get(0).startsWith("[")); // timestamp at the start of the line
     }
 
     @Test
@@ -49,8 +47,8 @@ class FileLoggerTest {
         assertTrue(lines.get(1).endsWith("second"));
     }
 
-    // מוצאת את קובץ הלוג שנוצר עבור הקידומת הזו (יש בו גם חותמת תאריך/שעה
-    // בשם, ר' FileLogger - לכן לא ניתן לחזות את השם המדויק מראש).
+    // Finds the log file created for this prefix. The name also contains a timestamp,
+    // so the exact file name can't be predicted in advance.
     private Path findCreatedFile(String prefix) throws IOException {
         try (Stream<Path> files = Files.list(Path.of("logs"))) {
             return files.filter(path -> path.getFileName().toString().startsWith(prefix))

@@ -13,20 +13,18 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class Img {
 
-    // קאש לתמונות שנטענו מהדיסק - מונע ImageIO.read חוזר על אותו קובץ
-    // בכל render tick (60 פעמים בשנייה). המפתח כולל את מידות היעד כדי
-    // שגדלים שונים של אותה תמונה לא ידרסו זה את זה.
+    // Caches images loaded from disk, so the same file isn't re-read on every render.
+    // The key includes the target size, so different scalings of one file don't overwrite each other.
     private static final Map<String, BufferedImage> IMAGE_CACHE = new ConcurrentHashMap<>();
 
     private BufferedImage img;
     private static JFrame frame;
     static JLabel label;
-    // כותרת חלון "ממתינה" (שלב 6, ר' setTitle) - נחוצה כי show() יוצרת
-    // את ה-frame באיחור (בתוך invokeLater משלה, בפעם הראשונה בלבד) - אם
-    // setTitle נקראת *לפני* שזה קרה, אין frame קיים לעדכן עדיין.
+    // Pending window title: show() creates the frame lazily, so setTitle may be called before one exists.
     private static String pendingTitle;
 
     /* ----------- load & optional resize ----------- */
+    /** Loads an image, optionally scaled to a target size, reusing the cache when possible. */
     public Img read(String path,
                     Dimension targetSize,
                     boolean keepAspect,
@@ -84,12 +82,7 @@ public class Img {
 
     public Img read(String path) { return read(path, null, false, null); }
 
-    /**
-     * טוענת תמונה כ"קנבס" נקי לציור - עותק פרטי (לא משותף עם הקאש),
-     * כי קנבס עומד להיות מצויר עליו (drawOn/fillRect וכו') בכל פריים,
-     * ועותק משותף היה נצבע-על מפריים לפריים. עדיין נמנעת מקריאה מהדיסק
-     * בזכות הקאש הפנימי.
-     */
+    /** Loads an image as a private, drawable canvas - a shared cached copy would accumulate paint across frames. */
     public Img readAsFreshCanvas(String path) {
         BufferedImage source = IMAGE_CACHE.get(path);
         if (source == null) {
@@ -109,12 +102,7 @@ public class Img {
         return this;
     }
 
-    /**
-     * כמו readAsFreshCanvas, אבל מציירת את התמונה בגודל יעד נתון (לא
-     * הגודל המקורי של הקובץ) - נחוץ כדי שרקע הלוח (board.png) יוכל
-     * להתאים את עצמו לגודל החלון הנוכחי, בדיוק כמו שספרייטי הכלים
-     * כבר עושים דרך read(path, targetSize, ...).
-     */
+    /** Same as readAsFreshCanvas, scaled to a target size - lets the board background follow the window size. */
     public Img readAsFreshCanvas(String path, int targetWidth, int targetHeight) {
         BufferedImage source = IMAGE_CACHE.get(path);
         if (source == null) {
@@ -135,12 +123,7 @@ public class Img {
         return this;
     }
 
-    /**
-     * יוצרת קנבס ריק (לא נטען מקובץ) בגודל נתון, מלא בצבע רקע אחיד.
-     * זו הדרך היחידה ליצור "משטח ציור" גדול יותר מתמונת הלוח עצמה -
-     * למשל כדי להרכיב עליו את הלוח ולצדדיו את פאנלי הניקוד/המהלכים -
-     * בלי לצאת מגבולות ה-API של Img ובלי להיעזר בשום ספריית גרפיקה אחרת.
-     */
+    /** Creates an empty canvas of the given size, filled with one color - the drawing surface for the whole scene. */
     public Img newCanvas(int width, int height, Color backgroundColor) {
         BufferedImage canvas = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = canvas.createGraphics();
@@ -161,11 +144,7 @@ public class Img {
         return img.getHeight();
     }
 
-    /**
-     * מציירת טקסט עם שליטה אמיתית בגודל הפונט (בפיקסלים) ואפשרות הדגשה (bold).
-     * putText הקיימת נשארת ללא שינוי (כדי לא לשבור קוד קיים שמשתמש בה) -
-     * זו תוספת ל-API הפנימי של Img לצורך פאנלי הניקוד/המהלכים החדשים.
-     */
+    /** Draws text with an exact pixel font size and optional bold. */
     public void drawText(String text, int x, int y, int fontSize, Color color, boolean bold) {
         if (img == null) throw new IllegalStateException("Image not loaded.");
         Graphics2D g = img.createGraphics();
@@ -176,13 +155,7 @@ public class Img {
         g.dispose();
     }
 
-    /**
-     * מודדת (בפיקסלים) כמה רוחב טקסט נתון יתפוס בפונט/גודל נתונים -
-     * בלי לצייר כלום. נחוץ כדי למרכז טקסט (למשל כותרת "ניצחת!" או טקסט
-     * על כפתור) בלי לנחש רוחב לפי מספר תווים, ובלי לצאת מגבולות ה-API
-     * של Img לשום ספריית גרפיקה אחרת - זה עדיין שימוש רק ב-Graphics2D
-     * הפנימי שכבר נמצא בשימוש בכל שאר המחלקה.
-     */
+    /** Measures how wide text would be, without drawing it - used to center text instead of guessing its width. */
     public int textWidth(String text, int fontSize, boolean bold) {
         if (img == null) throw new IllegalStateException("Image not loaded.");
         Graphics2D g = img.createGraphics();
@@ -194,6 +167,7 @@ public class Img {
     }
 
     /* ----------- draw this image onto another ----------- */
+    /** Composites this image onto another at the given position, respecting alpha. */
     public void drawOn(Img other, int x, int y) {
         if (img == null || other.img == null)
             throw new IllegalStateException("Both images must be loaded.");
@@ -209,6 +183,7 @@ public class Img {
     }
 
     /* ----------- draw a filled, alpha-blended rectangle (highlights / sandglass) ----------- */
+    /** Fills a rectangle, blending with whatever is underneath if the color has alpha. */
     public void fillRect(int x, int y, int w, int h, Color color) {
         if (img == null) throw new IllegalStateException("Image not loaded.");
         Graphics2D g = img.createGraphics();
@@ -218,13 +193,7 @@ public class Img {
         g.dispose();
     }
 
-    /**
-     * כמו fillRect, אבל עם פינות מעוגלות - נוסף לבקשת רות (עיצוב "פילה"
-     * לתג "You" בפאנל הצד, ר' SidePanelView) - fillRect/drawRect הקיימות
-     * נשארות ללא שינוי (עדיין רלוונטיות למקומות שבאמת רוצים פינות
-     * חדות - למשל גבול הלוח/הפאנלים עצמם). arcWidth/arcHeight - קוטר
-     * העיגול בכל פינה (לא רדיוס), בדיוק כמו Graphics2D.fillRoundRect עצמה.
-     */
+    /** Like fillRect but with rounded corners; arcWidth/arcHeight are corner diameters, as in Graphics2D. */
     public void fillRoundRect(int x, int y, int w, int h, int arcWidth, int arcHeight, Color color) {
         if (img == null) throw new IllegalStateException("Image not loaded.");
         Graphics2D g = img.createGraphics();
@@ -235,6 +204,7 @@ public class Img {
     }
 
     /* ----------- draw a rectangle outline (e.g. selection border) ----------- */
+    /** Strokes a rectangle outline, inset by half the stroke so it stays inside the given bounds. */
     public void drawRect(int x, int y, int w, int h, Color color, int thickness) {
         if (img == null) throw new IllegalStateException("Image not loaded.");
         Graphics2D g = img.createGraphics();
@@ -246,6 +216,7 @@ public class Img {
     }
 
     /* ----------- draw a filled oval (e.g. legal-move dot marker) ----------- */
+    /** Fills an oval inscribed in the given rectangle. */
     public void fillOval(int x, int y, int w, int h, Color color) {
         if (img == null) throw new IllegalStateException("Image not loaded.");
         Graphics2D g = img.createGraphics();
@@ -271,27 +242,21 @@ public class Img {
     }
 
     /* ----------- display in a Swing window ----------- */
+    /** Shows this image in the shared window, creating it on first call and swapping the image afterwards. */
     public void show() {
         if (img == null) throw new IllegalStateException("Image not loaded.");
 
          if (frame == null) {
-        // פעם ראשונה - יוצרים את החלון. pack() כאן קובע רק את הגודל
-        // ההתחלתי (לפי גודל התמונה הראשונה) - אחרי זה setResizable
-        // משאיר למשתמשת לגרור ולשנות גודל בעצמה.
+        // First call - create the window. pack() here only sets the initial size;
+        // after that the user is free to resize it by dragging.
         SwingUtilities.invokeLater(() -> {
             frame = new JFrame(pendingTitle != null ? pendingTitle : "Image");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             frame.setResizable(true);
             label = new JLabel(new ImageIcon(img));
-            // ברירת המחדל של JLabel היא למרכז אייקון בתוך גבולות ה-label -
-            // וה-label עצמו נמתח (BorderLayout.CENTER) לכל שטח החלון, שכמעט
-            // תמיד קצת יותר גדול מהתמונה המצוירת בפועל (בגלל חלוקת שלמים
-            // בחישוב גודל התא). התוצאה: התמונה "צפה" עם רווח מסביבה, ואז
-            // קליק שנמדד ביחס ל-label (שמתחיל ב-0,0 של כל השטח הנמתח) לא
-            // תואם לקואורדינטות בתוך התמונה עצמה. עיגון לפינה השמאלית-
-            // עליונה מבטל את המירכוז הזה לגמרי: התמונה תמיד מצוירת החל
-            // מ-(0,0) - בדיוק אותה נקודת התחלה שממנה נמדדות קואורדינטות
-            // העכבר - כך שאין יותר שום פער לפצות עליו בזמן טיפול בקליק.
+            // JLabel centers its icon by default, and the label stretches to fill the window -
+            // which is usually slightly larger than the drawn image. That gap would offset every
+            // click relative to the image. Anchoring top-left makes image (0,0) == mouse (0,0).
             label.setHorizontalAlignment(SwingConstants.LEFT);
             label.setVerticalAlignment(SwingConstants.TOP);
             frame.add(label);
@@ -300,10 +265,8 @@ public class Img {
             frame.setVisible(true);
         });
     } else {
-        // החלון כבר קיים - רק מעדכנים את התמונה בתוכו. בכוונה *לא*
-        // קוראים ל-pack() כאן: pack() היה מכריח את החלון לחזור לגודל
-        // התמונה בכל פריים (60 פעם בשנייה), מה שמבטל כל שינוי גודל
-        // ידני שהמשתמשת עושה בעכבר, עוד לפני שהיא מספיקה לראות אותו.
+        // Window already exists - just swap the image. Deliberately no pack() here:
+        // it would snap the window back to the image size on every frame, undoing any manual resize.
         SwingUtilities.invokeLater(() -> {
             label.setIcon(new ImageIcon(img));
             frame.repaint();
@@ -314,18 +277,15 @@ public class Img {
     /* ----------- access (optional) ----------- */
     public BufferedImage get() { return img; }
 
-    /**
-     * הגודל הפנימי הזמין לציור *ברגע הזה* (לא ערך שנשמר מ-resize קודם) -
-     * לקריאה בכל פעם שצריך לחשב גיאומטריה, כדי שרינדור וטיפול בקליק
-     * תמיד יסתמכו על אותו מקור-אמת חי, בלי סיכון ששניהם "לא מסונכרנים"
-     * (למשל קליק שמגיע ממש אחרי גרירת שינוי גודל, לפני שמשתנה שמור
-     * כלשהו הספיק להתעדכן).
-     */
-    /** האם show() כבר יצר בפועל את החלון - שימושי כדי לא לקרוא ל-contentSize() לפני שהוא קיים. */
+    /** Whether show() has actually created the window yet - check before calling contentSize(). */
     public boolean isReady() {
         return frame != null;
     }
 
+    /**
+     * The drawable area size right now (never a value cached from an earlier resize), so rendering
+     * and click handling always read the same live source and can't drift out of sync.
+     */
     public Dimension contentSize() {
         if (frame == null) {
             throw new IllegalStateException("Call show() before contentSize().");
@@ -334,12 +294,8 @@ public class Img {
     }
 
 /**
- * קובעת את כותרת חלון המשחק (שלב 6 - "לכתוב את ה-room id בראש המסך",
- * ר' NetworkGameWindow) - סטטית, כמו frame/label, כי כל ה-Img
- * "canvases" הזמניים ש-render() יוצר בכל טיק חולקים אותו חלון אחד.
- * אם frame כבר קיים - מעדכנת אותו ישירות (על ה-EDT); אחרת שומרת
- * ב-pendingTitle, ו-show() (למעלה) מיישמת אותה ברגע שהיא יוצרת את
- * ה-frame בפעם הראשונה.
+ * Sets the game window title. Static like frame/label, because every temporary Img canvas shares the one window.
+ * Applied immediately if the frame exists, otherwise stored and applied when show() creates it.
  */
 public static void setTitle(String title) {
     pendingTitle = title;
@@ -348,12 +304,12 @@ public static void setTitle(String title) {
     }
 }
 
+/** Registers a handler for left/any mouse click, receiving pixel coordinates inside the image. */
 public void onClick(java.util.function.BiConsumer<Integer, Integer> handler) {
     if (label == null) {
         throw new IllegalStateException("Call show() before onClick().");
     }
 
-    
     label.addMouseListener(new java.awt.event.MouseAdapter() {
         @Override
         public void mouseClicked(java.awt.event.MouseEvent e) {
@@ -361,7 +317,7 @@ public void onClick(java.util.function.BiConsumer<Integer, Integer> handler) {
         }
     });
 }
-// ב-Img.java, ליד onClick הקיימת
+/** Registers a handler for right-clicks only - used to trigger a jump. */
 public void onRightClick(java.util.function.BiConsumer<Integer, Integer> handler) {
     if (label == null) {
         throw new IllegalStateException("Call show() before onRightClick().");
@@ -377,10 +333,8 @@ public void onRightClick(java.util.function.BiConsumer<Integer, Integer> handler
 }
 
 /**
- * נקרא בכל פעם שהמשתמשת גוררת ומשנה את גודל החלון. מדווח את שטח
- * הציור *הפנימי* בפועל (getContentPane) ולא את frame.getWidth()/getHeight()
- * הגולמיים - אלה כוללים גם את מסגרת החלון וכותרתו, שאינם חלק מהשטח
- * שבו באמת מציירים את הלוח.
+ * Registers a handler fired whenever the user resizes the window.
+ * Reports the inner content size, not the raw frame size - the latter includes the border and title bar.
  */
 public void onResize(java.util.function.BiConsumer<Integer, Integer> handler) {
     if (label == null) {

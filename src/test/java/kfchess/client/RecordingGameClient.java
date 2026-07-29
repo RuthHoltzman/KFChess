@@ -5,11 +5,9 @@ import java.net.URI;
 import java.net.URISyntaxException;
 
 /**
- * GameClient מזויף לבדיקות: דורס את שיטות השליחה כדי רק לרשום מה נקרא,
- * בלי לגעת ברשת בכלל - GameClient.send() האמיתית (שקוראים לה sendClick/
- * sendJump/sendRestart) הייתה זורקת NotYetConnectedException כי הטסטים
- * כאן לא באמת מתחברים לשרת. אותה גישה בדיוק כמו FakeWebSocket שכבר קיים
- * (מחלקת stub ייעודית לטסטים, בחבילה הזו).
+ * Test double for GameClient: overrides the send methods to just record what was called, without
+ * touching the network. The real send() would throw NotYetConnectedException, since these tests
+ * never connect to a server. Same approach as the existing FakeWebSocket stub.
  */
 class RecordingGameClient extends GameClient {
 

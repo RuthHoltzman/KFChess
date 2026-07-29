@@ -4,13 +4,7 @@ import kfchess.view.Img;
 
 import java.awt.Dimension;
 
-/**
- * מוציא את חישוב הגיאומטריה של הלוח על המסך למקום אחד, נפרד מחלון
- * המשחק עצמו (NetworkGameWindow) - במקור נכתב כדי לשתף קוד גיאומטריה
- * בין חלון המשחק המקומי (שהוסר) לחלון הרשת, ונשאר מחלקה עצמאית ונבדקת
- * גם אחרי ההסרה, כדי שחישוב הגיאומטריה יישאר מופרד מהציור/מה-Swing
- * עצמו + פרמטרי (כמו רוחב פאנל הצד) בלי hard-code.
- */
+/** Keeps on-screen board geometry in one testable place, separate from the Swing window and the drawing code. */
 public final class BoardLayoutCalculator {
 
     private static final int MIN_CELL_SIZE = 20;
@@ -18,21 +12,10 @@ public final class BoardLayoutCalculator {
     private BoardLayoutCalculator() {
     }
 
-    /**
-     * כל המספרים שקובעים "איפה כל דבר נמצא על המסך" ברגע נתון - מחושבים
-     * *במקום אחד בלבד* (computeLayout למטה) ומועברים מוכנים לכל מי שצריך
-     * אותם (רינדור, טיפול בקליק). זה בדיוק הלקח משתי הבעיות הקודמות: כל
-     * פעם ששני מקומות חישבו משהו דומה בנפרד, הם התבדרו זה מזה.
-     */
+    /** Every number describing where things sit on screen - computed once here, then passed to rendering and click handling. */
     public record BoardLayout(int cellSize, int boardPixelSize, int offsetX, int offsetY) {}
 
-    /**
-     * הלוח תמיד *ריבועי* - cellSize זהה לרוחב ולגובה, לא שני מספרים
-     * נפרדים. אם החלון עצמו לא ריבועי, לוקחים את הצד הקטן מבין השניים
-     * (השטח שנשאר באמצע, אחרי הפאנלים) לקביעת גודל הלוח, וממרכזים אותו -
-     * כך שנשארים שוליים ריקים בציר שיש בו עודף מקום, במקום למתוח את
-     * הלוח למלבן.
-     */
+    /** Sizes the board as a centered square in the space left between the two side panels, letterboxing any excess. */
     public static BoardLayout computeLayout(Dimension content, int cols, int rows, int sidePanelWidth) {
         int middleWidth = Math.max(1, content.width - sidePanelWidth * 2);
         int middleHeight = Math.max(1, content.height);
@@ -46,7 +29,7 @@ public final class BoardLayoutCalculator {
         return new BoardLayout(cellSize, boardPixelSize, offsetX, offsetY);
     }
 
-    /** גודל התוכן הנוכחי של החלון, או גודל התחלתי קבוע אם החלון עוד לא נפתח בפועל (ר' Img.isReady). */
+    /** The window's current content size, or a fixed starting size if the window hasn't been created yet. */
     public static Dimension currentContentSize(Img windowAnchor, int sidePanelWidth, int initialCellSize) {
         if (!windowAnchor.isReady()) {
             return new Dimension(sidePanelWidth * 2 + initialCellSize * 8, initialCellSize * 8);

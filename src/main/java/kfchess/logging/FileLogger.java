@@ -7,22 +7,16 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
+
 /**
- * לוגר טקסט משותף לשרת וללקוח (שלב 6, חלק 2 - "Store logs on both server
- * and client side, for all of the client/server activity", לפי המצגת
- * המקורית). זה לא קשור בכלל ל-moveLog (רישום מהלכי השחמט, שכבר קיים
- * מהשלבים המוקדמים ומוצג בפאנל הצדדי) - זה לוג טכני/תפעולי: מי התחבר/
- * התנתק, שגיאות, איך משחק נוצר וכו'.
+ * Shared text logger for the server and the client: an operational log (who connected, errors,
+ * how a game was created) - unrelated to the chess move log shown in the side panel.
  * <p>
- * קובץ חדש בכל הרצה (לא קובץ אחד שמצטבר) - רות בחרה את זה במפורש, כדי
- * שקל יהיה להצביע על "ההרצה הספציפית שבה קרה משהו", ובעיקר כדי שכמה
- * תהליכי לקוח שרצים בו-זמנית (כל חלון LoginScreenMain הוא JVM נפרד) לא
- * "יתחרו" על אותו קובץ - לכל הרצה יש שם קובץ ייחודי (קידומת + חותמת
- * זמן), אז אין בכלל מצב של כתיבה בו-זמנית מכמה תהליכים לאותו קובץ.
+ * A new file per run, not one growing file: it makes it easy to point at the specific run where
+ * something happened, and several client processes running at once never share a file.
  * <p>
- * synchronized על log(): בתוך תהליך *אחד* (למשל GameServer) עדיין אפשר
- * שכמה threads יכתבו בו-זמנית (thread הרשת מול thread הטיק) - בלי נעילה
- * שורות היו עלולות "להתערבב" זו בזו בקובץ.
+ * log() is synchronized because within one process several threads can write at the same time
+ * (the network thread and the tick thread), and lines would otherwise interleave.
  */
 public class FileLogger {
 
@@ -32,15 +26,16 @@ public class FileLogger {
 
     private final PrintWriter writer;
 
-    // prefix - "server" או "client", קובע רק את תחילת שם הקובץ (logs/server_<timestamp>.log).
+    /** prefix is "server" or "client"; it only sets the start of the file name (logs/server_&lt;timestamp&gt;.log). */
     public FileLogger(String prefix) {
         this.writer = openWriter(prefix);
     }
 
-    // אם אי-אפשר ליצור/לפתוח את קובץ הלוג (לדוגמה בעיית הרשאות) - לא
-    // מפילה את השרת/לקוח בגלל זה בכלל: מדפיסה אזהרה אחת ל-System.err
-    // וממשיכה בלי כתיבה לקובץ (log() בודקת null ולא עושה כלום). הלוג
-    // הוא כלי עזר, לא חלק קריטי מהתפקוד עצמו.
+    /**
+     * Opens the log file, or returns null if it can't be created (e.g. a permissions problem).
+     * Logging is a convenience, not core behavior, so a failure here warns once and never brings
+     * the server or client down - log() checks for null and quietly does nothing.
+     */
     private static PrintWriter openWriter(String prefix) {
         try {
             Files.createDirectories(LOGS_DIRECTORY);
@@ -52,6 +47,7 @@ public class FileLogger {
         }
     }
 
+    /** Writes one timestamped line; a no-op if the log file couldn't be opened. */
     public synchronized void log(String message) {
         if (writer == null) {
             return;
@@ -59,9 +55,10 @@ public class FileLogger {
         writer.println("[" + LocalDateTime.now().format(LINE_TIMESTAMP) + "] " + message);
     }
 
-    // נקראת רק בסגירה מסודרת (למשל אם בעתיד יתווסף shutdown hook) - כרגע
-    // לא נקראת בפועל מ-GameServer/GameClient (autoFlush=true כבר מבטיח
-    // שהשורות נכתבות לדיסק מיד, גם בלי close מפורש).
+    /**
+     * For an orderly shutdown. Not currently called by GameServer or GameClient - autoFlush already
+     * writes each line to disk immediately, so nothing is lost without an explicit close.
+     */
     public void close() {
         if (writer != null) {
             writer.close();

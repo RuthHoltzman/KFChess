@@ -33,8 +33,8 @@ class GameIdResolverTest {
 
     @Test
     void resolve_pathWithQueryString_stripsQuery() {
-        // שלב 4 Part B: ?username= מגיע על אותו URI - בלי חיתוך query
-        // string זה היה הופך בטעות לחלק משם ה-room.
+        // ?username= arrives on the same URI - without stripping the query string
+        // it would end up as part of the room name.
         assertEquals("room1", GameIdResolver.resolve("/room1?username=ruth"));
     }
 

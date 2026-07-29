@@ -20,14 +20,13 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * בודק את ClientSnapshotReconstructor דרך round-trip אמיתי (SnapshotMessage
- * -> JSON עם Gson -> IncomingSnapshot), בדיוק כמו שקורה בפועל בין שרת
- * ללקוח - לא בונה IncomingSnapshot ידנית. שני הדברים החשובים ביותר
- * שנבדקים כאן: (1) שכלי עם אותו piece.id() נשאר אותו אובייקט Java בין
- * שתי הודעות נפרדות (שימור זהות - זה מה שמאפשר את אנימציית שעון-החול
- * ברשת), ו-(2) שהכלי על הלוח וה-Piece בתוך Motion/JumpVisual המשוחזרים
- * הם אותו אובייקט בדיוק בתוך אותה הודעה (בלעדי זה SnapshotFactory לא
- * יכול לקשר תנועה לכלי בכלל, גם בלי קשר לזהות בין הודעות).
+ * Tests ClientSnapshotReconstructor through a real round trip (SnapshotMessage -&gt; JSON -&gt;
+ * IncomingSnapshot), exactly as it happens between server and client, rather than building an
+ * IncomingSnapshot by hand. The two things that matter most here:
+ * (1) a piece with the same id() stays the same Java object across two separate messages, which is
+ * what makes the networked sandglass animation possible; and
+ * (2) within a single message, the piece on the board and the Piece inside the reconstructed
+ * Motion/JumpVisual are the same object - without that, motion can't be tied to a piece at all.
  */
 class ClientSnapshotReconstructorTest {
 
@@ -99,8 +98,8 @@ class ClientSnapshotReconstructorTest {
                 .pieceAt(new Position(6, 4)).orElseThrow();
         assertTrue(moverDuringTransit.isInTransit());
 
-        // בדיוק כמו ש-GameEngine.completeMotion עושה בפועל: מקדם את מצב
-        // אותו אובייקט Piece עצמו לפני שההודעה הבאה נבנית.
+        // Exactly what GameEngine.completeMotion does in practice: advance the state of
+        // the very same Piece object before the next message is built.
         pawn.markArrived();
         SnapshotMessage message2 = new SnapshotMessage(8, 8,
                 List.of(PieceDto.from(pawn, new Position(5, 4))), null, List.of(), Map.of(), Map.of(),
@@ -184,8 +183,8 @@ class ClientSnapshotReconstructorTest {
         assertEquals(List.of("e2e4"), result.moveLog().get(PieceColor.WHITE));
     }
 
-    // שלב 5, חלק 1: מוודא ש-disconnectSecondsRemaining עובר round-trip (JSON) בלי שינוי -
-    // בניגוד לכלים/מהלכים, אין כאן שום "שחזור זהות" לעשות, רק להעביר את הערך הלאה כמו שהוא.
+    // disconnectSecondsRemaining must survive the JSON round trip unchanged - unlike pieces,
+    // there is no identity to reconstruct here, just a value to pass along as is.
     @Test
     void reconstruct_disconnectSecondsRemaining_passedThroughUnchanged() {
         SnapshotMessage message = new SnapshotMessage(8, 8, List.of(), null, List.of(), Map.of(), Map.of(),
@@ -197,8 +196,8 @@ class ClientSnapshotReconstructorTest {
         assertEquals(12, result.disconnectSecondsRemaining());
     }
 
-    // בקשת רות (הסבב הזה): waitingForOpponent עובר round-trip (JSON) בלי
-    // שינוי - בדיוק כמו disconnectSecondsRemaining למעלה.
+    // waitingForOpponent likewise survives the JSON round trip unchanged,
+    // exactly like disconnectSecondsRemaining above.
     @Test
     void reconstruct_waitingForOpponent_passedThroughUnchanged() {
         SnapshotMessage message = new SnapshotMessage(8, 8, List.of(), null, List.of(), Map.of(), Map.of(),

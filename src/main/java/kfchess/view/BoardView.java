@@ -7,36 +7,27 @@ import kfchess.engine.snapshot.PieceVisualState;
 import kfchess.model.Position;
 import java.awt.*;
 
+/** Draws the board and everything on it - pieces, rest timers, capture effects, selection and legal-move markers. */
 public class BoardView {
 
-    private static final Color SELECTION_COLOR = new Color(255, 235, 59); // צהוב לבחירה
-    private static final Color LEGAL_MOVE_COLOR = new Color(30, 200, 30, 170); // ירוק חצי-שקוף לתאים שאפשר לזוז אליהם
-    private static final Color REST_SAND_COLOR = new Color(255, 200, 0, 120); // "שעון חול" - צהוב חצי-שקוף שמתרוקן
-    private static final Color CAPTURE_EFFECT_COLOR = new Color(220, 30, 30); // אדום - "X" דוהה במקום שכלי נלכד
+    private static final Color SELECTION_COLOR = new Color(255, 235, 59); // yellow - the selected square
+    private static final Color LEGAL_MOVE_COLOR = new Color(30, 200, 30, 170); // translucent green - reachable squares
+    private static final Color REST_SAND_COLOR = new Color(255, 200, 0, 120); // "sandglass" - draining yellow overlay
+    private static final Color CAPTURE_EFFECT_COLOR = new Color(220, 30, 30); // red - fading "X" where a piece was captured
 
     private final String boardImagePath;
 
-    // geometry היה שדה קבוע בקונסטרוקטור - עכשיו הוא פרמטר בכל render(),
-    // כי גודל הלוח יכול להשתנות מפריים לפריים (שינוי גודל חלון), ו-BoardView
-    // עצמו לא מחזיק שום זיכרון-מצב (בניגוד ל-SnapshotFactory) - אז אין
-    // סיבה לקבע אותו בקונסטרוקטור בכלל.
+
     public BoardView(String boardImagePath) {
         this.boardImagePath = boardImagePath;
     }
 
-    /**
-     * מציירת את הלוח + הכלים על קנבס טרי ומחזירה אותו (בלי להציג אותו).
-     * ההצגה בפועל (canvas.show()) היא באחריות שכבת קומפוזיציה מעל
-     * (GameSceneView) - כי אנחנו רוצים לצייר קודם את פאנלי הניקוד/המהלכים
-     * לצידי הלוח, ורק אז להציג את התמונה השלמה פעם אחת.
-     */
+    /** Draws the board onto a fresh canvas and returns it - GameSceneView composes and shows the final image. */
     public Img render(GameSnapshot snapshot, BoardGeometry geometry) {
         int boardWidthPx = geometry.getCellWidth() * geometry.getCols();
         int boardHeightPx = geometry.getCellHeight() * geometry.getRows();
 
-        // רקע הלוח נטען עכשיו בגודל היעד הנוכחי (לא בגודל המקורי של
-        // הקובץ) - בדיוק כמו שספרייטי הכלים כבר עושים - כדי שהוא יתאים
-        // את עצמו לגודל החלון הנוכחי בכל render.
+        // Loaded at the current target size (not the file's own size) so it follows window resizes.
         Img canvas = new Img().readAsFreshCanvas(boardImagePath, boardWidthPx, boardHeightPx);
 
         drawLegalMoveMarkers(canvas, snapshot, geometry);
@@ -46,8 +37,7 @@ public class BoardView {
             drawRestOverlayIfResting(canvas, piece, geometry);
         }
 
-        // מצוירים אחרי הכלים (מעל), כדי שה"X" הדוהה יהיה גלוי בבירור גם
-        // אם כלי אחר כבר עומד/עובר על אותה משבצת ברגע זה.
+        // Drawn on top of the pieces, so the fading "X" stays visible even if another piece already occupies the square.
         for (CaptureEffectSnapshot effect : snapshot.captureEffects()) {
             drawCaptureEffect(canvas, effect, geometry);
         }
@@ -57,13 +47,7 @@ public class BoardView {
         return canvas;
     }
 
-    /**
-     * מציירת "X" אדום דוהה + טבעת מתרחבת במקום שבו כלי נלכד הרגע (בין אם
-     * זו לכידה רגילה, ובין אם זו "התאדות" של תוקף מול כלי קופץ) - כדי
-     * שהלכידה תהיה ברורה לעין ולא תיראה כאילו "כלום לא קרה" בין פריים
-     * לפריים. progress=0 זה הרגע שנתפס (הכי בולט), progress=1 זה הרגע
-     * שבו האפקט אמור להיעלם לגמרי (הכי דהוי ומורחב).
-     */
+    /** Draws a fading red "X" and expanding ring where a piece was just captured (progress 0 = fresh, 1 = gone). */
     private void drawCaptureEffect(Img canvas, CaptureEffectSnapshot effect, BoardGeometry geometry) {
         double fadeOut = 1.0 - effect.progress();
         int alpha = (int) Math.round(220 * fadeOut);
@@ -74,7 +58,7 @@ public class BoardView {
         int cx = (int) Math.round(effect.pixelX() + geometry.getCellWidth() / 2.0);
         int cy = (int) Math.round(effect.pixelY() + geometry.getCellHeight() / 2.0);
         int baseSize = Math.min(geometry.getCellWidth(), geometry.getCellHeight());
-        // הטבעת מתרחבת קצת תוך כדי שהיא דוהה - נותן תחושת "התפזרות" ולא רק היעלמות.
+        // The ring grows slightly as it fades, so it reads as "dispersing" rather than just disappearing.
         int ringSize = (int) Math.round(baseSize * (0.55 + 0.35 * effect.progress()));
         Color ringColor = new Color(CAPTURE_EFFECT_COLOR.getRed(), CAPTURE_EFFECT_COLOR.getGreen(),
                 CAPTURE_EFFECT_COLOR.getBlue(), alpha);
@@ -87,6 +71,7 @@ public class BoardView {
         canvas.drawText(mark, cx - markWidth / 2, cy + markFontSize / 3, markFontSize, ringColor, true);
     }
 
+    /** Draws one piece's current animation frame, centered in its square. */
     private void drawPiece(Img canvas, PieceSnapshot piece, BoardGeometry geometry) {
         String framePath = currentFramePathFor(piece);
         Img pieceImg = new Img().read(
@@ -94,13 +79,8 @@ public class BoardView {
                 new Dimension(geometry.getCellWidth(), geometry.getCellHeight()),
                 true, null
         );
-        // read(..., keepAspect=true) שומרת על יחס הגובה-רוחב של הספרייט, ולכן
-        // הגודל בפועל של pieceImg כמעט תמיד קטן מ-cellWidth/cellHeight באחד
-        // הצירים (למשל ספרייט "רזה" יותר מהמשבצת). אם מציירים אותו פשוט
-        // בפינה השמאלית-עליונה של המשבצת (כמו קודם), הוא ייראה "דחוק"
-        // לפינה במקום להיות ממורכז בה - זו בדיוק התופעה של "כלים לא
-        // במיקום המדויק של הריבוע". כאן מחשבים את מרכז המשבצת ומזיזים
-        // את פינת הציור כך שהספרייט (בגודלו האמיתי אחרי הסקייל) יתמרכז בה.
+        // keepAspect=true means the scaled sprite is usually smaller than the cell on one axis.
+        // Offsetting by half the difference centers it, instead of pinning it to the top-left corner.
         int cellX = (int) Math.round(piece.pixelX());
         int cellY = (int) Math.round(piece.pixelY());
         int x = cellX + (geometry.getCellWidth() - pieceImg.width()) / 2;
@@ -108,11 +88,7 @@ public class BoardView {
         pieceImg.drawOn(canvas, x, y);
     }
 
-    /**
-     * "שעון חול": כל עוד הכלי במנוחה (קצרה אחרי הליכה, ארוכה אחרי קפיצה),
-     * מציירים על המשבצת שלו מלבן צהוב חצי-שקוף שמתחיל מלא וגובהו הולך
-     * ומצטמצם ככל שהמנוחה מתקדמת - עד שהוא נעלם לגמרי כשהמנוחה מסתיימת.
-     */
+    /** "Sandglass": a translucent overlay on a resting piece's square that drains as its cooldown elapses. */
     private void drawRestOverlayIfResting(Img canvas, PieceSnapshot piece, BoardGeometry geometry) {
         boolean resting = piece.state() == PieceVisualState.SHORT_REST
                 || piece.state() == PieceVisualState.LONG_REST;
@@ -129,6 +105,7 @@ public class BoardView {
         canvas.fillRect(x, y, geometry.getCellWidth(), overlayHeight, REST_SAND_COLOR);
     }
 
+    /** Outlines the viewer's currently selected square, if any. */
     private void drawSelectionHighlight(Img canvas, GameSnapshot snapshot, BoardGeometry geometry) {
         if (snapshot.selectedPosition() == null) {
             return;
@@ -137,6 +114,7 @@ public class BoardView {
         canvas.drawRect(topLeft.x, topLeft.y, geometry.getCellWidth(), geometry.getCellHeight(), SELECTION_COLOR, 4);
     }
 
+    /** Draws a dot on every square the selected piece could legally move to. */
     private void drawLegalMoveMarkers(Img canvas, GameSnapshot snapshot, BoardGeometry geometry) {
         for (Position target : snapshot.legalMoves()) {
             Point topLeft = geometry.cellToPixel(target);
@@ -147,6 +125,7 @@ public class BoardView {
         }
     }
 
+    /** Resolves the sprite file for a piece's current visual state and elapsed animation time. */
     private String currentFramePathFor(PieceSnapshot piece) {
         String folder = "" + piece.kind().code() + Character.toUpperCase(piece.color().code());
         String stateFolder = stateFolderFor(piece.state());
@@ -159,6 +138,7 @@ public class BoardView {
         return clip.getFramePath(frameIndex);
     }
 
+    /** The sprite sub-folder name for each visual state. */
     private String stateFolderFor(PieceVisualState state) {
         return switch (state) {
             case IDLE -> "idle";
@@ -169,6 +149,7 @@ public class BoardView {
         };
     }
 
+    /** Playback speed per visual state - moving animates faster than idling. */
     private int framesPerSecFor(PieceVisualState state) {
         return switch (state) {
             case IDLE -> 6;
@@ -178,6 +159,7 @@ public class BoardView {
         };
     }
 
+    /** Every state loops except JUMPING, which plays once and holds its last frame. */
     private boolean isLoopFor(PieceVisualState state) {
         return state != PieceVisualState.JUMPING;
     }

@@ -9,21 +9,10 @@ import java.awt.Rectangle;
 import java.util.List;
 
 /**
- * שכבת התצוגה העליונה: מרכיבה קנבס אחד גדול -
- * פאנל השחקן הלבן (מוצמד לקצה השמאלי) | הלוח (ריבועי, ממורכז בשטח
- * שנשאר באמצע) | פאנל השחקן השחור (מוצמד לקצה הימני) -
- * ורק היא קוראת ל-show() בפועל.
+ * Top-level view: composes one canvas - White's panel | the board | Black's panel - and is the only class that calls show().
  * <p>
- * בכוונה, המחלקה הזו לא מחשבת שום גיאומטריה בעצמה יותר (לא היכן הלוח
- * מתחיל, לא כמה מקום נשאר) - כל המספרים (גודל הלוח, ה-offset שלו)
- * מגיעים כפרמטרים מוכנים מ-NetworkGameWindow, שהוא המקום היחיד שבאמת
- * יודע מה גודל החלון האמיתי כרגע. זה לקח משתי באגים קודמים: כל פעם
- * ששני מקומות שונים חישבו את אותו מספר בנפרד (במקום שאחד יחשב ויעביר
- * לשני), הם התבדרו זה מזה וזה יצר בדיוק את הבאגים של "קליק לא במקום".
- * <p>
- * הלוח *תמיד* ריבועי (cellSize זהה לרוחב ולגובה) - זו הסיבה שאין יותר
- * "קצוות שהופכות למלבן": אם החלון עצמו לא ריבועי, פשוט נשאר שוליים
- * ריקים (letterboxing) בציר שיש בו עודף מקום, במקום למתוח את הלוח.
+ * It computes no geometry itself; all sizes and offsets arrive as parameters from NetworkGameWindow,
+ * so the same number is never calculated in two places that could drift apart.
  */
 public class GameSceneView {
 
@@ -33,26 +22,15 @@ public class GameSceneView {
     private static final Color BUTTON_COLOR = new Color(46, 139, 87);
     private static final Color BUTTON_BORDER_COLOR = Color.WHITE;
     private static final Color BUTTON_TEXT_COLOR = Color.WHITE;
-    // כתום-אדמדם, שונה בכוונה מ-OVERLAY_BACKGROUND (שחור) - כדי שהבאנר
-    // יבלוט כ"אזהרה" ולא יתבלבל עם מסך ה-Game-Over, למרות שהם אף פעם
-    // לא מוצגים בו-זמנית בפועל (ר' תיעוד drawDisconnectBanner).
+    // Warm red - reads as a warning, distinct from the black game-over overlay.
     private static final Color DISCONNECT_BANNER_BACKGROUND = new Color(120, 40, 20, 210);
-    // כחול רגוע, שונה בכוונה מהכתום-אדמדם של ניתוק - זו לא "אזהרה" (אף
-    // אחד לא עשה משהו רע), רק מידע נייטרלי "עוד לא התחלנו". ר' תיעוד
-    // drawWaitingForOpponentBanner.
+    // Calm blue - neutral information ("not started yet"), deliberately not a warning color.
     private static final Color WAITING_BANNER_BACKGROUND = new Color(20, 60, 110, 210);
-    // חום-כהה נייטרלי לפס שם-החדר - שונה מכל שאר הבאנרים (לא אזהרה, לא
-    // "עוד לא התחלנו") כי הוא לא תלוי-מצב בכלל, תמיד מוצג בדיוק אותו
-    // דבר (בקשת רות - שם החדר "בפס עליון קבוע"). עודכן (בקשת רות - עיצוב
-    // יותר יפה) מאפור-כחלחל שטוח לגוון חם, כדי להתאים ל-ROOM_ID_ACCENT
-    // למטה (שני-גוונים בטקסט עצמו - ר' drawRoomHeader).
+    // Neutral dark brown for the always-on room header, distinct from both state-dependent banners.
     private static final Color ROOM_HEADER_BACKGROUND = new Color(38, 34, 28);
-    // הצבע של מזהה החדר עצמו בתוך הפס (בהיר-חם, "זהב מעומעם") - שונה
-    // בכוונה מ-TITLE_COLOR (הלבן הרגיל) שמשמש למילה "Room" עצמה, כדי
-    // שהעין תתפוס מיד מה המידע ה"חשוב" (הקוד עצמו) מול המילה הכללית.
+    // Muted gold for the room id itself, so the eye separates the code from the word "Room".
     private static final Color ROOM_ID_ACCENT = new Color(201, 168, 118);
-    // גוון עמום לפרטים משניים בפס (כרגע רק "Spectator: ..." לצופה/ה) -
-    // לא אמור למשוך את העין כמו הקוד עצמו.
+    // Dim tone for secondary header details (currently just the spectator label).
     private static final Color ROOM_HEADER_MUTED = new Color(154, 149, 135);
 
     private static final int TITLE_FONT_SIZE = 42;
@@ -60,42 +38,28 @@ public class GameSceneView {
     private static final int BUTTON_WIDTH = 200;
     private static final int BUTTON_HEIGHT = 56;
     private static final int BUTTON_FONT_SIZE = 22;
-    // גובה/גודל-פונט משותפים לשני סוגי הבאנר העליון (ניתוק/המתנה ליריב) -
-    // אותה גיאומטריה בדיוק, רק צבע/טקסט שונים לפי המצב. אלה מצוירים *על
-    // הלוח עצמו* (boardCanvas) ותלויים-מצב - בניגוד ל-ROOM_HEADER_HEIGHT
-    // למטה, שהוא פס *קבוע* לרוחב כל הסצנה (כולל שני הפאנלים), לא רק הלוח.
+    // Shared by both state-dependent banners (disconnect / waiting) - same geometry, different color and text.
+    // These are drawn on the board canvas only, unlike ROOM_HEADER_HEIGHT below which spans the whole scene.
     private static final int TOP_BANNER_HEIGHT = 40;
     private static final int TOP_BANNER_FONT_SIZE = 20;
-    // גובה פס שם-החדר הקבוע - נפרד בכוונה מ-TOP_BANNER_HEIGHT (אלה שני
-    // סוגי-פס שונים לגמרי: זה קבוע ולרוחב מלא, האחרים תלויי-מצב ולרוחב
-    // הלוח בלבד). NetworkGameWindow *חייב* להשתמש באותו מספר בדיוק
-    // (ר' roomHeaderHeight() למטה) כשהוא מקטין את השטח הפנוי ללוח/פאנלים -
-    // בדיוק העיקרון שכבר קיים ב-BoardLayoutCalculator ("חישוב במקום אחד,
-    // לא בשני מקומות שיתבדרו זה מזה").
+    // Height of the always-on room header. NetworkGameWindow must use this exact number
+    // (via roomHeaderHeight()) when it shrinks the space left for the board.
     private static final int ROOM_HEADER_HEIGHT = 34;
     private static final int ROOM_HEADER_FONT_SIZE = 18;
 
     private final BoardView boardView;
     private final SidePanelView sidePanelView;
-    // שלושת השדות הבאים (roomId/role/username) קבועים לכל אורך חיי החלון -
-    // בניגוד לכל שאר המידע שמגיע ל-render() (GameSnapshot), הם *לא*
-    // משתנים תוך כדי משחק (שם החדר/התפקיד/שם המשתמש נקבעים פעם אחת ברגע
-    // החיבור, ר' NetworkGameWindow.launch) - אז הם שדות של הבנאי, לא
-    // פרמטרים חדשים ב-render() (שהיה משנה את החתימה שלה בלי צורך אמיתי).
+    // Fixed for the window's whole lifetime (set once at connect time), unlike everything else
+    // that arrives per-frame in the GameSnapshot - hence constructor fields, not render() parameters.
     private final String roomId;
     private final ClientRole role;
     private final String username;
 
-    // "הגודל האחרון שידוע" - מתעדכן בתחילת כל render(). לא זיכרון-מצב
-    // אמיתי, רק נוחות כדי ש-restartButtonBounds() (בלי פרמטרים, נקראת
-    // גם מחוץ ל-render כדי לבדוק קליק) תדע למה להתייחס.
+    // Refreshed at the start of every render(), so restartButtonBounds() (which takes no
+    // parameters and is also called from click handling) knows what to measure against.
     private int lastBoardPixelSize;
 
-    // חתימה ישנה (בלי roomId/role/username) - נשארת כדי ש-NetworkClickHandlerTest
-    // הקיים ימשיך לעבוד בלי שינוי (הוא בונה GameSceneView רק כדי לשאול
-    // restartButtonBounds(), לא קורא ל-render() בכלל - ר' תיעוד הטסט).
-    // שקולה ל-roomId=null/role=null/username=null, כמו שדפוס התאימות-
-    // לאחור הזה כבר עובד בכל הפרויקט (ר' SnapshotMessage/GameSession וכו').
+    /** Convenience overload without room/role/username - used only by NetworkClickHandlerTest. */
     public GameSceneView(BoardView boardView, int panelWidth) {
         this(boardView, panelWidth, null, null, null);
     }
@@ -108,26 +72,14 @@ public class GameSceneView {
         this.username = username;
     }
 
-    // כמה מקום (בפיקסלים) צריך לשמור *מלכתחילה* בשביל פס שם-החדר, לפני
-    // שמחשבים איפה הלוח/פאנלים בכלל נכנסים - NetworkGameWindow קורא
-    // לזה לפני BoardLayoutCalculator.computeLayout (ר' תיעוד שם) כדי
-    // שהלוח לא "יגלוש" מתחת לפס הזה. public+static בכוונה (בניגוד לשאר
-    // הקבועים הפרטיים כאן) - זה המספר היחיד מהמחלקה הזו שגם קוד מבחוץ
-    // חייב לדעת, כדי לא לשכפל אותו כקבוע נפרד שם (בדיוק הבאג ששני באגי-
-    // "קליק לא במקום" הקודמים נבעו ממנו).
+    /** Pixels to reserve for the room header before laying out the board - the one constant outside code must know. */
     public static int roomHeaderHeight() {
         return ROOM_HEADER_HEIGHT;
     }
 
     /**
-     * מיקום/גודל כפתור ה-Restart, ביחס ללוח בלבד (0,0 = הפינה השמאלית-
-     * עליונה של הלוח עצמו, לא של כל הסצנה) - נכון תמיד אחרי לפחות
-     * render() אחד. הקוד הקורא צריך להחסיר את ה-offset של הלוח (שהוא
-     * עצמו מחשב) לפני שהוא בודק קליק מול זה.
-     * <p>
-     * הערה: כרגע אין קוד שקורא למתודה הזו בפועל (שימשה את מסך המשחק
-     * המקומי שהוסר) - נשארה כאן כתשתית מוכנה לכפתור Restart ב-UI
-     * הרשת, אם/כשיתווסף.
+     * Restart button bounds, relative to the board's own top-left (not the scene's) - valid after at least one render().
+     * Callers must subtract the board offset before testing a click against it.
      */
     public Rectangle restartButtonBounds() {
         int x = (lastBoardPixelSize - BUTTON_WIDTH) / 2;
@@ -136,11 +88,13 @@ public class GameSceneView {
     }
 
     /**
-     * @param sceneWidthPx   הרוחב הכולל של החלון (הפנימי, לציור) - כולל שני הפאנלים.
-     * @param sceneHeightPx  הגובה הכולל של החלון.
-     * @param boardPixelSize גודל הלוח בפיקסלים - *ריבוע* אחד (רוחב=גובה תמיד).
-     * @param boardOffsetX   היכן הלוח מתחיל בציר X בתוך הסצנה (כבר כולל את הפאנל השמאלי + מירכוז).
-     * @param boardOffsetY   היכן הלוח מתחיל בציר Y בתוך הסצנה (מירכוז אנכי אם יש שוליים).
+     * Composes and shows one full frame: room header, board (with any overlay/banner), and both side panels.
+     *
+     * @param sceneWidthPx   total drawable window width, including both panels.
+     * @param sceneHeightPx  total drawable window height.
+     * @param boardPixelSize board size in pixels - always square.
+     * @param boardOffsetX   where the board starts on X (already accounts for the left panel and centering).
+     * @param boardOffsetY   where the board starts on Y (vertical centering, if there's spare room).
      */
     public void render(GameSnapshot snapshot, int sceneWidthPx, int sceneHeightPx,
                         int boardPixelSize, int boardOffsetX, int boardOffsetY) {
@@ -150,39 +104,27 @@ public class GameSceneView {
                 boardPixelSize, boardPixelSize, snapshot.boardHeightCells(), snapshot.boardWidthCells());
 
         Img scene = new Img().newCanvas(sceneWidthPx, sceneHeightPx, OUTER_BACKGROUND);
-        // תמיד מצויר, ראשון (בקשת רות - שם החדר "בפס עליון קבוע", לא תלוי-
-        // מצב כמו הבאנרים למטה) - לרוחב *כל* הסצנה (כולל שני הפאנלים),
-        // כי זה מידע כללי על המשחק, לא ספציפי ללוח. boardOffsetY שמתקבל
-        // כפרמטר כבר "יודע" להזיז את הלוח למטה בגובה הזה בדיוק - ר' תיעוד
-        // roomHeaderHeight()/NetworkGameWindow.computeBoardLayout.
+        // Always drawn first, spanning the whole scene - it's game-wide info, not board-specific.
+        // The boardOffsetY passed in already accounts for this header's height.
         drawRoomHeader(scene, sceneWidthPx);
 
         Img boardCanvas = boardView.render(snapshot, geometry);
         if (snapshot.gameOver()) {
             drawGameOverOverlay(boardCanvas, snapshot.winner(), snapshot.restartRequestedByViewer());
         }
-        // בפועל אף פעם לא קורה בו-זמנית עם gameOver (ר' GameSession.resolveExpiredDisconnects -
-        // ברגע שחלון החסד פג, gameOver הופך ל-true ו-disconnectSecondsRemaining חוזר ל-null
-        // באותו טיק) - אבל אין תלות מפורשת בין שני ה-if-ים כאן בכוונה, כל אחד עצמאי לגמרי
-        // לפי מה שה-snapshot בפועל מכיל, ולא לפי הנחה על מה "לא אמור" לקרות יחד.
+        // In practice this never coincides with gameOver, but the conditions stay independent
+        // on purpose - each reacts to what the snapshot actually contains, not to an assumption.
         if (snapshot.disconnectSecondsRemaining() != null) {
             drawDisconnectBanner(boardCanvas, snapshot.disconnectSecondsRemaining());
         }
-        // אף פעם לא קורה בו-זמנית עם disconnectSecondsRemaining (ר' תיעוד
-        // GameSession.isWaitingForOpponent - "פנוי" דורש שלא יהיה חלון-חסד
-        // פתוח על הצד השני, אז שני התנאים סותרים זה את זה) - שוב, if
-        // עצמאי בכוונה, לא תלוי בתנאי הקודם.
+        // Likewise mutually exclusive with the disconnect banner in practice, but kept independent.
         if (snapshot.waitingForOpponent()) {
             drawWaitingForOpponentBanner(boardCanvas);
         }
         boardCanvas.drawOn(scene, boardOffsetX, boardOffsetY);
 
-        // שני הפאנלים מתחילים מתחת לפס שם-החדר (startY=ROOM_HEADER_HEIGHT)
-        // ולא מ-0 כמו קודם - כדי שלא "יצטיירו" מתחת לפס ההוא (ר' תיעוד
-        // SidePanelView.draw). isLocalPlayer - true בדיוק לפאנל שמתאים
-        // ל-role של הלקוח הזה עצמו (WHITE→פאנל שמאל, BLACK→פאנל ימין) -
-        // לצופה/ה (role==SPECTATOR, או role==null בחתימת-התאימות הישנה)
-        // אף אחד מהשניים לא "שלי", אז אף פאנל לא מקבל את התג "(You: ...)".
+        // Both panels start below the room header. isLocalPlayer marks whichever panel matches
+        // this client's own role - a spectator owns neither, so neither gets the "You" badge.
         int panelWidth = sidePanelView.panelWidth();
         int panelStartY = ROOM_HEADER_HEIGHT;
         int panelHeight = sceneHeightPx - ROOM_HEADER_HEIGHT;
@@ -202,12 +144,8 @@ public class GameSceneView {
     }
 
     /**
-     * מציירת מסך "נגמר המשחק": רקע כהה חצי-שקוף, כותרת עם שם המנצח,
-     * וכפתור Restart. restartRequestedByViewer - האם *הצופה הזה בדיוק*
-     * כבר ביקש/ה RESTART (ר' GameSession.applyRestartVote - שני הצדדים
-     * צריכים לבקש כדי שהלוח יתאפס בפועל) - אם כן, מציגה "Waiting for
-     * opponent..." במקום "Game Over"/"Restart", כדי שהצד שכבר לחץ יידע
-     * שהקליק שלו נקלט ולא רק ילחץ שוב ושוב בלי משוב.
+     * Draws the game-over overlay: dark scrim, winner title, and a Restart button.
+     * If this viewer already voted to restart, it shows "Waiting for opponent..." instead, so they get feedback.
      */
     private void drawGameOverOverlay(Img boardCanvas, String winner, boolean restartRequestedByViewer) {
         boardCanvas.fillRect(0, 0, lastBoardPixelSize, lastBoardPixelSize, OVERLAY_BACKGROUND);
@@ -236,12 +174,8 @@ public class GameSceneView {
     }
 
     /**
-     * מציירת פס אזהרה צר לרוחב הלוח כולו, צמוד לקצה העליון: "Opponent
-     * disconnected - Xs to reconnect" - שלב 5 (auto-resign), ר' תיעוד
-     * GameSession.pendingDisconnects/DISCONNECT_GRACE_MILLIS. בכוונה
-     * *לא* overlay מלא כמו drawGameOverOverlay - המשחק לא נגמר, הלוח
-     * עדיין אמור להיראות (קפוא, כי אין tick חדש עד שהניתוק נפתר, אבל
-     * לא מוסתר) - רק באנר דק שמסביר *למה* הוא קפוא.
+     * Thin warning strip across the top of the board: "Opponent disconnected - Xs to reconnect".
+     * Deliberately not a full overlay - the game isn't over, so the board stays visible; this only explains why it's frozen.
      */
     private void drawDisconnectBanner(Img boardCanvas, int secondsRemaining) {
         boardCanvas.fillRect(0, 0, lastBoardPixelSize, TOP_BANNER_HEIGHT, DISCONNECT_BANNER_BACKGROUND);
@@ -254,11 +188,8 @@ public class GameSceneView {
     }
 
     /**
-     * מציירת פס עליון (אותה גיאומטריה בדיוק כמו drawDisconnectBanner, רק
-     * צבע כחול נייטרלי): "Waiting for an opponent to join..." - בקשת רות
-     * (הסבב הזה) - כל עוד GameSession.isWaitingForOpponent() (רק צד אחד
-     * מחובר), כדי שהשחקן/ית היחיד/ה שכבר בפנים ידע/תדע *למה* קליקים לא
-     * עושים כלום (ר' GameSession.applyCommand - נחסמים בשקט בלי הודעה).
+     * Same strip geometry as the disconnect banner, in neutral blue: "Waiting for an opponent to join...".
+     * Shown while only one player is connected, so they understand why their clicks do nothing.
      */
     private void drawWaitingForOpponentBanner(Img boardCanvas) {
         boardCanvas.fillRect(0, 0, lastBoardPixelSize, TOP_BANNER_HEIGHT, WAITING_BANNER_BACKGROUND);
@@ -271,26 +202,14 @@ public class GameSceneView {
     }
 
     /**
-     * מציירת פס עליון *קבוע* לרוחב כל הסצנה (בניגוד לשני הבאנרים למעלה,
-     * שמצוירים רק על הלוח ורק בתנאים מסוימים) - בקשת רות: "שם חדר" תמיד
-     * גלוי על המסך, לא רק בכותרת החלון (Img.setTitle, שנשארת גם היא ללא
-     * שינוי - זה תוסף, לא תחליף). roomId==null (מקרה-קצה: ROLE_ASSIGNED
-     * לא הגיעה בזמן, ר' HomeScreen.waitForAssignedGameId) מוצג כ-"?"
-     * במקום לזרוק/להציג "null" מילולית.
-     * <p>
-     * תפקיד/שם המשתמש *לא* מוצגים כאן עבור WHITE/BLACK - אלה מופיעים
-     * בפאנל הצד המתאים (ר' SidePanelView.draw, isLocalPlayer) לפי בקשת
-     * רות ("גם וגם"). עבור SPECTATOR דווקא כן מוצגים כאן - אין לצופה/ה
-     * "פאנל שלו/ה" ששני הצדדים הקיימים (WHITE/BLACK) לא שייכים לו בכלל.
+     * Draws the always-on header strip across the whole scene, so the room id is visible on screen and not just in the title bar.
+     * WHITE/BLACK see their name in their own side panel instead; only a spectator gets their label here.
      */
     private void drawRoomHeader(Img scene, int sceneWidthPx) {
         scene.fillRect(0, 0, sceneWidthPx, ROOM_HEADER_HEIGHT, ROOM_HEADER_BACKGROUND);
 
-        // שלושה קטעים אפשריים, כל אחד בצבע/משמעות משלו (בקשת רות - עיצוב
-        // יותר יפה: להבדיל ויזואלית בין "המילה הכללית" למידע החשוב עצמו) -
-        // בניגוד לפני, שהיה מחרוזת אחת בצבע אחיד. textWidth נמדד לכל קטע
-        // בנפרד לפני הציור כדי למרכז את הקבוצה כולה, ואז מצייר ברצף עם
-        // "סמן" X שמתקדם - Img.drawText לא תומך בכמה צבעים במחרוזת אחת.
+        // Three segments, each its own color. Img.drawText can't mix colors in one string,
+        // so each is measured separately to center the group, then drawn with an advancing X cursor.
         String label = "Room ";
         String id = shortRoomId(roomId);
         String spectatorSuffix = role == ClientRole.SPECTATOR
@@ -315,17 +234,8 @@ public class GameSceneView {
     }
 
     /**
-     * מקצרת gameId ארוך לתצוגה קריאה - רק עבור מזהי matchmaking
-     * ("match-&lt;uuid&gt;", ר' GameServer.resolveMatchmakingGameId) שהם
-     * ארוכים מדי ומכוערים על המסך (בקשת רות - זה בדיוק מה שהפך את הפס
-     * למכוער בצילום המסך שהיא שלחה). מציגה רק 8 התווים הראשונים של ה-UUID
-     * עצמו, **בלי** הקידומת "match-" - "Room: 816a33df" בדיוק כמו שרות
-     * ביקשה. <p>
-     * קודי חדר מ-Create/Join (הקוד הקצר שצריך למסור לחברה כדי שתצטרף,
-     * ר' RoomIdGenerator) **לא** מקוצרים בכלל - קיצור שלהם היה שובר את
-     * הפיצ'ר עצמו (השחקנית השנייה חייבת לראות/להקליד את הקוד המלא
-     * והמדויק). public+static (לא private) כדי שאפשר יהיה לבדוק את
-     * הלוגיקה הזו בטסט בלי להרים Swing בכלל - אין לה שום תלות ב-Img/גרפיקה.
+     * Shortens long matchmaking ids ("match-&lt;uuid&gt;") to the first 8 UUID chars for display.
+     * Create/Join room codes are left untouched - the other player has to read and type them exactly.
      */
     public static String shortRoomId(String gameId) {
         if (gameId == null) {

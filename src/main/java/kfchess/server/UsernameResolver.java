@@ -5,15 +5,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
 /**
- * מחלץ את פרמטר ה-username מה-query string של נתיב החיבור (למשל
- * "/room1?username=ruth" -> "ruth") - שלב 4 Part B: חיבור ה-username
- * המחובר (מ-LoginScreenMain) לפרוטוקול הרשת עצמו, כדי ש-GameSession
- * ידע למי לעדכן ELO בסוף משחק (ר' GameSession.onGameLifecycleEvent).
+ * Extracts the username query parameter from a connection path ("/room1?username=ruth" -&gt; "ruth"),
+ * so the session knows whose ELO to update when the game ends.
  * <p>
- * מחלקה נפרדת מ-GameIdResolver (לא הרחבה שלו) בכוונה - זה query
- * parameter נפרד לגמרי מנתיב ה-room, לא אותו פענוח. חיבור בלי username
- * בכלל (למשל בדיקת פרוטוקול גולמי מקונסולת דפדפן, בלי login) הוא מקרה
- * נתמך לגמרי - Optional.empty(), לא שגיאה.
+ * Kept separate from GameIdResolver because this is a query parameter, not part of the room path.
+ * A connection with no username at all is fully supported - it returns empty, not an error.
  */
 public final class UsernameResolver {
 
@@ -22,6 +18,7 @@ public final class UsernameResolver {
     private UsernameResolver() {
     }
 
+    /** The decoded username from the path's query string, or empty if there isn't one. */
     public static Optional<String> resolve(String resourceDescriptor) {
         if (resourceDescriptor == null) {
             return Optional.empty();

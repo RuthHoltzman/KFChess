@@ -1,5 +1,6 @@
 package kfchess.model;
 
+/** The type of a chess piece. */
 public enum PieceKind {
     KING('K'),
     QUEEN('Q'),
@@ -18,6 +19,7 @@ public enum PieceKind {
         return code;
     }
 
+    /** Looks up the kind by its single-char code (used in board-text). */
     public static PieceKind fromCode(char code) {
         for (PieceKind kind : values()) {
             if (kind.code == code) {
@@ -27,6 +29,7 @@ public enum PieceKind {
         throw new IllegalArgumentException("Unknown piece code: " + code);
     }
 
+    /** Whether a char is a recognized piece code. */
     public static boolean isValidCode(char code) {
         for (PieceKind kind : values()) {
             if (kind.code == code) {
@@ -36,10 +39,7 @@ public enum PieceKind {
         return false;
     }
 
-    /**
-     * ערך "קלאסי" של הכלי (כמו בשחמט רגיל) - משמש רק לחישוב הניקוד
-     * המוצג ב-UI (view/SidePanelView), אין לו שום השפעה על חוקי המשחק.
-     */
+    /** Classic chess point value, used only for the score shown in the UI - has no effect on game rules. */
     public int value() {
         return switch (this) {
             case PAWN -> 1;

@@ -7,9 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * בודק את תרגום הודעות השרת לשורה קריאה אחת, ואת isSnapshot() (שמשמש
- * את GameClient כדי להחליט אם להדפיס מיד או לשמור בשקט) - לוגיקה
- * טהורה, בלי חיבור רשת (ר' GameIdResolverTest לאותו רעיון).
+ * Covers turning a server message into one readable line, and isSnapshot(), which GameClient uses
+ * to decide whether to log it. Pure logic, no network connection.
  */
 class IncomingMessageSummaryTest {
 
@@ -73,8 +72,8 @@ class IncomingMessageSummaryTest {
         assertFalse(IncomingMessageSummary.isRoleAssigned("{\"type\":\"ERROR\"}"));
     }
 
-    // תיקון "Play" לפי המפרט המדויק (ELO ±100 / timeout של דקה) - ר'
-    // MatchmakingTimeoutMessage/GameServer.checkMatchmakingTimeout.
+    // Matchmaking timeout (ELO +/-100, one-minute wait) - see
+    // MatchmakingTimeoutMessage / GameServer.checkMatchmakingTimeout.
 
     @Test
     void isMatchmakingTimeout_matchmakingTimeoutMessage_returnsTrue() {

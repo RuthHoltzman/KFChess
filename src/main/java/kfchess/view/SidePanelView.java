@@ -5,21 +5,10 @@ import kfchess.model.PieceColor;
 import java.awt.Color;
 import java.util.List;
 
-/**
- * מציירת פאנל צד אחד (ניקוד + רשימת מהלכים) של שחקן בודד, על קנבס נתון
- * ובהיסט X נתון. כל הציור עובר דרך Img בלבד (fillRect/drawRect/drawText) -
- * בהתאם לדרישה שלא להשתמש בשום ספריית גרפיקה מלבד ה-class הזה.
- * <p>
- * הפאנל "טיפש" בכוונה: הוא לא יודע כלום על GameEngine/GameSnapshot,
- * רק מקבל ערכים מוכנים (צבע, ניקוד, רשימת מהלכים) ומצייר אותם.
- */
+/** Draws one player's side panel (score + move list). Deliberately "dumb" - it takes ready values, not game objects. */
 public class SidePanelView {
 
-    // בקשת רות (עיצוב יותר יפה, "צבעים/עיצוב שונים לכל אזור") - שני
-    // "ערכות נושא" נפרדות במקום צבע אחיד לשני הפאנלים כמו קודם: בהיר-חם
-    // ל-White, כהה ל-Black - כדי שהעין תבדיל מיד בין הצדדים, לא רק לפי
-    // הכיתוב "White"/"Black". נבחר לפי הפרמטר color שכבר קיים ב-draw()
-    // (ר' WHITE_THEME/BLACK_THEME למטה) - אין צורך בפרמטר נוסף.
+    /** Per-side color scheme, so the eye distinguishes White from Black without reading the label. */
     private record Theme(Color background, Color border, Color headerText, Color moveText,
                           Color badgeBackground, Color badgeText) {}
 
@@ -40,12 +29,8 @@ public class SidePanelView {
     private static final int MOVE_FONT_SIZE = 15;
     private static final int MOVE_LINE_HEIGHT = 22;
     private static final int HEADER_Y = 32;
-    // "פילה" (rounded badge) ל-"You: username" - מתחת לכותרת, לא בתוכה
-    // (בקשת רות - הטקסט הקודם שהוצמד לכותרת "נחתך/נהדק מדי"). התג עצמו
-    // מצויר רק אם isLocalPlayer, אבל השטח *מתחת* לכותרת נשאר שמור קבוע
-    // (SCORE_Y/MOVES_*_Y לא משתנים בין הפאנל "שלי" לפאנל של היריב/ה) -
-    // כדי ששני הפאנלים יישארו מיושרים אחד מול השני בדיוק, בלי קשר למי
-    // מהם "שלי" כרגע.
+    // The "You" badge sits below the header. Its space stays reserved even when not drawn,
+    // so both panels stay aligned regardless of which one is the local player's.
     private static final int BADGE_TOP_Y = 40;
     private static final int BADGE_HEIGHT = 18;
     private static final int SCORE_Y = 72;
@@ -58,22 +43,12 @@ public class SidePanelView {
         this.panelWidth = panelWidth;
     }
 
+    /** The panel's fixed width in pixels. */
     public int panelWidth() {
         return panelWidth;
     }
 
-    // startY נוסף (בקשת רות - שם חדר בפס עליון קבוע, ר' GameSceneView):
-    // כל הפאנל צריך לזוז למטה באותו גובה בדיוק כשיש פס כזה, כדי לא להצטייר
-    // מתחת לו - startY=0 שקול בדיוק להתנהגות הישנה (בלי פס עליון בכלל).
-    // כל הקבועים (HEADER_Y/SCORE_Y/וכו') הם היסטים *יחסיים* ל-startY, לא
-    // ערכים מוחלטים - כדי שהפאנל עצמו יישאר "טיפש" וזז שלם ביחד.
-    // isLocalPlayer+username (בקשת רות - להציג תפקיד+שם המשתמש) מציגים
-    // "פילה" (badge) מעוגלת מתחת לכותרת - במקום התוספת הקודמת בתוך שורת
-    // הכותרת עצמה ("White (You: ruth)"), שרות תיארה כ"נחתך/נהדק" - השטח
-    // שמתחתיה נשאר שמור קבוע גם כשלא מוצגת (ר' BADGE_TOP_Y/SCORE_Y למעלה),
-    // כדי שהפאנל של היריב/ה יישאר מיושר בדיוק מול הפאנל "שלי". אין overload
-    // ישן שנשאר: ל-SidePanelView יש קריאה אחת בלבד (GameSceneView.render),
-    // בניגוד ל-DTOs שנשלחים ברשת שחייבים תאימות לאחור.
+    /** Draws the whole panel at the given offset; every Y constant is relative to startY, so it moves as one block. */
     public void draw(Img canvas, int offsetX, int startY, int panelHeight,
                       PieceColor color, int score, List<String> moves,
                       boolean isLocalPlayer, String username) {
@@ -95,8 +70,7 @@ public class SidePanelView {
         int maxVisibleRows = Math.max(0, (panelHeight - MOVES_START_Y - PADDING) / MOVE_LINE_HEIGHT);
         List<String> recentMoves = lastN(moves, maxVisibleRows);
 
-        // המהלך האחרון מוצג ראשון (למעלה) - זה מה שהכי מעניין את השחקן
-        // ברגע נתון, ואין צורך בגלילה כי הפאנל ממילא מוגבל בגובה קבוע.
+        // Newest move first (at the top) - no scrolling needed, the panel has a fixed height anyway.
         int y = startY + MOVES_START_Y;
         for (int i = recentMoves.size() - 1; i >= 0; i--) {
             canvas.drawText(recentMoves.get(i), offsetX + PADDING, y, MOVE_FONT_SIZE, theme.moveText(), false);
@@ -104,9 +78,7 @@ public class SidePanelView {
         }
     }
 
-    // מציירת את הפילה "You" / "You: username" - רוחב מחושב מהטקסט עצמו
-    // (לא קבוע קשיח) כדי שהיא תתאים גם לשמות משתמש קצרים וגם ארוכים,
-    // בדיוק העיקרון שכבר משמש את כפתור ה-Restart (textWidth לפני ציור).
+    /** Draws the rounded "You: username" badge, sized from the measured text so any username fits. */
     private void drawYouBadge(Img canvas, int offsetX, int startY, Theme theme, String username) {
         String text = username != null ? "You: " + username : "You";
         int textWidth = canvas.textWidth(text, BADGE_FONT_SIZE, true);
@@ -118,10 +90,12 @@ public class SidePanelView {
         canvas.drawText(text, offsetX + PADDING + PADDING / 2, textY, BADGE_FONT_SIZE, theme.badgeText(), true);
     }
 
+    /** The panel header text for a color. */
     private static String displayName(PieceColor color) {
         return color == PieceColor.WHITE ? "White" : "Black";
     }
 
+    /** The last n entries of the list, or fewer if it's shorter. */
     private static List<String> lastN(List<String> list, int n) {
         if (n <= 0 || list.isEmpty()) {
             return List.of();

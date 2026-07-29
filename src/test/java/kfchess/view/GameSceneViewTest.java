@@ -5,11 +5,10 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * GameSceneView בעצמה לא נבדקת ישירות (ציור/Swing, בדיוק כמו קודם - ר'
- * PROGRESS.md) - אבל shortRoomId() טהורה לגמרי (בלי Img/גרפיקה), אז אין
- * סיבה לא לבדוק אותה כמו כל לוגיקה משמעותית אחרת בפרויקט. בקשת רות
- * (עיצוב יותר יפה): מזהי matchmaking ("match-<uuid>") מקוצרים ל-8
- * התווים הראשונים של ה-UUID בלבד, קודי Create/Join לא נוגעים בהם בכלל.
+ * GameSceneView itself isn't tested directly (drawing and Swing), but shortRoomId() is completely
+ * pure, so it's worth testing like any other meaningful logic.
+ * Matchmaking ids ("match-&lt;uuid&gt;") are shortened to the first 8 UUID characters; Create/Join
+ * codes are left untouched.
  */
 class GameSceneViewTest {
 
@@ -36,8 +35,8 @@ class GameSceneViewTest {
 
     @Test
     void shortRoomId_matchmakingIdShorterThan8Chars_returnsWhateverRemains() {
-        // מקרה-קצה תיאורטי (UUID אמיתי תמיד ארוך בהרבה מ-8) - לא אמור
-        // לזרוק חריגה גם אם החלק שאחרי "match-" קצר מהצפוי.
+        // Theoretical edge case (a real UUID is always far longer than 8): it must not
+        // throw even if the part after "match-" is shorter than expected.
         assertEquals("ab", GameSceneView.shortRoomId("match-ab"));
     }
 }

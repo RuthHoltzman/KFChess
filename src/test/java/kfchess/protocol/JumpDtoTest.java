@@ -12,10 +12,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * JumpDto רק מצמיד jump+position (JumpVisual, כמו Piece, לא יודע את
- * מיקומו בעצמו) - Motion ו-CaptureEffect לעומת זאת נשלחים היום ישירות
- * בלי DTO עוטף, כי כבר יש להם את כל השדות הדרושים (ר' ההחלטה לצמצם
- * DTOs מיותרים ב-PROGRESS.md).
+ * JumpDto only pairs a jump with its position, because JumpVisual (like Piece) doesn't know where
+ * it is. Motion and CaptureEffect are sent without a wrapper, since they already carry every field.
  */
 class JumpDtoTest {
 

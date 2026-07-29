@@ -1,9 +1,7 @@
 package kfchess.protocol;
 
-/**
- * נשלח כשהלקוח שולח הודעה פגומה (JSON לא תקין, שדות חסרים) או פקודה
- * שלא ניתן לבצע - כדי שהשרת יגיב בצורה מסודרת במקום לקרוס/להתעלם בשקט.
- */
+
+/** Outgoing-only DTO sent when a client message is malformed or its command can't be applied. */
 public class ErrorMessage {
 
     private final String type = "ERROR";

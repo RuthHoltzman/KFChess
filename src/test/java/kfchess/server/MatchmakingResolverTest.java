@@ -14,8 +14,8 @@ class MatchmakingResolverTest {
 
     @Test
     void isMatchmakingRequest_matchmakingPathWithUsername_returnsTrue() {
-        // אותו טעם בדיוק כמו GameIdResolverTest.resolve_pathWithQueryString_stripsQuery -
-        // חייב להתעלם מ-?username= בבדיקת הנתיב.
+        // Same reasoning as GameIdResolverTest.resolve_pathWithQueryString_stripsQuery -
+        // ?username= must be ignored when matching the path.
         assertTrue(MatchmakingResolver.isMatchmakingRequest("/_play?username=ruth"));
     }
 

@@ -11,16 +11,8 @@ import java.util.List;
 import java.util.Scanner;
 import java.util.regex.Pattern;
 
-/**
- * קוראת ומאמתת את מקטע "Board:" מתוך קלט טקסטואלי, ובונה ממנו Board.
- * ה-Scanner מוזרק דרך הבנאי (constructor injection) - לא נוצר כאן
- * ולא נלקח מ-System.in ישירות - כדי שאפשר יהיה לבדוק את המחלקה
- * עם קלט מדומה (ראו kfchess.texttests.BoardParserTest).
- * <p>
- * כישלון ולידציה מדווח דרך IllegalArgumentException (לא הדפסה עצמית
- * ולא ערך null) - כך שה-Parser נשאר "טהור" (בלי side effect של פלט),
- * וה-caller (Main) הוא זה שמחליט איך ומתי להציג את השגיאה למשתמש.
- */
+
+/** Parses the "Board:" section of a text-based board definition (as used by GameSession) into a Board. */
 public class BoardParser {
 
     private static final String BOARD_HEADER = "Board:";
@@ -38,6 +30,7 @@ public class BoardParser {
         this.scanner = scanner;
     }
 
+    /** Reads and validates the board section, throwing IllegalArgumentException on malformed input. */
     public Board readBoard() {
         List<String[]> rawRows = readRawBoardLines();
         ValidationResult result = validate(rawRows);
@@ -47,6 +40,7 @@ public class BoardParser {
         return buildBoard(rawRows);
     }
 
+    /** Reads the lines between "Board:" and the next section (or blank line/EOF), split into tokens. */
     private List<String[]> readRawBoardLines() {
         List<String[]> lines = new ArrayList<>();
         boolean readingBoard = false;
@@ -68,6 +62,7 @@ public class BoardParser {
         return lines;
     }
 
+    /** Checks the raw board lines for emptiness, consistent row width, and valid piece tokens. */
     private ValidationResult validate(List<String[]> lines) {
         if (lines == null || lines.isEmpty()) {
             return ValidationResult.failure(ERROR_EMPTY_BOARD);
@@ -81,17 +76,20 @@ public class BoardParser {
         return ValidationResult.success();
     }
 
+    /** Whether every row has the same number of tokens as the first row. */
     private boolean hasConsistentRowWidth(List<String[]> lines) {
         int width = lines.get(0).length;
         return lines.stream().allMatch(row -> row.length == width);
     }
 
+    /** Whether every token is either the empty-cell marker or a recognized color+kind code. */
     private boolean hasOnlyValidTokens(List<String[]> lines) {
         return lines.stream()
                 .flatMap(java.util.Arrays::stream)
                 .allMatch(this::isValidToken);
     }
 
+    /** Whether a single token is the empty-cell marker or a valid 2-char color+kind code. */
     private boolean isValidToken(String token) {
         if (token.equals(EMPTY_CELL_TOKEN)) {
             return true;
@@ -105,6 +103,7 @@ public class BoardParser {
         return validColor && PieceKind.isValidCode(kindCode);
     }
 
+    /** Builds the Board and places a piece for every non-empty token. */
     private Board buildBoard(List<String[]> rows) {
         int height = rows.size();
         int width = rows.get(0).length;
@@ -121,12 +120,14 @@ public class BoardParser {
         return board;
     }
 
+    /** Decodes a 2-char token (e.g. "wP") into a Piece. */
     private Piece pieceFromToken(String token) {
         PieceColor color = PieceColor.fromCode(token.charAt(0));
         PieceKind kind = PieceKind.fromCode(token.charAt(1));
         return new Piece(color, kind);
     }
 
+    /** Result of validating the raw board lines: either success, or a failure with an error message. */
     private static final class ValidationResult {
         private final boolean valid;
         private final String errorMessage;

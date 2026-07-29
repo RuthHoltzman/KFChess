@@ -3,6 +3,7 @@ package kfchess.view;
 import java.io.File;
 import java.util.*;
 
+/** One sprite animation loaded from a folder of numbered .png frames, played at a fixed frame rate. */
 public class AnimationClip {
 
     private final List<String> framePaths;
@@ -15,6 +16,7 @@ public class AnimationClip {
         this.framePaths = loadSortedFramePaths(spritesFolder);
     }
 
+    /** Loads every .png in the folder, ordered by its numeric file name (0.png, 1.png, ...). */
     private List<String> loadSortedFramePaths(String folder) {
         File dir = new File(folder);
         File[] files = dir.listFiles((d, name) -> name.endsWith(".png"));
@@ -37,11 +39,7 @@ public class AnimationClip {
         return paths;
     }
 
-    public int frameCount() {
-        return framePaths.size();
-    }
-
-    // מחזיר את אינדקס הפריים שצריך להיות מוצג, לפי כמה זמן (במילישניות) עבר
+    /** Which frame to show after the given elapsed time - wraps around if looping, else holds the last frame. */
     public int getFrameIndex(long elapsedMillis) {
         int index = (int) (elapsedMillis / (1000L / framesPerSec));
         int count = framePaths.size();

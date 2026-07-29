@@ -12,9 +12,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * בודק את צורת ה-JSON היוצא של הודעות השרת->לקוח: בעיקר ששדה "type"
- * יוצא נכון (זה מה שהלקוח משתמש בו כדי להבחין בין סוגי הודעות), ושערכי
- * null (winner/selected לפני שיש בחירה/ניצחון) לא גורמים לחריגה.
+ * Checks the JSON shape of outgoing server-to-client messages: mainly that the "type" field comes
+ * out correctly (the client uses it to tell message kinds apart), and that null values such as
+ * winner/selected don't cause an exception.
  */
 class MessageDtoTest {
 
@@ -64,8 +64,8 @@ class MessageDtoTest {
         assertEquals("WHITE", json.get("winner").getAsString());
     }
 
-    // שלב 5, חלק 1: שדה חדש (ר' SnapshotMessage.disconnectSecondsRemaining) - Integer
-    // ולא int/boolean בכוונה, כדי שאפשר יהיה להבדיל "0 שניות נשארו" מ-"אין ניתוק פעיל".
+    // disconnectSecondsRemaining is an Integer, not an int or boolean, on purpose - so
+    // "0 seconds left" can be told apart from "no disconnect in progress".
 
     @Test
     void snapshotMessage_withDisconnectSecondsRemaining_serializesField() {
@@ -86,12 +86,11 @@ class MessageDtoTest {
 
         JsonObject json = gson.toJsonTree(snapshot).getAsJsonObject();
 
-        assertFalse(json.has("disconnectSecondsRemaining")); // null -> Gson משמיט את השדה לגמרי, לא כותב "null"
+        assertFalse(json.has("disconnectSecondsRemaining")); // null -> Gson omits the field entirely
     }
 
-    // בקשת רות (הסבב הזה): שדה חדש waitingForOpponent - boolean רגיל,
-    // תמיד משודר (בניגוד ל-disconnectSecondsRemaining שהוא Integer ויכול
-    // להיות null/מושמט).
+    // waitingForOpponent is a plain boolean and is always transmitted, unlike
+    // disconnectSecondsRemaining, which is an Integer and can be null/omitted.
 
     @Test
     void snapshotMessage_withWaitingForOpponentTrue_serializesField() {

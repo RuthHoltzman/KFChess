@@ -8,23 +8,7 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * ה-Controller של שכבת הרשת בצד השרת (מקביל תפקידית ל-
- * {@code kfchess.client.NetworkClickHandler} בצד הלקוח): מקבל "מה נלחץ,
- * ע"י מי" ומנתב את זה ל-{@link GameEngine} - בלי לממש שום כלל משחק בעצמו.
- * שמו הישן היה {@code NetworkActions}; שונה כדי שהתפקיד האדריכלי (קונטרולר)
- * יהיה גלוי מהשם, לא רק מהתיעוד (ר' PROGRESS.md, "חבילת controller מפורשת").
- * <p>
- * מאפשר לשני שחקנים לפעול בו-זמנית ובאופן עצמאי על אותו GameEngine - כל
- * צבע עם "בחירה נוכחית" משלו, בלי שקליק של שחקן אחד יתפרש כהשלמת מהלך של
- * השני (מה שהיה קורה עם selectedPosition היחיד/משותף של GameEngine, שמתאים
- * למשחק מקומי חד-שחקן אבל לא לרשת).
- * <p>
- * חי באותה חבילה (kfchess.engine) כדי לראות את החברים package-private
- * של GameEngine (isAvailableToAct/tryMove/beginJump/advanceGameState) -
- * כל לוגיקת חוקי המשחק עצמה נשארת אך ורק ב-GameEngine; המחלקה הזו רק
- * מנתבת קליק לשחקן הנכון ואוכפת שכל שחקן נוגע רק בכלים של עצמו.
- */
+/** The server-side controller: routes a per-color CLICK/JUMP to GameEngine, one independent selection per color. */
 public class GameCommandController {
 
     private final GameEngine engine;
@@ -34,6 +18,7 @@ public class GameCommandController {
         this.engine = engine;
     }
 
+    /** First click for a color selects a piece; second click acts on that selection. */
     public void handleClick(PieceColor actingColor, Position clicked) {
         engine.advanceGameState();
         if (engine.isGameOver() || !engine.board().isWithinBounds(clicked)) {
@@ -47,6 +32,7 @@ public class GameCommandController {
         }
     }
 
+    /** Starts a jump for the piece at the target, if it belongs to the acting color and is available. */
     public void handleJump(PieceColor actingColor, Position target) {
         engine.advanceGameState();
         if (engine.isGameOver()) {
@@ -62,11 +48,12 @@ public class GameCommandController {
         });
     }
 
-    /** מה השחקן בצבע הזה בחר כרגע (אם בכלל) - לשימוש השרת בבניית snapshot. */
+    /** What this color currently has selected, if anything - used when building a snapshot for that viewer. */
     public Optional<Position> selectedPositionFor(PieceColor color) {
         return Optional.ofNullable(selectedPositionByColor.get(color));
     }
 
+    /** Selects the clicked piece, if it belongs to the acting color and is available. */
     private void trySelect(PieceColor actingColor, Position clicked) {
         engine.board().pieceAt(clicked).ifPresent(piece -> {
             if (piece.color() == actingColor && engine.isAvailableToAct(piece)) {
@@ -75,6 +62,7 @@ public class GameCommandController {
         });
     }
 
+    /** Re-selects another own piece, or attempts the move to the clicked square. */
     private void tryActOnSelection(PieceColor actingColor, Position selected, Position clicked) {
         Optional<Piece> selectedPiece = engine.board().pieceAt(selected);
         if (selectedPiece.isEmpty()) {

@@ -15,15 +15,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// client=null ברוב הטסטים כאן בכוונה: resolvePosition() לא נוגע ב-client
-// בכלל (הרי בשביל זה היא הוצאה בנפרד - טהורה, בלי רשת), וטסטים ל-handle()
-// כאן בודקים רק את הענפים ש"בורחים" *לפני* שנוגעים ב-client (קליק מחוץ
-// ללוח, או קליק בזמן gameOver שמפספס את כפתור ה-Restart) - אז NPE על
-// client לא אמור לקרות. sceneView **כן** צריך להיות אמיתי (לא null) גם
-// בטסטים האלה - handle() שואל אותו restartButtonBounds() בכל קריאה עם
-// gameOver=true, גם אם הקליק בסוף מפספס; GameSceneView בטוח לבנות בלי
-// לגעת בקבצים בכלל (הבנאי רק שומר path כמחרוזת, ר' תיעוד BoardView) -
-// רק render() בפועל היה קורא לקובץ, ואף טסט כאן לא קורא ל-render().
+// client=null in most of these tests on purpose: resolvePosition() never touches the client (that's
+// why it was extracted - pure, no network), and the handle() tests here only exercise the branches
+// that return *before* the client is used (a click outside the board, or a click during gameOver
+// that misses the Restart button), so no NPE can occur.
+// sceneView does have to be real, because handle() asks it for restartButtonBounds() on every
+// gameOver click even when the click ultimately misses. Constructing a GameSceneView touches no
+// files - the constructor only stores a path string; only render() would read one, and no test
+// here calls render().
 class NetworkClickHandlerTest {
 
     private static final BoardLayout LAYOUT = new BoardLayout(50, 400, 240, 0);
@@ -33,7 +32,7 @@ class NetworkClickHandlerTest {
 
     @Test
     void resolvePosition_clickInsideBoard_returnsCorrectPosition() {
-        // פיקסל (240+75, 125) - תא (2,1) בגודל 50: row = 125/50 = 2, col = 75/50 = 1
+        // Pixel (240+75, 125) with cell size 50 -> row = 125/50 = 2, col = 75/50 = 1
         Optional<Position> resolved = handler.resolvePosition(240 + 75, 125, LAYOUT);
         assertEquals(Optional.of(new Position(2, 1)), resolved);
     }
@@ -45,13 +44,13 @@ class NetworkClickHandlerTest {
 
     @Test
     void resolvePosition_clickInSidePanel_returnsEmpty() {
-        // פיקסל x=100 קטן מ-offsetX=240 - זה בפאנל השחקן הלבן, לא על הלוח
+        // x=100 is left of offsetX=240 - that's inside White's panel, not on the board
         assertTrue(handler.resolvePosition(100, 100, LAYOUT).isEmpty());
     }
 
     @Test
     void resolvePosition_clickPastRightEdgeOfBoard_returnsEmpty() {
-        // offsetX(240) + boardPixelSize(400) = 640 - כל מה שמעבר לזה מחוץ ללוח
+        // offsetX(240) + boardPixelSize(400) = 640 - anything beyond that is off the board
         assertTrue(handler.resolvePosition(640, 100, LAYOUT).isEmpty());
     }
 
@@ -67,23 +66,21 @@ class NetworkClickHandlerTest {
 
     @Test
     void handle_gameOverAndClickMissesRestartButton_doesNothingAndDoesNotTouchClient() {
-        // (300,100) הופך ל-boardX=60,boardY=100 (LAYOUT.offsetX()=240) - מחוץ
-        // לגובה של הכפתור המחושב (y בטווח 30-86 לפני כל render(), ר' תיעוד
-        // restartButtonBounds()). client=null - אם handle() בכל זאת היה
-        // "פוגע" בכפתור ומנסה client.sendRestart(), זו הייתה נופלת ב-NPE.
+        // (300,100) becomes boardX=60, boardY=100 (offsetX=240), which is outside the
+        // button's vertical range. client=null is the assertion here: if handle() did
+        // hit the button and call sendRestart(), this would fail with an NPE.
         handler.handle(300, 100, LAYOUT, true, false);
     }
 
     @Test
     void handle_gameOverAndClickHitsRestartButton_sendsRestartToServer() throws URISyntaxException {
-        // בונה handler נפרד עם RecordingGameClient אמיתי (לא null) - כי כאן
-        // אנחנו כן מצפים ש-sendRestart() ייקרא, וצריך "מרגל" שיודע לרשום את זה.
+        // A separate handler with a real RecordingGameClient: here we do expect
+        // sendRestart() to be called, so we need a spy that records it.
         RecordingGameClient client = new RecordingGameClient();
         NetworkClickHandler handlerWithClient = new NetworkClickHandler(client, new BoardMapper(), sceneView);
 
-        // הפיקסל מחושב מתוך restartButtonBounds() בפועל (לא מספר קסם קבוע) -
-        // כך שהטסט לא ייתלה בקבוע BUTTON_WIDTH/HEIGHT הפנימי של GameSceneView
-        // אם הוא ישתנה בעתיד; ר' אותה גישה ב-restart_bothSidesRequest... ב-GameSessionTest.
+        // The pixel is derived from the actual restartButtonBounds() rather than a magic
+        // number, so the test doesn't break if GameSceneView's internal button size changes.
         Rectangle button = sceneView.restartButtonBounds();
         int pixelX = LAYOUT.offsetX() + button.x + button.width / 2;
         int pixelY = LAYOUT.offsetY() + button.y + button.height / 2;
@@ -95,7 +92,7 @@ class NetworkClickHandlerTest {
 
     @Test
     void handle_clickOutsideBoardWhileGameStillRunning_doesNothingAndDoesNotTouchClient() {
-        // גם כאן client=null - resolvePosition ריק אמור למנוע כל נגיעה ב-client
+        // client=null again: an empty resolvePosition must prevent the client being touched
         handler.handle(100, 100, LAYOUT, false, false);
     }
 }

@@ -9,8 +9,10 @@ import kfchess.model.Position;
 import java.util.EnumMap;
 import java.util.Map;
 
+/** Holds one movement rule per piece kind, and the standard chess rules for all six kinds by default. */
 public final class PieceRules {
 
+    /** A single piece kind's movement rule: whether moving from "from" to "to" is geometrically legal. */
     @FunctionalInterface
     public interface MoveRule {
         boolean isLegal(Board board, Position from, Position to);
@@ -18,6 +20,7 @@ public final class PieceRules {
 
     private final Map<PieceKind, MoveRule> rules = new EnumMap<>(PieceKind.class);
 
+    /** Registers the standard chess movement rule for each of the six piece kinds. */
     public PieceRules() {
         rules.put(PieceKind.KING, (board, from, to) -> 
             Math.abs(from.row() - to.row()) <= 1 && Math.abs(from.col() - to.col()) <= 1);
@@ -41,14 +44,17 @@ public final class PieceRules {
         rules.put(PieceKind.PAWN, PieceRules::pawnMove);
     }
 
+    /** The movement rule for a piece kind; unknown kinds default to "never legal". */
     public MoveRule ruleFor(PieceKind kind) {
         return rules.getOrDefault(kind, (board, from, to) -> false);
     }
 
+    /** Overrides (or adds) the movement rule for a piece kind. */
     public void register(PieceKind kind, MoveRule rule) {
         rules.put(kind, rule);
     }
 
+    /** Pawn movement: one square forward (or two from the start row), or diagonal capture. */
     private static boolean pawnMove(Board board, Position from, Position to) {
         Piece pawn = board.pieceAt(from).orElseThrow();
         int direction = (pawn.color() == PieceColor.WHITE) ? -1 : 1;

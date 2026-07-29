@@ -20,10 +20,9 @@ class RoomIdGeneratorTest {
 
     @Test
     void generate_twoCallsProduceDifferentCodes() {
-        // לא הבטחה מתמטית (יכול תיאורטית להתנגש) - אבל עם ~2 מיליארד
-        // צירופים אפשריים, שני קריאות רצופות שמייצרות בדיוק אותו קוד
-        // כמעט בלתי אפשרי בפועל; מספיק כ"בדיקת שפיות" שהמחלקה בכלל מייצרת
-        // ערכים אקראיים ולא מחזירה קבוע.
+        // Not a mathematical guarantee (a collision is possible in theory), but with about
+        // 2 billion combinations two consecutive calls returning the same code is effectively
+        // impossible - enough as a sanity check that the class isn't returning a constant.
         assertNotEquals(RoomIdGenerator.generate(), RoomIdGenerator.generate());
     }
 }

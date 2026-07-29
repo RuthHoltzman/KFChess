@@ -51,8 +51,8 @@ class HomeScreenTest {
         assertEquals("ws://localhost:8887/room1?username=ruth+h", HomeScreen.buildUri("room1", "ruth h"));
     }
 
-    // שלב 5, חלק 2: buildMatchmakingUri (כפתור "Skip") - מתעלמת לגמרי משם ה-room,
-    // מתחברת תמיד לנתיב השמור שגם MatchmakingResolver בצד השרת מזהה.
+    // buildMatchmakingUri ignores the room name entirely and always targets the
+    // reserved path that MatchmakingResolver recognizes on the server side.
 
     @Test
     void buildMatchmakingUri_withoutUsername_pointsToMatchmakingPath() {
@@ -69,8 +69,8 @@ class HomeScreenTest {
         assertEquals("ws://localhost:8887/_play", HomeScreen.buildMatchmakingUri("   "));
     }
 
-    // שלב 6: buildCreateRoomUri (כפתור "Create" בדיאלוג Room) - נתיב שמור
-    // נפרד מ-matchmaking, מתעלם לגמרי מכל שם room.
+    // buildCreateRoomUri uses its own reserved path, separate from matchmaking,
+    // and likewise ignores any room name.
 
     @Test
     void buildCreateRoomUri_withoutUsername_pointsToCreateRoomPath() {

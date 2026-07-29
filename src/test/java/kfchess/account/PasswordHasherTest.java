@@ -22,8 +22,8 @@ class PasswordHasherTest {
 
     @Test
     void hash_samePasswordTwice_producesDifferentHashes() {
-        // כל hash מקבל salt אקראי חדש - כדי שלא יהיה אפשר להשוות טבלת
-        // hash-ים בין חשבונות שונים עם אותה סיסמה (rainbow table).
+        // Every hash gets a fresh random salt, so identical passwords on different
+        // accounts can't be spotted by comparing hashes (rainbow table).
         String firstHash = PasswordHasher.hash("s3cret");
         String secondHash = PasswordHasher.hash("s3cret");
         assertNotEquals(firstHash, secondHash);

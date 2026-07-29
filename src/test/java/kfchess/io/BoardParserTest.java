@@ -16,11 +16,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 /**
- * דוגמה לבדיקות יחידה עם הזרקת תלויות נקייה (Dependency Injection):
- * במקום System.in אנחנו מזריקים ל-BoardParser Scanner שקורא ממחרוזת
- * שנמצאת בזיכרון. אין כאן monkey patching ואין שינוי זמן-ריצה של
- * הקוד הנבדק - רק החלפת מקור הקלט דרך הבנאי, בדיוק כי BoardParser
- * תוכנן מלכתחילה לקבל Scanner מבחוץ ולא ליצור אחד לעצמו.
+ * An example of clean dependency injection in a unit test: instead of System.in, the parser is
+ * given a Scanner over an in-memory string. No monkey patching and no runtime rewriting - just a
+ * different input source through the constructor, which is exactly what BoardParser was designed for.
  */
 
 class BoardParserTest {
