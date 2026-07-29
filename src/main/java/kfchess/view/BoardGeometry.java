@@ -3,6 +3,7 @@ package kfchess.view;
 import kfchess.model.Position;
 import java.awt.Point;
 
+/** Cell dimensions for one rendered board, and the board-square -> pixel conversion that follows from them. */
 public class BoardGeometry {
 
     private final int cellWidth;
@@ -32,6 +33,7 @@ public class BoardGeometry {
         return cols;
     }
     
+    /** The top-left pixel of the given board square. */
     public Point cellToPixel(Position pos) {
         int x = pos.col() * cellWidth;
         int y = pos.row() * cellHeight;
