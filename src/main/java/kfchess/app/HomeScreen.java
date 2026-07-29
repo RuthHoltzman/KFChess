@@ -2,6 +2,7 @@ package kfchess.app;
 
 import kfchess.account.Account;
 import kfchess.client.GameClient;
+import kfchess.protocol.ConnectionPaths;
 
 import javax.swing.*;
 import java.awt.*;
@@ -15,9 +16,6 @@ import java.nio.charset.StandardCharsets;
 public class HomeScreen {
 
     private static final String SERVER_HOST_AND_PORT = "ws://localhost:8887";
-    private static final String DEFAULT_ROOM = "default";
-    private static final String MATCHMAKING_PATH = "_play";
-    private static final String CREATE_ROOM_PATH = "_create";
     private static final long GAME_ID_WAIT_TIMEOUT_MILLIS = 2000;
     private static final long GAME_ID_POLL_INTERVAL_MILLIS = 20;
 
@@ -29,7 +27,7 @@ public class HomeScreen {
     /** Builds the server WebSocket URI for a specific room, with the username as an optional query parameter. */
     public static String buildUri(String room, String username) {
         String trimmed = room == null ? "" : room.trim();
-        String resolvedRoom = trimmed.isEmpty() ? DEFAULT_ROOM : trimmed;
+        String resolvedRoom = trimmed.isEmpty() ? ConnectionPaths.DEFAULT_ROOM : trimmed;
         String base = SERVER_HOST_AND_PORT + "/" + resolvedRoom;
         if (username == null || username.isBlank()) {
             return base;
@@ -40,7 +38,7 @@ public class HomeScreen {
 
     /** Builds the server WebSocket URI for the Play/matchmaking endpoint. */
     public static String buildMatchmakingUri(String username) {
-        String base = SERVER_HOST_AND_PORT + "/" + MATCHMAKING_PATH;
+        String base = SERVER_HOST_AND_PORT + "/" + ConnectionPaths.MATCHMAKING;
         if (username == null || username.isBlank()) {
             return base;
         }
@@ -50,7 +48,7 @@ public class HomeScreen {
 
     /** Builds the server WebSocket URI for creating a brand-new room. */
     public static String buildCreateRoomUri(String username) {
-        String base = SERVER_HOST_AND_PORT + "/" + CREATE_ROOM_PATH;
+        String base = SERVER_HOST_AND_PORT + "/" + ConnectionPaths.CREATE_ROOM;
         if (username == null || username.isBlank()) {
             return base;
         }
