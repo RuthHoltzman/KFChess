@@ -30,8 +30,12 @@ render the snapshots they receive.
 - 🌐 **WebSocket server** — multiple concurrent game rooms in a single process
 - 🔐 **User accounts** — bcrypt-hashed passwords persisted in SQLite
 - 📈 **ELO ratings** — updated automatically when a game ends
+- 🎯 **Matchmaking** — *Play* pairs you with a waiting opponent rated within ±100
+- 🚪 **Private rooms** — *Create* generates a short code, *Join* enters one
+- ⏳ **Disconnect grace window** — a dropped player has time to reconnect before forfeiting
 - 🤝 **Mutual rematch** — a restart requires both players to agree
 - 🎮 **Desktop client** — Swing UI with animated movement and mouse controls
+- 📝 **Activity logs** — timestamped server-side and client-side log files per run
 - 🧪 **Tested** — JUnit 5 suite covering the engine, protocol, and account layers
 
 ---
@@ -96,9 +100,15 @@ Login / Register  →  Home screen (pick a room)  →  Game window
 
 - **Register** creates a new account (starting ELO **1200**); **Login** signs into
   an existing one.
-- On the home screen, enter a room name (or keep `default`) and press **Connect**.
+- From the home screen you can either press **Play** to be matched automatically
+  with a waiting opponent of similar rating, or open **Room** to **Create** a
+  private room (the server returns a short code to share) or **Join** one by code.
 - The first client in a room becomes **White**, the second **Black**, and any
   further clients join as **spectators**.
+
+> [!NOTE]
+> **Play** waits up to one minute for a compatible opponent. If none is found it
+> says so and closes the window, rather than waiting indefinitely.
 
 **3 — Two players on one machine**
 
@@ -109,7 +119,9 @@ this to be enabled explicitly:
 Edit Configurations… → Modify options → ✔ Allow multiple instances
 ```
 
-Sign in with **two different accounts** and connect both to the **same room name**.
+Sign in with **two different accounts**, then put both into the same game — either
+by pressing **Play** on both, or by having one **Create** a room and the other
+**Join** with the code it displays.
 
 > [!NOTE]
 > Two *different* accounts matter for ratings: a game where both sides are the
@@ -170,8 +182,9 @@ flowchart LR
 - **Stable piece IDs.** Each `Piece` carries an `id` assigned once at
   construction, so the client can recognise "the same piece as before" across
   separate JSON messages — which is what makes cooldown animations possible.
-- **Shared rendering layer.** Snapshot construction and drawing are identical for
-  the console and networked versions; only the data source differs.
+- **Event-driven rendering.** The client repaints when a snapshot arrives or the
+  window is resized, rather than on a fixed timer — there is no redundant redraw
+  when nothing has changed.
 - **Event bus.** Gameplay milestones (moves, score changes, sounds, lifecycle) are
   published to a `pub/sub` bus, keeping the engine decoupled from whatever reacts
   to them — for example, ELO updates subscribe to the end-of-game event.
@@ -187,6 +200,15 @@ username is a query parameter:
 ws://localhost:8887/<room>?username=<name>
 ```
 
+Two path names are reserved (see `protocol.ConnectionPaths`), so the server can
+tell the three ways of starting a game apart:
+
+| Path | Meaning |
+|---|---|
+| `/_play` | Matchmaking — find or open a game for an opponent of similar rating |
+| `/_create` | Create a private room; the server invents the code |
+| `/<room>` | Join the named room (`default` if the path is empty) |
+
 **Client → Server**
 
 | Type | Payload | Meaning |
@@ -200,7 +222,8 @@ ws://localhost:8887/<room>?username=<name>
 | Type | Contents |
 |---|---|
 | `ROLE_ASSIGNED` | Assigned role (`WHITE` / `BLACK` / `SPECTATOR`) and room id |
-| `SNAPSHOT` | Full game state: pieces, motions, jumps, capture effects, scores, selection, game-over flags |
+| `SNAPSHOT` | Full game state: pieces, motions, jumps, capture effects, scores, selection, game-over flags, waiting/disconnect status |
+| `MATCHMAKING_TIMEOUT` | No compatible opponent was found within a minute |
 | `ERROR` | Description of a malformed or invalid command |
 
 Snapshots are **per-viewer**: every client receives the same game state, but only
@@ -212,19 +235,20 @@ its own selection highlight and its own restart vote.
 
 ```
 src/main/java/kfchess/
-├── model/                 Board, Piece, Position, colors / kinds / states / ClientRole
+├── model/                 Board, Piece, Position, PlayState, colors / kinds / states / ClientRole
 ├── rules/                 RuleEngine + PieceRules (per-piece legality)
 ├── realtime/              RaelTime (game clock), Motion (piece in transit)
-├── engine/                PlayEngine, MoveHistory, NetworkActions
+├── engine/                PlayEngine, PlayCommandController, PieceTimers, MoveHistory
 │   └── snapshot/          SnapshotFactory + immutable PlaySnapshot view model
 ├── bus/                   EventBus (pub/sub) + game event types
 ├── io/                    BoardParser (text board format, used by the Restart feature)
+├── logging/               FileLogger (per-run activity log, server and client)
 ├── view/                  Swing rendering, animation, images
 │   └── layout/            BoardLayoutCalculator (screen geometry)
 ├── input/                 BoardMapper (pixel ↔ board coordinates)
 ├── account/               Accounts, bcrypt hashing, SQLite repo, EloCalculator
-├── protocol/              Shared WebSocket DTOs (ClientCommand, SnapshotMessage, ...)
-├── server/                PlayServer, PlaySession, ServerMain, resolvers
+├── protocol/              Shared WebSocket DTOs (ClientCommand, SnapshotMessage, ConnectionPaths, ...)
+├── server/                PlayServer, PlaySession, SnapshotBuilder, ServerMain, resolvers
 ├── client/                PlayClient, snapshot reconstruction, click handling
 └── app/                   Client entry points
     ├── LoginScreenMain    ← entry point: login / register
@@ -247,10 +271,13 @@ src/main/java/kfchess/
 mvn clean test
 ```
 
-Tests live in `src/test/java/texttests/` and use **JUnit 5**. They cover the pure
-logic layers — movement rules, board parsing, protocol DTOs, snapshot
-reconstruction, session and room behaviour, accounts and ELO — and run without a
-server or a display.
+Tests live in `src/test/java/kfchess/`, mirroring the main source packages, and
+use **JUnit 5**. They cover the pure logic layers — movement rules, board parsing,
+protocol DTOs, snapshot reconstruction, session and room behaviour, accounts and
+ELO — and run without a server or a display.
+
+The game clock is injected rather than read from the system, so a test can advance
+time by 45 seconds in a single call instead of sleeping.
 
 Rather than a mocking framework, the suite uses hand-written test doubles
 (`FakeWebSocket`, `RecordingPlayClient`) in place of real network objects, which
@@ -279,12 +306,16 @@ keeps the tests fast and deterministic.
 3. **הרצת הלקוח** — מריצים את **`kfchess.app.LoginScreenMain`**
    (נקודת הכניסה **היחידה** למשחק).
    - **Register** ליצירת חשבון חדש (דירוג התחלתי 1200), או **Login** לחשבון קיים.
-   - במסך הבית מזינים שם חדר (או משאירים `default`) ולוחצים **Connect**.
+   - במסך הבית אפשר ללחוץ **Play** להתאמה אוטומטית ליריב/ה בדירוג קרוב (±100),
+     או לפתוח **Room** כדי ליצור חדר פרטי (**Create**, השרת מחזיר קוד קצר לשיתוף)
+     או להצטרף לחדר קיים לפי קוד (**Join**).
    - הראשון שמתחבר לחדר מקבל **לבן**, השני **שחור**, השאר **צופים**.
+   - **Play** ממתין עד דקה; אם לא נמצא/ה יריב/ה מתאים/ה מוצגת הודעה והחלון נסגר.
 4. **שני שחקנים על אותו מחשב** — מריצים את `LoginScreenMain` פעמיים.
    ב-IntelliJ יש לאפשר זאת: `Edit Configurations…` → `Modify options` →
-   **Allow multiple instances**. מתחברים עם **שני חשבונות שונים** לאותו שם חדר
-   (חשבונות שונים חשובים כדי שדירוג ה-ELO אכן יתעדכן).
+   **Allow multiple instances**. נכנסים עם **שני חשבונות שונים** (חשוב, אחרת
+   דירוג ה-ELO לא יתעדכן) ומחברים את שניהם לאותו משחק — או **Play** בשניהם,
+   או שאחד עושה **Create** והשני **Join** עם הקוד שמוצג.
 5. **שליטה** — קליק שמאלי לבחירת כלי, קליק שמאלי נוסף ליעד, קליק ימני לקפיצה.
    בסיום המשחק מופיע כפתור **Restart**, ו**שני** הצדדים חייבים ללחוץ עליו כדי
    שהלוח יתאפס (עד אז מוצג "Waiting for opponent…").

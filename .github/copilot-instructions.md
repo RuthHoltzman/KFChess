@@ -16,7 +16,7 @@ Project-specific guidance:
 - Separate rules and UI concerns. Keep move legality/state transitions in the rules and engine layers, and avoid leaking board or game logic into the view layer.
 - Avoid code smells by following DRY, SRP, and strong encapsulation principles.
 - Keep constants and configuration values out of business logic whenever possible.
-- Strive for high unit-test coverage for core behavior and edge cases, especially around text parsing and rule enforcement in [src/test/java/texttests](src/test/java/texttests).
+- Strive for high unit-test coverage for core behavior and edge cases, especially around text parsing and rule enforcement in [src/test/java/kfchess](src/test/java/kfchess).
 - Avoid monkey patching in tests; prefer explicit, maintainable test setup.
 - Add the repository URL in the main file header when updating the main entry point.
 
