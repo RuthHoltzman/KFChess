@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Covers turning a server message into one readable line, and isSnapshot(), which GameClient uses
+ * Covers turning a server message into one readable line, and isSnapshot(), which PlayClient uses
  * to decide whether to log it. Pure logic, no network connection.
  */
 class IncomingMessageSummaryTest {
@@ -73,7 +73,7 @@ class IncomingMessageSummaryTest {
     }
 
     // Matchmaking timeout (ELO +/-100, one-minute wait) - see
-    // MatchmakingTimeoutMessage / GameServer.checkMatchmakingTimeout.
+    // MatchmakingTimeoutMessage / PlayServer.checkMatchmakingTimeout.
 
     @Test
     void isMatchmakingTimeout_matchmakingTimeoutMessage_returnsTrue() {

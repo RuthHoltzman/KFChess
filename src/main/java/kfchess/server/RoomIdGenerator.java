@@ -7,7 +7,7 @@ import java.security.SecureRandom;
  * off the screen and passed between people so a friend can Join.
  * <p>
  * 6 characters from A-Z and 0-9, about 2 billion combinations, so collisions are very rare
- * (GameServer still checks and retries if one happens).
+ * (PlayServer still checks and retries if one happens).
  */
 public final class RoomIdGenerator {
 

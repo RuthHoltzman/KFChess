@@ -2,14 +2,14 @@ package kfchess.model;
 
 import java.util.Optional;
 
-/** Pure data holder for game state (board + game-over + winner); all rules/logic live in GameEngine instead. */
-public class Game {
+/** Pure data holder for game state (board + game-over + winner); all rules/logic live in PlayEngine instead. */
+public class PlayState {
 
     private final Board board;
     private boolean gameOver = false;
     private PieceColor winner;
 
-    public Game(Board board) {
+    public PlayState(Board board) {
         this.board = board;
     }
 

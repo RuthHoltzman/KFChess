@@ -80,7 +80,7 @@ Run `kfchess.server.ServerMain`. In IntelliJ: open the file and click the
 green ▶ beside `main`.
 
 ```
-GameServer started on port 8887
+PlayServer started on port 8887
 ```
 
 Leave it running. It creates and uses `kfchess.db` (the accounts database) in the
@@ -141,14 +141,14 @@ player clicks as well.
 ```mermaid
 flowchart LR
     subgraph Client["Client (Swing)"]
-        L[LoginScreenMain] --> H[HomeScreen] --> W[NetworkGameWindow]
+        L[LoginScreenMain] --> H[HomeScreen] --> W[NetworkPlayWindow]
         W --> CH[NetworkClickHandler]
         W --> R[ClientSnapshotReconstructor]
     end
 
     subgraph Server["Server (single tick thread)"]
-        GS[GameServer] --> SE[GameSession]
-        SE --> EN[GameEngine]
+        GS[PlayServer] --> SE[PlaySession]
+        SE --> EN[PlayEngine]
         EN --> RU[RuleEngine]
         EN --> BUS[EventBus]
         BUS --> ELO[EloCalculator]
@@ -161,7 +161,7 @@ flowchart LR
 
 **Design decisions**
 
-- **Authoritative server.** The client holds no `GameEngine`. Every rule decision —
+- **Authoritative server.** The client holds no `PlayEngine`. Every rule decision —
   including rejecting clicks on the opponent's pieces — happens server-side, so a
   modified client cannot cheat.
 - **Single-writer threading.** Commands arriving on network threads are queued;
@@ -215,8 +215,8 @@ src/main/java/kfchess/
 ├── model/                 Board, Piece, Position, colors / kinds / states / ClientRole
 ├── rules/                 RuleEngine + PieceRules (per-piece legality)
 ├── realtime/              RaelTime (game clock), Motion (piece in transit)
-├── engine/                GameEngine, MoveHistory, NetworkActions
-│   └── snapshot/          SnapshotFactory + immutable GameSnapshot view model
+├── engine/                PlayEngine, MoveHistory, NetworkActions
+│   └── snapshot/          SnapshotFactory + immutable PlaySnapshot view model
 ├── bus/                   EventBus (pub/sub) + game event types
 ├── io/                    BoardParser (text board format, used by the Restart feature)
 ├── view/                  Swing rendering, animation, images
@@ -224,12 +224,12 @@ src/main/java/kfchess/
 ├── input/                 BoardMapper (pixel ↔ board coordinates)
 ├── account/               Accounts, bcrypt hashing, SQLite repo, EloCalculator
 ├── protocol/              Shared WebSocket DTOs (ClientCommand, SnapshotMessage, ...)
-├── server/                GameServer, GameSession, ServerMain, resolvers
-├── client/                GameClient, snapshot reconstruction, click handling
+├── server/                PlayServer, PlaySession, ServerMain, resolvers
+├── client/                PlayClient, snapshot reconstruction, click handling
 └── app/                   Client entry points
     ├── LoginScreenMain    ← entry point: login / register
     ├── HomeScreen         ← room selection
-    └── NetworkGameWindow  ← the game window
+    └── NetworkPlayWindow  ← the game window
 ```
 
 **Entry points**
@@ -253,7 +253,7 @@ reconstruction, session and room behaviour, accounts and ELO — and run without
 server or a display.
 
 Rather than a mocking framework, the suite uses hand-written test doubles
-(`FakeWebSocket`, `RecordingGameClient`) in place of real network objects, which
+(`FakeWebSocket`, `RecordingPlayClient`) in place of real network objects, which
 keeps the tests fast and deterministic.
 
 ---
@@ -275,7 +275,7 @@ keeps the tests fast and deterministic.
 
 1. **דרישות**: Java 17 (JDK) ו-Maven.
 2. **הרצת השרת** — מריצים את המחלקה `kfchess.server.ServerMain`.
-   אמורה להופיע השורה `GameServer started on port 8887`. משאירים אותו רץ.
+   אמורה להופיע השורה `PlayServer started on port 8887`. משאירים אותו רץ.
 3. **הרצת הלקוח** — מריצים את **`kfchess.app.LoginScreenMain`**
    (נקודת הכניסה **היחידה** למשחק).
    - **Register** ליצירת חשבון חדש (דירוג התחלתי 1200), או **Login** לחשבון קיים.

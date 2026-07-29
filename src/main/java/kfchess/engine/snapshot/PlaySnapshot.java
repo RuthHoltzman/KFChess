@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Immutable wire/DTO form of the whole game state, sent to the client each tick. */
-public record GameSnapshot(
+public record PlaySnapshot(
         int boardWidthCells,
         int boardHeightCells,
         List<PieceSnapshot> pieces,
@@ -21,7 +21,7 @@ public record GameSnapshot(
         Integer disconnectSecondsRemaining,
         boolean waitingForOpponent
 ) {
-    public GameSnapshot {
+    public PlaySnapshot {
         pieces = List.copyOf(pieces); // defensive copy - collections can't be mutated after construction
         captureEffects = List.copyOf(captureEffects);
         legalMoves = List.copyOf(legalMoves);

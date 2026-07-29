@@ -2,7 +2,7 @@ package kfchess.client;
 
 import kfchess.input.BoardMapper;
 import kfchess.model.Position;
-import kfchess.view.GameSceneView;
+import kfchess.view.PlaySceneView;
 import kfchess.view.layout.BoardLayoutCalculator.BoardLayout;
 
 import java.awt.Rectangle;
@@ -11,11 +11,11 @@ import java.util.Optional;
 /** The client's input controller: turns mouse clicks into CLICK/JUMP/RESTART commands sent to the server. */
 public class NetworkClickHandler {
 
-    private final GameClient client;
+    private final PlayClient client;
     private final BoardMapper boardMapper;
-    private final GameSceneView sceneView;
+    private final PlaySceneView sceneView;
 
-    public NetworkClickHandler(GameClient client, BoardMapper boardMapper, GameSceneView sceneView) {
+    public NetworkClickHandler(PlayClient client, BoardMapper boardMapper, PlaySceneView sceneView) {
         this.client = client;
         this.boardMapper = boardMapper;
         this.sceneView = sceneView;

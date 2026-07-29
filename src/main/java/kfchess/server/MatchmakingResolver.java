@@ -1,11 +1,14 @@
 package kfchess.server;
 
-/** Detects a matchmaking connection request by its reserved path, rather than a named room. */
-public final class MatchmakingResolver {
+import kfchess.protocol.ConnectionPaths;
 
-    // Must match the token in HomeScreen.buildMatchmakingUri exactly - both ends define it separately.
-    // Known limitation: typing "_play" as a manual room name collides with matchmaking. Rare enough to ignore.
-    private static final String MATCHMAKING_PATH = "_play";
+/**
+ * Detects a matchmaking connection request by its reserved path, rather than a named room.
+ * <p>
+ * Known limitation: typing the reserved token as a manual room name collides with matchmaking.
+ * Rare enough in practice to leave alone.
+ */
+public final class MatchmakingResolver {
 
     private MatchmakingResolver() {
     }
@@ -17,6 +20,6 @@ public final class MatchmakingResolver {
         }
         String pathOnly = resourceDescriptor.split("\\?", 2)[0];
         String trimmed = pathOnly.replaceAll("^/+", "").replaceAll("/+$", "");
-        return trimmed.equals(MATCHMAKING_PATH);
+        return trimmed.equals(ConnectionPaths.MATCHMAKING);
     }
 }

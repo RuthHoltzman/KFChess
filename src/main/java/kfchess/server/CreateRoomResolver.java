@@ -1,10 +1,9 @@
 package kfchess.server;
 
+import kfchess.protocol.ConnectionPaths;
+
 /** Detects a "Create room" connection request by its reserved path. Pure and separately unit-testable. */
 public final class CreateRoomResolver {
-
-    // Must match the token in HomeScreen.buildCreateRoomUri exactly - both ends define it separately.
-    private static final String CREATE_ROOM_PATH = "_create";
 
     private CreateRoomResolver() {
     }
@@ -16,6 +15,6 @@ public final class CreateRoomResolver {
         }
         String pathOnly = resourceDescriptor.split("\\?", 2)[0];
         String trimmed = pathOnly.replaceAll("^/+", "").replaceAll("/+$", "");
-        return trimmed.equals(CREATE_ROOM_PATH);
+        return trimmed.equals(ConnectionPaths.CREATE_ROOM);
     }
 }

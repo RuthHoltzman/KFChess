@@ -12,6 +12,6 @@ public final class ServerMain {
     /** Starts the server on the given port, or the default one. */
     public static void main(String[] args) {
         int port = args.length > 0 ? Integer.parseInt(args[0]) : DEFAULT_PORT;
-        new GameServer(port).start();
+        new PlayServer(port).start();
     }
 }

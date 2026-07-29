@@ -1,6 +1,6 @@
 package kfchess.view;
 
-import kfchess.engine.snapshot.GameSnapshot;
+import kfchess.engine.snapshot.PlaySnapshot;
 import kfchess.model.PieceColor;
 import kfchess.model.ClientRole;
 
@@ -11,10 +11,10 @@ import java.util.List;
 /**
  * Top-level view: composes one canvas - White's panel | the board | Black's panel - and is the only class that calls show().
  * <p>
- * It computes no geometry itself; all sizes and offsets arrive as parameters from NetworkGameWindow,
+ * It computes no geometry itself; all sizes and offsets arrive as parameters from NetworkPlayWindow,
  * so the same number is never calculated in two places that could drift apart.
  */
-public class GameSceneView {
+public class PlaySceneView {
 
     private static final Color OUTER_BACKGROUND = new Color(30, 30, 30);
     private static final Color OVERLAY_BACKGROUND = new Color(0, 0, 0, 150);
@@ -42,7 +42,7 @@ public class GameSceneView {
     // These are drawn on the board canvas only, unlike ROOM_HEADER_HEIGHT below which spans the whole scene.
     private static final int TOP_BANNER_HEIGHT = 40;
     private static final int TOP_BANNER_FONT_SIZE = 20;
-    // Height of the always-on room header. NetworkGameWindow must use this exact number
+    // Height of the always-on room header. NetworkPlayWindow must use this exact number
     // (via roomHeaderHeight()) when it shrinks the space left for the board.
     private static final int ROOM_HEADER_HEIGHT = 34;
     private static final int ROOM_HEADER_FONT_SIZE = 18;
@@ -50,7 +50,7 @@ public class GameSceneView {
     private final BoardView boardView;
     private final SidePanelView sidePanelView;
     // Fixed for the window's whole lifetime (set once at connect time), unlike everything else
-    // that arrives per-frame in the GameSnapshot - hence constructor fields, not render() parameters.
+    // that arrives per-frame in the PlaySnapshot - hence constructor fields, not render() parameters.
     private final String roomId;
     private final ClientRole role;
     private final String username;
@@ -60,11 +60,11 @@ public class GameSceneView {
     private int lastBoardPixelSize;
 
     /** Convenience overload without room/role/username - used only by NetworkClickHandlerTest. */
-    public GameSceneView(BoardView boardView, int panelWidth) {
+    public PlaySceneView(BoardView boardView, int panelWidth) {
         this(boardView, panelWidth, null, null, null);
     }
 
-    public GameSceneView(BoardView boardView, int panelWidth, String roomId, ClientRole role, String username) {
+    public PlaySceneView(BoardView boardView, int panelWidth, String roomId, ClientRole role, String username) {
         this.boardView = boardView;
         this.sidePanelView = new SidePanelView(panelWidth);
         this.roomId = roomId;
@@ -96,7 +96,7 @@ public class GameSceneView {
      * @param boardOffsetX   where the board starts on X (already accounts for the left panel and centering).
      * @param boardOffsetY   where the board starts on Y (vertical centering, if there's spare room).
      */
-    public void render(GameSnapshot snapshot, int sceneWidthPx, int sceneHeightPx,
+    public void render(PlaySnapshot snapshot, int sceneWidthPx, int sceneHeightPx,
                         int boardPixelSize, int boardOffsetX, int boardOffsetY) {
         this.lastBoardPixelSize = boardPixelSize;
 

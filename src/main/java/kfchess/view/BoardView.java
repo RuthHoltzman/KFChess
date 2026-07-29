@@ -1,7 +1,7 @@
 package kfchess.view;
 
 import kfchess.engine.snapshot.CaptureEffectSnapshot;
-import kfchess.engine.snapshot.GameSnapshot;
+import kfchess.engine.snapshot.PlaySnapshot;
 import kfchess.engine.snapshot.PieceSnapshot;
 import kfchess.engine.snapshot.PieceVisualState;
 import kfchess.model.Position;
@@ -22,8 +22,8 @@ public class BoardView {
         this.boardImagePath = boardImagePath;
     }
 
-    /** Draws the board onto a fresh canvas and returns it - GameSceneView composes and shows the final image. */
-    public Img render(GameSnapshot snapshot, BoardGeometry geometry) {
+    /** Draws the board onto a fresh canvas and returns it - PlaySceneView composes and shows the final image. */
+    public Img render(PlaySnapshot snapshot, BoardGeometry geometry) {
         int boardWidthPx = geometry.getCellWidth() * geometry.getCols();
         int boardHeightPx = geometry.getCellHeight() * geometry.getRows();
 
@@ -106,7 +106,7 @@ public class BoardView {
     }
 
     /** Outlines the viewer's currently selected square, if any. */
-    private void drawSelectionHighlight(Img canvas, GameSnapshot snapshot, BoardGeometry geometry) {
+    private void drawSelectionHighlight(Img canvas, PlaySnapshot snapshot, BoardGeometry geometry) {
         if (snapshot.selectedPosition() == null) {
             return;
         }
@@ -115,7 +115,7 @@ public class BoardView {
     }
 
     /** Draws a dot on every square the selected piece could legally move to. */
-    private void drawLegalMoveMarkers(Img canvas, GameSnapshot snapshot, BoardGeometry geometry) {
+    private void drawLegalMoveMarkers(Img canvas, PlaySnapshot snapshot, BoardGeometry geometry) {
         for (Position target : snapshot.legalMoves()) {
             Point topLeft = geometry.cellToPixel(target);
             int markerSize = Math.min(geometry.getCellWidth(), geometry.getCellHeight()) / 3;

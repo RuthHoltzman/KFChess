@@ -98,7 +98,7 @@ class ClientSnapshotReconstructorTest {
                 .pieceAt(new Position(6, 4)).orElseThrow();
         assertTrue(moverDuringTransit.isInTransit());
 
-        // Exactly what GameEngine.completeMotion does in practice: advance the state of
+        // Exactly what PlayEngine.completeMotion does in practice: advance the state of
         // the very same Piece object before the next message is built.
         pawn.markArrived();
         SnapshotMessage message2 = new SnapshotMessage(8, 8,

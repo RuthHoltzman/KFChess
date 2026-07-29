@@ -1,7 +1,7 @@
 package kfchess.server;
 
-import kfchess.engine.GameCommandController;
-import kfchess.engine.GameEngine;
+import kfchess.engine.PlayCommandController;
+import kfchess.engine.PlayEngine;
 import kfchess.engine.snapshot.JumpVisual;
 import kfchess.model.Board;
 import kfchess.model.ClientRole;
@@ -19,8 +19,8 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Turns game state (Board + GameEngine) into a {@link SnapshotMessage} - a pure domain-to-DTO
- * translation layer, extracted from {@link GameSession}. It keeps no state between calls.
+ * Turns game state (Board + PlayEngine) into a {@link SnapshotMessage} - a pure domain-to-DTO
+ * translation layer, extracted from {@link PlaySession}. It keeps no state between calls.
  * <p>
  * The session-dependent details (restart vote, disconnect countdown, waiting for an opponent) are
  * <b>not</b> computed here; they arrive ready as parameters, because they depend on connection state
@@ -33,7 +33,7 @@ public class SnapshotBuilder {
     }
 
     /** Assembles the full snapshot message for one viewer. */
-    public SnapshotMessage build(Board board, GameEngine engine, GameCommandController commandController,
+    public SnapshotMessage build(Board board, PlayEngine engine, PlayCommandController commandController,
                                   ClientRole viewerRole, boolean restartRequestedByViewer,
                                   Integer disconnectSecondsRemaining, boolean waitingForOpponent) {
         BoardScan scan = scanBoard(board);
@@ -65,7 +65,7 @@ public class SnapshotBuilder {
     }
 
     /** Converts active jumps to DTOs; JumpVisual has no position of its own, so the scan map supplies it. */
-    private List<JumpDto> collectJumps(GameEngine engine, Map<Piece, Position> positionByPiece) {
+    private List<JumpDto> collectJumps(PlayEngine engine, Map<Piece, Position> positionByPiece) {
         List<JumpDto> jumps = new ArrayList<>();
         for (JumpVisual jump : engine.activeJumps()) {
             Position position = positionByPiece.get(jump.piece());
@@ -77,14 +77,14 @@ public class SnapshotBuilder {
     }
 
     /** Re-keys the score map by color name, for JSON. */
-    private Map<String, Integer> scoresByName(GameEngine engine) {
+    private Map<String, Integer> scoresByName(PlayEngine engine) {
         Map<String, Integer> byName = new HashMap<>();
         engine.scores().forEach((color, score) -> byName.put(color.name(), score));
         return byName;
     }
 
     /** Re-keys the move log by color name, for JSON. */
-    private Map<String, List<String>> moveLogByName(GameEngine engine) {
+    private Map<String, List<String>> moveLogByName(PlayEngine engine) {
         Map<String, List<String>> byName = new HashMap<>();
         engine.moveLog().forEach((color, log) -> byName.put(color.name(), log));
         return byName;

@@ -12,7 +12,7 @@ import java.util.Scanner;
 import java.util.regex.Pattern;
 
 
-/** Parses the "Board:" section of a text-based board definition (as used by GameSession) into a Board. */
+/** Parses the "Board:" section of a text-based board definition (as used by PlaySession) into a Board. */
 public class BoardParser {
 
     private static final String BOARD_HEADER = "Board:";

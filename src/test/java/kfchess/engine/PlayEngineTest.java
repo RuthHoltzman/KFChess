@@ -2,7 +2,7 @@ package kfchess.engine;
 
 import kfchess.bus.EventBus;
 import kfchess.model.Board;
-import kfchess.model.Game;
+import kfchess.model.PlayState;
 import kfchess.model.Piece;
 import kfchess.model.PieceColor;
 import kfchess.model.PieceKind;
@@ -15,18 +15,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Covers the "capture in mid-air" case (see GameEngine.captureFailsAgainstJumpingDefender):
+ * Covers the "capture in mid-air" case (see PlayEngine.captureFailsAgainstJumpingDefender):
  * piece A moves to capture piece B, but B is JUMPING - so A vanishes and B survives intact.
  * The reported bug was that nobody scored; now the defender who effectively did the capturing
  * is credited with the attacker's piece value.
  * <p>
- * Builds a GameEngine directly, with no GameSession or network, using a simulated clock so time
+ * Builds a PlayEngine directly, with no PlaySession or network, using a simulated clock so time
  * can be advanced without a real Thread.sleep.
  */
-class GameEngineTest {
+class PlayEngineTest {
 
-    private static GameEngine newEngine(Board board) {
-        return new GameEngine(new Game(board), new RuleEngine(), new RaelTime(), new EventBus());
+    private static PlayEngine newEngine(Board board) {
+        return new PlayEngine(new PlayState(board), new RuleEngine(), new RaelTime(), new EventBus());
     }
 
     @Test
@@ -36,7 +36,7 @@ class GameEngineTest {
         Piece defender = new Piece(PieceColor.BLACK, PieceKind.PAWN);
         board.placePiece(new Position(0, 0), attacker);
         board.placePiece(new Position(0, 1), defender);
-        GameEngine engine = newEngine(board);
+        PlayEngine engine = newEngine(board);
 
         engine.beginJump(defender); // defender starts jumping (1000ms)
         engine.tryMove(attacker, new Position(0, 0), new Position(0, 1)); // attacker moves onto the jumping defender (1 square, 1000ms travel)
@@ -54,7 +54,7 @@ class GameEngineTest {
         Piece defender = new Piece(PieceColor.BLACK, PieceKind.PAWN);
         board.placePiece(new Position(0, 0), attacker);
         board.placePiece(new Position(0, 1), defender);
-        GameEngine engine = newEngine(board);
+        PlayEngine engine = newEngine(board);
 
         engine.beginJump(defender);
         engine.tryMove(attacker, new Position(0, 0), new Position(0, 1));
@@ -73,7 +73,7 @@ class GameEngineTest {
         Piece defender = new Piece(PieceColor.BLACK, PieceKind.PAWN);
         board.placePiece(new Position(0, 0), attacker);
         board.placePiece(new Position(0, 1), defender);
-        GameEngine engine = newEngine(board);
+        PlayEngine engine = newEngine(board);
 
         engine.tryMove(attacker, new Position(0, 0), new Position(0, 1));
         engine.handleWait(1000);
