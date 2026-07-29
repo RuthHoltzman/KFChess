@@ -19,25 +19,20 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * הופך את מצב המשחק (Board+GameEngine) להודעת {@link SnapshotMessage} לשידור -
- * שכבת "תרגום דומיין ל-DTO" גרידא. הוצא מ-{@link GameSession} (ר' PROGRESS.md,
- * "פיצול GameSession") - זו הייתה אחת מחמש אחריויות שונות שישבו שם ביחד
- * (חיבורים/ניתוקים/restart/snapshot/ELO), וזו האחת שהכי פשוט להוציא כי היא
- * טהורה: קלט (board+engine+controller+כמה ערכים) בלבד, פלט DTO, בלי state
- * משלה בין קריאות.
+ * Turns game state (Board + GameEngine) into a {@link SnapshotMessage} - a pure domain-to-DTO
+ * translation layer, extracted from {@link GameSession}. It keeps no state between calls.
  * <p>
- * הפרטים שבאמת שייכים ל"מושב" (session) עצמו - האם ביקשתי restart, כמה
- * שניות נשארו לניתוק, האם ממתינים ליריב - <b>לא</b> מחושבים כאן; הם מגיעים
- * כפרמטרים מוכנים מ-{@code GameSession}, כי הם תלויים ב-state של חיבורי
- * הרשת (connections/pendingDisconnects) שלא קשור בכלל ל"איך הופכים לוח
- * להודעת JSON".
+ * The session-dependent details (restart vote, disconnect countdown, waiting for an opponent) are
+ * <b>not</b> computed here; they arrive ready as parameters, because they depend on connection state
+ * rather than on the board.
  */
 public class SnapshotBuilder {
 
-    /** תוצאת סריקת הלוח: הכלים לשידור + מיקום כל כלי (זהות, לא ערך) - דרוש כדי לאתר קפיצות (ר' collectJumps). */
+    /** One board scan: the pieces to broadcast, plus each piece's position - needed to locate active jumps. */
     private record BoardScan(List<PieceDto> pieces, Map<Piece, Position> positionByPiece) {
     }
 
+    /** Assembles the full snapshot message for one viewer. */
     public SnapshotMessage build(Board board, GameEngine engine, GameCommandController commandController,
                                   ClientRole viewerRole, boolean restartRequestedByViewer,
                                   Integer disconnectSecondsRemaining, boolean waitingForOpponent) {
@@ -53,7 +48,7 @@ public class SnapshotBuilder {
                 restartRequestedByViewer, disconnectSecondsRemaining, waitingForOpponent);
     }
 
-    // סורק את כל הלוח (row/col) פעם אחת - אוסף גם PieceDto לשידור וגם piece->position לצורך collectJumps.
+    /** Walks the board once, collecting both the DTOs to broadcast and a piece-to-position map. */
     private BoardScan scanBoard(Board board) {
         List<PieceDto> pieces = new ArrayList<>();
         Map<Piece, Position> positionByPiece = new HashMap<>();
@@ -69,7 +64,7 @@ public class SnapshotBuilder {
         return new BoardScan(pieces, positionByPiece);
     }
 
-    // ממיר את כל הקפיצות הפעילות ל-DTO; JumpVisual לא יודע את מיקומו בעצמו, לכן משתמשים במפה מ-scanBoard.
+    /** Converts active jumps to DTOs; JumpVisual has no position of its own, so the scan map supplies it. */
     private List<JumpDto> collectJumps(GameEngine engine, Map<Piece, Position> positionByPiece) {
         List<JumpDto> jumps = new ArrayList<>();
         for (JumpVisual jump : engine.activeJumps()) {
@@ -81,14 +76,14 @@ public class SnapshotBuilder {
         return jumps;
     }
 
-    // ממיר Map<PieceColor,Integer> של הניקוד ל-Map<String,Integer> לפי שם הצבע, לשידור ב-JSON.
+    /** Re-keys the score map by color name, for JSON. */
     private Map<String, Integer> scoresByName(GameEngine engine) {
         Map<String, Integer> byName = new HashMap<>();
         engine.scores().forEach((color, score) -> byName.put(color.name(), score));
         return byName;
     }
 
-    // ממיר Map<PieceColor,List<String>> של יומן המהלכים ל-Map<String,List<String>>, לשידור ב-JSON.
+    /** Re-keys the move log by color name, for JSON. */
     private Map<String, List<String>> moveLogByName(GameEngine engine) {
         Map<String, List<String>> byName = new HashMap<>();
         engine.moveLog().forEach((color, log) -> byName.put(color.name(), log));

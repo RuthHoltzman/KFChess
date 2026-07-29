@@ -1,22 +1,15 @@
 package kfchess.server;
 
-/**
- * מזהה אם בקשת חיבור WebSocket היא בקשת "Create room" (כפתור Create
- * בדיאלוג ה-Room, שלב 6) - לפי נתיב שמור (CREATE_ROOM_PATH), באותו
- * דפוס בדיוק כמו MatchmakingResolver (וגם GameIdResolver לפני זה):
- * מחלקה טהורה נפרדת, נבדקת ביחידה בלי handshake מזויף.
- */
+/** Detects a "Create room" connection request by its reserved path. Pure and separately unit-testable. */
 public final class CreateRoomResolver {
 
-    // חייב להיות זהה בדיוק לטוקן שקבוע ב-HomeScreen.buildCreateRoomUri
-    // בצד הלקוח - שני הקצוות מגדירים אותו בנפרד, אותו עיקרון בדיוק כמו
-    // MATCHMAKING_PATH/"_play".
+    // Must match the token in HomeScreen.buildCreateRoomUri exactly - both ends define it separately.
     private static final String CREATE_ROOM_PATH = "_create";
 
     private CreateRoomResolver() {
     }
 
-    // אותה שיטת חיתוך query string בדיוק כמו GameIdResolver/MatchmakingResolver.
+    /** Whether this connection path is the reserved "create a new room" path. */
     public static boolean isCreateRoomRequest(String resourceDescriptor) {
         if (resourceDescriptor == null) {
             return false;

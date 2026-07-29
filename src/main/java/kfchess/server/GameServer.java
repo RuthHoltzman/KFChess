@@ -25,55 +25,36 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * נקודת הכניסה לרשת: מחזיק משחק (GameSession) לכל gameId, ומריץ thread
- * יחיד ("single writer") שהוא היחיד שקורא ל-tick על כל משחק ומשדר את
- * מצבו - כל מה ש-onOpen/onMessage/onClose (שרצים על threads הרשת של
- * הספרייה) עושים הוא לתייק פקודות/לעדכן מיפויי חיבורים, לא לגעת
- * ב-GameEngine ישירות (ר' התיעוד ב-GameSession).
+ * The network entry point: holds one GameSession per gameId and runs the single tick thread that
+ * advances and broadcasts every game.
+ * <p>
+ * onOpen/onMessage/onClose run on the library's network threads and only file commands or update
+ * connection maps - they never touch a GameEngine directly.
  */
 public class GameServer extends WebSocketServer {
 
-    private static final long TICK_INTERVAL_MILLIS = 33; // ~30 עדכונים בשנייה
-    // תיקון "Play" לפי המפרט המדויק (התגלה מאוחר, ר' "הערה חשובה - קובץ
-    // ההוראות המקורי" ב-PROGRESS.md; רות בחרה לדחות אותו עד אחרי שלב 6):
-    // "ELO in range of ±100... waits for 1 min... pops up a message that
-    // can't find". שני הקבועים למטה - ר' resolveMatchmakingGameId/checkMatchmakingTimeout.
+    private static final long TICK_INTERVAL_MILLIS = 33; // ~30 updates per second
     private static final int ELO_MATCH_RANGE = 100;
     private static final long MATCHMAKING_TIMEOUT_MILLIS = 60_000;
 
     private final Gson gson = new Gson();
-    // repository אחד, משותף לכל ה-GameSession-ים (וגם ל-LoginScreenMain בצד
-    // הלקוח) - אותו קובץ kfchess.db בדיוק, כי אלה אותם חשבונות עצמם.
+    // One repository shared by every session (and by the login screen) - the same kfchess.db file,
+    // because these are the same accounts.
     private final AccountRepository accountRepository =
             new SqliteAccountRepository(SqliteAccountRepository.DEFAULT_DB_FILE);
     private final Map<String, GameSession> sessions = new ConcurrentHashMap<>();
     private final Map<WebSocket, String> gameIdByConnection = new ConcurrentHashMap<>();
-    // gameId-ים שנוצרו *דרך Play עצמו* (ר' resolveMatchmakingGameId) - בלי
-    // זה, סריקת ה-matchmaking הייתה עלולה "לגנוב" session שממתין ליריב אבל
-    // נוצר דרך Create/Join (חדר פרטי/בשם) - Play חייב להתאים רק למי שגם
-    // הוא/היא הגיע/ה דרך Play. ConcurrentHashMap.newKeySet() כי נקרא גם
-    // מ-thread הרשת (onOpen/resolveMatchmakingGameId).
+    // Sessions created through Play. Without this, matchmaking could steal a session that is waiting
+    // for a specific friend to Join a private room - Play must only match other Play players.
     private final Set<String> matchmakingSessionIds = ConcurrentHashMap.newKeySet();
-    // gameId (מ-matchmakingSessionIds) -> רגע (System.currentTimeMillis)
-    // שבו פג ה-1-דקה timeout שלו (ר' checkMatchmakingTimeout) - רק ל-
-    // sessions שנוצרו *חדשים* דרך Play בלי שנמצא/ה match מיידי; מוסר
-    // ברגע שנמצא match (resolveMatchmakingGameId) או שה-timeout כבר נורה.
-    // זמן-קיר אמיתי בכוונה, לא שעון-המשחק המדומה (RaelTime) של GameSession -
-    // GameServer ממילא לא נבדק ביחידה (דורש שרת/רשת חיים), כבר משתמש
-    // ב-System.nanoTime() ישירות ב-tickAllSessions.
+    // gameId -> wall-clock moment its 1-minute matchmaking timeout expires. Removed once a match is
+    // found or the timeout has already fired.
     private final Map<String, Long> matchmakingDeadlines = new ConcurrentHashMap<>();
     private final ScheduledExecutorService tickExecutor = Executors.newSingleThreadScheduledExecutor();
-    // נעילה ייעודית ל"החלטה איזה gameId להשתמש בו" - גם matchmaking
-    // (ר' resolveMatchmakingGameId) וגם Create room (ר' createNewRoomGameId)
-    // חולקים אותה, כי שתיהן אותה בעיה בעצם ("תמצא/י או תמציא/י gameId פנוי
-    // ותשמרי אותו לפני שמישהו אחר עושה בדיוק אותו דבר"). נפרדת מהנעילות
-    // הפנימיות של GameSession עצמה (assignRole וכו') כי כאן הבעיה היא ברמת
-    // GameServer: איזה session בכלל נבחר, לא מה קורה בתוכו.
+    // Guards "decide which gameId to use". Both matchmaking and Create room share it, because both
+    // solve the same problem: find or invent a free gameId and claim it before anyone else does.
     private final Object sessionAllocationLock = new Object();
-    // שלב 6 חלק 2 (בקשת המנחה): לוג טכני/תפעולי לקובץ טקסט - לא קשור
-    // בכלל ל-moveLog (רישום מהלכי שחמט, כבר קיים) - ר' תיעוד FileLogger.
-    // אחד בלבד לכל תהליך שרת (לא לכל session) - "פעילות שרת" היא
-    // ברמת ה-GameServer, לא ברמת משחק בודד.
+    // Operational log for the whole server process (not per session) - unrelated to the chess move log.
     private final FileLogger fileLogger = new FileLogger("server");
     private long lastTickNanos = System.nanoTime();
 
@@ -81,7 +62,7 @@ public class GameServer extends WebSocketServer {
         super(new InetSocketAddress(port));
     }
 
-    // נקרא פעם אחת אחרי שהשקע נפתח בהצלחה: כאן מתחילה לולאת הטיק, על thread נפרד מזה של הרשת.
+    /** Called once the socket is open: starts the tick loop on its own thread, separate from the network threads. */
     @Override
     public void onStart() {
         lastTickNanos = System.nanoTime();
@@ -90,24 +71,14 @@ public class GameServer extends WebSocketServer {
         fileLogger.log("GameServer started on port " + getPort());
     }
 
-    // חיבור חדש: קובע/יוצר את המשחק לפי הנתיב, קובע תפקיד (לבן/שחור/צופה)
-    // + משייך את ה-username אם הגיע אחד (ר' UsernameResolver - שלב 4 Part B,
-    // דרוש לעדכון ELO בסוף המשחק), ומודיע ללקוח מיד.
-    // שלב 5 חלק 2 (matchmaking, כפתור "Skip"): אם הנתיב הוא בקשת matchmaking
-    // (ר' MatchmakingResolver) - ה-gameId לא נקבע מהנתיב עצמו אלא נמצא/נוצר
-    // דינמית (ר' resolveMatchmakingGameId); אחרת בדיוק ההתנהגות הקיימת
-    // (חדר-בשם-ספציפי, GameIdResolver). שום דבר אחר כאן לא משתנה - גם
-    // matchmaking בסוף עובר דרך אותו computeIfAbsent (בטוח לקרוא לו שוב
-    // גם אם resolveMatchmakingGameId כבר יצרה את ה-session - no-op).
-    // שלב 6 (Create room, כפתור Create בדיאלוג Room): אם הנתיב הוא בקשת
-    // "Create" (ר' CreateRoomResolver) - ה-gameId מגיע מ-createNewRoomGameId
-    // (קוד קצר שהשרת ממציא, ר' RoomIdGenerator) - נבדק *לפני* matchmaking,
-    // כי שני הנתיבים השמורים (_create/_play) הדדית בלעדיים.
+    /**
+     * New connection: picks the game from the request path (Create / Play / Join), assigns a role,
+     * records the username if one was supplied, and tells the client immediately.
+     */
     @Override
     public void onOpen(WebSocket conn, ClientHandshake handshake) {
         String path = handshake.getResourceDescriptor();
-        // הוזז לפני חישוב ה-gameId (היה אחרי) - resolveMatchmakingGameId
-        // צריכה את ה-username כדי לבדוק התאמת ELO (ר' תיעוד שם).
+        // Resolved before the gameId, because matchmaking needs the username to compare ELO.
         String username = UsernameResolver.resolve(path).orElse(null);
         String gameId;
         String connectionMethod;
@@ -129,20 +100,13 @@ public class GameServer extends WebSocketServer {
         conn.send(gson.toJson(new RoleAssignedMessage(role.name(), gameId)));
     }
 
-    // מוצאת session קיים שממתין ליריב **עם ELO תואם** (ר' isCompatibleElo)
-    // ומצטרפת אליו; אם אין כזה - יוצרת session חדש עם gameId ייחודי
-    // ("match-<uuid>", לא ניתן להקליד ידנית בשדה room) ורושמת לו דדליין
-    // של דקה (ר' matchmakingDeadlines/checkMatchmakingTimeout).
-    // synchronized(sessionAllocationLock) חובה: בלי זה, שני חיבורים שמגיעים כמעט
-    // בו-זמנית עלולים *שניהם* לסרוק ולא למצוא אף session ממתין (כי אף אחד
-    // מהם עדיין לא נוצר), ואז *שניהם* ייצרו לעצמם session נפרד - ולעולם לא
-    // ייפגשו. הבחירה כאן היא "הראשון שנמצא בסריקה" - לא תור FIFO אמיתי לפי
-    // כמה זמן מישהו/י ממתין/ה; מספיק טוב לשלב הזה.
-    // matchmakingSessionIds.contains(entry.getKey()) - בלי זה, isWaitingForOpponent()
-    // לבד לא מבחין בין "ממתין/ה כי לחצתי Play" לבין "ממתין/ה כי פתחתי חדר
-    // פרטי ומחכה שחברה ספציפית תעשה Join" - שני המצבים נראים זהים מבחינת
-    // GameSession עצמו (רק צד אחד מחובר). ה-Set מבטיח ש-Play יתאים רק
-    // ל-session שגם הוא נוצר במקור דרך Play.
+    /**
+     * Finds a waiting session with a compatible ELO and joins it, or creates a new one with a
+     * unique "match-&lt;uuid&gt;" id and a one-minute deadline.
+     * <p>
+     * The lock is required: without it two near-simultaneous searchers could both find nothing,
+     * both create their own session, and never meet.
+     */
     private String resolveMatchmakingGameId(String searcherUsername) {
         Integer searcherElo = eloFor(searcherUsername).orElse(null);
         synchronized (sessionAllocationLock) {
@@ -153,7 +117,7 @@ public class GameServer extends WebSocketServer {
                 }
                 Integer candidateElo = eloFor(candidate.waitingPlayerUsername().orElse(null)).orElse(null);
                 if (isCompatibleElo(searcherElo, candidateElo)) {
-                    matchmakingDeadlines.remove(entry.getKey()); // מצא/ה match - בטל את ה-timeout
+                    matchmakingDeadlines.remove(entry.getKey()); // matched - cancel the timeout
                     return entry.getKey();
                 }
             }
@@ -165,18 +129,15 @@ public class GameServer extends WebSocketServer {
         }
     }
 
-    // ה-ELO הנוכחי של username נתון, או Optional.empty() אם אין username
-    // (התחברות אנונימית) או שהחשבון לא נמצא - שני המצבים מטופלים באותה
-    // צורה ע"י isCompatibleElo (fallback סובלני, ר' שם).
+    /** The current ELO for a username, or empty if there's no username (anonymous) or no such account. */
     private Optional<Integer> eloFor(String username) {
         return username == null ? Optional.empty() : accountRepository.currentElo(username);
     }
 
-    // true אם ההפרש בין שני ה-ELO-ים הוא ≤100 (הדרישה המדויקת - "±100") -
-    // *או* אם אין מספיק מידע לשפוט בכלל (מישהו/י מהשניים לא מחובר/ת עם
-    // login, או שה-ELO שלו/ה לא נמצא). ה-fallback הזה נבחר בכוונה: בלי
-    // login (למשל חיבור אנונימי לבדיקות) matchmaking היה נתקע לגמרי בלי
-    // דרך להתאים, וזה גרוע יותר מהתאמה בלי בדיקת ELO.
+    /**
+     * Whether two ratings are within +/-100 - or whether there simply isn't enough information to judge.
+     * That lenient fallback is deliberate: without it, anonymous connections could never be matched at all.
+     */
     private boolean isCompatibleElo(Integer searcherElo, Integer candidateElo) {
         if (searcherElo == null || candidateElo == null) {
             return true;
@@ -184,12 +145,10 @@ public class GameServer extends WebSocketServer {
         return Math.abs(searcherElo - candidateElo) <= ELO_MATCH_RANGE;
     }
 
-    // נקראת מ-tickAllSessions על כל session שיש לו דדליין רשום ב-
-    // matchmakingDeadlines: אם כבר לא ממתין (מישהו/י הצטרף/ה, או שהמשחק
-    // "נגמר" איכשהו) - רק מנקה את הרישום, בלי לשלוח כלום. אם עדיין ממתין/ה
-    // וגם עבר הדדליין - שולחת MATCHMAKING_TIMEOUT ישירות לחיבור היחיד
-    // שכבר שם (ר' session.connections() - יש בדיוק חיבור אחד במצב הזה),
-    // ומנקה את הרישום כדי לא לשלוח שוב בכל טיק עוקב.
+    /**
+     * Called each tick for sessions with a registered deadline: clears the entry if someone joined,
+     * otherwise sends MATCHMAKING_TIMEOUT once to the lone waiting connection.
+     */
     private void checkMatchmakingTimeout(String gameId, GameSession session) {
         Long deadline = matchmakingDeadlines.get(gameId);
         if (deadline == null) {
@@ -209,12 +168,10 @@ public class GameServer extends WebSocketServer {
         fileLogger.log("Matchmaking timed out: gameId=" + gameId);
     }
 
-    // מייצרת gameId חדש וייחודי בעזרת RoomIdGenerator (קוד קצר, קריא -
-    // בניגוד ל-UUID של matchmaking, כי הקוד הזה כן צריך להיכתב/להיאמר
-    // בין אנשים בפועל - ר' תיעוד RoomIdGenerator), ופותחת עבורו session
-    // חדש. synchronized(sessionAllocationLock): בלי זה, שני לחיצות Create
-    // כמעט-בו-זמניות (תיאורטי, נדיר מאוד עם 6 תווים אקראיים) עלולות תיאורטית
-    // "לנחש" את אותו קוד ולדרוס אחת את השנייה בין הבדיקה ליצירה בפועל.
+    /**
+     * Invents a short, human-readable room code (unlike the matchmaking UUID, this one gets spoken
+     * and typed between people) and opens a session for it.
+     */
     private String createNewRoomGameId() {
         synchronized (sessionAllocationLock) {
             String newGameId;
@@ -226,9 +183,7 @@ public class GameServer extends WebSocketServer {
         }
     }
 
-    // ניתוק: מעביר ל-GameSession.handleDisconnect (במקום removeConnection הישנה)
-    // כדי ש-WHITE/BLACK באמצע משחק פעיל יקבלו "חלון חסד" לחיבור מחדש
-    // (שלב 5, auto-resign) במקום להפסיד/להיתקע מיד - ר' תיעוד handleDisconnect.
+    /** Disconnect: handed to GameSession, which gives an active player a grace window to reconnect. */
     @Override
     public void onClose(WebSocket conn, int code, String reason, boolean remote) {
         String gameId = gameIdByConnection.remove(conn);
@@ -239,7 +194,7 @@ public class GameServer extends WebSocketServer {
         }
     }
 
-    // הודעה נכנסת: רק מפענחת ומתייקת (enqueueCommand) - הביצוע בפועל קורה ב-tick, לא כאן.
+    /** Incoming message: only decodes and queues it - the command is actually applied on the tick thread. */
     @Override
     public void onMessage(WebSocket conn, String message) {
         GameSession session = sessions.get(gameIdByConnection.get(conn));
@@ -258,17 +213,14 @@ public class GameServer extends WebSocketServer {
         }
     }
 
-    // שגיאת רשת - רק לוג, לא מפילה את השרת (חיבור בודד עשוי להיסגר בעקבותיה, זה מטופל ע"י onClose בנפרד).
+    /** Network error - logged only; a dropped connection is handled separately by onClose. */
     @Override
     public void onError(WebSocket conn, Exception ex) {
         System.err.println("GameServer error: " + ex.getMessage());
         fileLogger.log("ERROR: " + ex.getMessage());
     }
 
-    // רץ אך ורק על thread הטיק: מקדם את כל המשחקים הפעילים לפי הזמן שעבר,
-    // בודק אם משחקי matchmaking שממתינים עברו את דקת ה-timeout (ר'
-    // checkMatchmakingTimeout - דילוג מיידי ל-sessions בלי דדליין רשום,
-    // ר' matchmakingDeadlines.get שם), ואז משדר לכל אחד את מצבו.
+    /** Runs only on the tick thread: advances every session by the elapsed time, checks matchmaking timeouts, then broadcasts. */
     private void tickAllSessions() {
         long now = System.nanoTime();
         long elapsedMillis = (now - lastTickNanos) / 1_000_000;
@@ -281,16 +233,35 @@ public class GameServer extends WebSocketServer {
                 checkMatchmakingTimeout(entry.getKey(), session);
             }
             broadcast(session);
+            removeIfAbandoned(entry.getKey(), session);
         }
     }
 
-    // שולח לכל חיבור במשחק snapshot מותאם לתפקיד שלו; חיבור שכבר נסגר בשקט מדולג (לא מפיל את שאר השידור).
+    /**
+     * Drops a session once everyone has left it, so finished rooms stop consuming memory and tick time.
+     * <p>
+     * The removal is re-checked inside computeIfPresent, which holds the same per-key lock as the
+     * computeIfAbsent in onOpen - so a session cannot be discarded while a new connection is claiming it.
+     */
+    private void removeIfAbandoned(String gameId, GameSession session) {
+        if (!session.isAbandoned()) {
+            return;
+        }
+        synchronized (sessionAllocationLock) {
+            sessions.computeIfPresent(gameId, (id, existing) -> existing.isAbandoned() ? null : existing);
+        }
+        matchmakingSessionIds.remove(gameId);
+        matchmakingDeadlines.remove(gameId);
+        fileLogger.log("Session discarded (empty): gameId=" + gameId);
+    }
+
+    /** Sends each connection a snapshot tailored to its role; a already-closed connection is skipped. */
     private void broadcast(GameSession session) {
         session.connections().forEach((conn, role) -> {
             try {
                 conn.send(gson.toJson(session.snapshotFor(role)));
             } catch (RuntimeException sendFailed) {
-                // חיבור שכבר לא תקין (למשל WebsocketNotConnectedException) - מתעלמים, ה-onClose כבר בדרך.
+                // Connection already broken - ignore it, onClose is on its way.
             }
         });
     }

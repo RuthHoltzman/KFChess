@@ -1,10 +1,6 @@
 package kfchess.server;
 
-/**
- * הופך את נתיב החיבור (מהבקשה ההתחלתית של ה-WebSocket) ל-gameId: מחלקה
- * קטנה ונפרדת (ולא מתודה פרטית בתוך GameServer) בכוונה, כדי שאפשר יהיה
- * לבדוק את הלוגיקה הטהורה הזו ביחידה בלי להרים שרת/handshake מזויף.
- */
+/** Turns the WebSocket connection path into a gameId. A separate class so it's unit-testable without a real server. */
 public final class GameIdResolver {
 
     private static final String DEFAULT_GAME_ID = "default";
@@ -12,10 +8,7 @@ public final class GameIdResolver {
     private GameIdResolver() {
     }
 
-    // "/room1" -> "room1"; שורש ("/" או ריק או null) -> ברירת מחדל, כדי לתמוך בכמה משחקים בלי UI לחדרים עדיין.
-    // חותך גם query string אם יש (למשל "/room1?username=ruth" -> "room1") -
-    // שלב 4 Part B הוסיף ?username= לאותו URI, ובלי החיתוך הזה הוא היה
-    // "נדבק" בטעות לתוך שם ה-room עצמו.
+    /** "/room1?username=ruth" -&gt; "room1"; the root path (or null) falls back to the default room. */
     public static String resolve(String resourceDescriptor) {
         if (resourceDescriptor == null) {
             return DEFAULT_GAME_ID;
