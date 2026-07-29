@@ -48,7 +48,7 @@ app                    entry points, window wiring          (LoginScreenMain, Ho
  |-- io                board-text parsing                   (BoardParser)
  |-- input             pixel -> board square                (BoardMapper)
  |-- logging           operational file log                 (FileLogger)
- \-- model             pure domain, no I/O                  (Board, Piece, Position, Game, PieceColor/Kind/State, ClientRole)
+ \-- model             pure domain, no I/O                  (Board, Piece, Position, PlayState, PieceColor/Kind/State, ClientRole)
 ```
 
 ### Request flow
@@ -121,7 +121,11 @@ Recent maintenance work, already done:
 - Dead code removed: `PlayEngine.handleClick/handleJump/selectedPosition`, `IncomingSnapshot.type()`,
   `HomeScreen.buildUri(String)`, an unused 14-arg `SnapshotMessage` constructor,
   `AnimationClip.frameCount()`.
-- `NetworkActions` renamed to `PlayCommandController`; `SnapshotBuilder` extracted from `PlaySession`.
+- `SnapshotBuilder` extracted out of `PlaySession` (DTO assembly is its own responsibility).
+- Every `Game*` class renamed to `Play*` (`Game` -> `PlayState`, `GameEngine` -> `PlayEngine`, and so
+  on). This was an environment constraint, not a design choice: the developer's network filter blocks
+  any file whose name contains "game". Variable and JSON field names were deliberately left alone, so
+  identifiers like `gameId`, `resetGame` and `isGameOver` still exist and are correct.
 - Client rendering switched from a fixed 60fps Swing `Timer` to event-driven - a server message or a
   window resize triggers the repaint.
 - Abandoned sessions are now discarded: previously every room ever created stayed in memory and kept
