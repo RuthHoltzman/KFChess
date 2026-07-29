@@ -1,13 +1,7 @@
 package kfchess.protocol;
 
-/**
- * נשלח פעם אחת לכל חיבור, מיד אחרי onOpen: מודיע ללקוח באיזה תפקיד הוא
- * משחק במשחק הזה - הראשון שמתחבר ל-GameSession נתון מקבל WHITE, השני
- * BLACK, כל השאר SPECTATOR (ר' GameSession.assignRole).
- * <p>
- * DTO ליציאה בלבד (משמש רק ל-gson.toJson) - אין getters, ואין בדיקת
- * null על הפרמטרים כי הקריאה היחידה אליו (מ-GameServer) כבר מבטיחה ערכים תקינים.
- */
+
+/** Outgoing-only DTO sent once per connection right after onOpen, telling the client its role and game id. */
 public class RoleAssignedMessage {
 
     private final String type = "ROLE_ASSIGNED";
